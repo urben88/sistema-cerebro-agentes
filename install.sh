@@ -136,6 +136,19 @@ for f in servidor.sh launcher.sh; do
   ok "Instalado: $SYSTEM_DIR/$f"
 done
 
+# ---------------------------------------------------------------- 3b. Panel web
+step 'Panel web en tiempo real'
+backup_item "$SYSTEM_DIR/web"
+rm -rf "$SYSTEM_DIR/web"
+cp -R "$CONFIG_ROOT/web" "$SYSTEM_DIR/web"
+ok "Panel instalado: $SYSTEM_DIR/web"
+backup_item "$SYSTEM_DIR/panel.sh"
+cp -f "$REPO_ROOT/scripts/panel.sh" "$SYSTEM_DIR/panel.sh"
+chmod +x "$SYSTEM_DIR/panel.sh"
+ok "Instalado: $SYSTEM_DIR/panel.sh"
+node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({ repoRoot: process.argv[2] }, null, 2) + "\n")' "$SYSTEM_DIR/panel-config.json" "$REPO_ROOT"
+ok 'panel-config.json escrito (ruta del repositorio)'
+
 # ---------------------------------------------------------------- 4. MCP en Claude Code
 step 'MCP opencode en Claude Code'
 
@@ -229,6 +242,8 @@ printf '  1. Reinicia Claude Code si lo tienes abierto (para que cargue el MCP).
 printf '  2. Verifica el sistema:\n'
 printf '       bash scripts/verificar.sh --smoke\n'
 printf '  3. Uso: abre Claude Code en la carpeta de un proyecto y pide lo que quieras.\n'
+printf '  4. Panel web en tiempo real:\n'
+printf '       bash ~/.sistema-cerebro-agentes/panel.sh\n'
 if [ "${#WARNINGS[@]}" -gt 0 ]; then
   printf '\nAvisos:\n'
   for w in "${WARNINGS[@]}"; do warn "$w"; done

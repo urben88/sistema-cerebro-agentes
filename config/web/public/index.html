@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sistema Cerebro → OpenCode · Panel</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="barra">
+    <div class="barra-izq">
+      <span class="logo">🧠</span>
+      <div>
+        <h1>Sistema Cerebro → OpenCode</h1>
+        <p class="sub">Panel de control en tiempo real · solo lectura</p>
+      </div>
+    </div>
+    <div class="barra-der">
+      <span class="vivo"><span class="punto" id="puntoVivo"></span><span id="textoVivo">conectando…</span></span>
+      <span class="chip" id="chipServidor">servidor —</span>
+      <span class="chip" id="chipPuerto">puerto —</span>
+      <span class="chip" id="chipNode">node —</span>
+    </div>
+  </header>
+
+  <div id="avisoError" class="aviso oculto"></div>
+
+  <section class="pipeline">
+    <div class="nodo" id="nodoCerebro">
+      <div class="nodo-icono">🧠</div>
+      <div class="nodo-titulo">Cerebro</div>
+      <div class="nodo-detalle">Claude Code</div>
+      <div class="nodo-estado" id="ncEstado">—</div>
+    </div>
+    <div class="flecha">→</div>
+    <div class="nodo" id="nodoMcp">
+      <div class="nodo-icono">🔌</div>
+      <div class="nodo-titulo">Puente</div>
+      <div class="nodo-detalle">opencode-mcp</div>
+      <div class="nodo-estado" id="nmEstado">—</div>
+    </div>
+    <div class="flecha">→</div>
+    <div class="nodo" id="nodoServidor">
+      <div class="nodo-icono">🖥️</div>
+      <div class="nodo-titulo">Servidor V1</div>
+      <div class="nodo-detalle">opencode-ai</div>
+      <div class="nodo-estado" id="nsEstado">—</div>
+    </div>
+    <div class="flecha">→</div>
+    <div class="nodo" id="nodoAgentes">
+      <div class="nodo-icono">🤖</div>
+      <div class="nodo-titulo">Manos</div>
+      <div class="nodo-detalle">agentes</div>
+      <div class="nodo-estado" id="naEstado">—</div>
+    </div>
+  </section>
+
+  <section class="metricas">
+    <div class="metrica"><div class="metrica-valor" id="mSesiones">—</div><div class="metrica-nombre">sesiones totales</div></div>
+    <div class="metrica"><div class="metrica-valor" id="mActivas">—</div><div class="metrica-nombre">activas (5 min)</div></div>
+    <div class="metrica"><div class="metrica-valor" id="mJobs">—</div><div class="metrica-nombre">trabajos registrados</div></div>
+    <div class="metrica"><div class="metrica-valor" id="mAgentes">—</div><div class="metrica-nombre">agentes</div></div>
+    <div class="metrica ancho2"><div class="metrica-valor pequeno" id="mUltima">—</div><div class="metrica-nombre">última actividad</div></div>
+  </section>
+
+  <main class="rejilla">
+    <section class="tarjeta">
+      <h2>Trabajos del MCP <span class="nota">(opencode_fire / run)</span></h2>
+      <div class="tabla-scroll">
+        <table id="tablaJobs">
+          <thead><tr><th>Estado</th><th>Título</th><th>Directorio</th><th>Actualizado</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Sesiones recientes del servidor V1</h2>
+      <div class="tabla-scroll">
+        <table id="tablaSesiones">
+          <thead><tr><th></th><th>Título</th><th>Directorio</th><th>Coste</th><th>Actualizada</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="nota">Haz clic en una sesión para ver sus últimos mensajes.</p>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Agentes configurados</h2>
+      <div id="listaAgentes" class="lista-agentes"></div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Ficheros de configuración</h2>
+      <p class="nota">Haz clic para abrir (solo lectura). Para editar, hazlo en el repositorio y ejecuta <code>install</code> o <code>scripts/actualizar</code>.</p>
+      <div id="listaFicheros"></div>
+    </section>
+  </main>
+
+  <div id="modal" class="modal oculto">
+    <div class="modal-caja">
+      <div class="modal-cabecera">
+        <div>
+          <div class="modal-titulo" id="modalTitulo">—</div>
+          <div class="modal-ruta" id="modalRuta">—</div>
+        </div>
+        <button class="boton" id="modalCerrar">Cerrar ✕</button>
+      </div>
+      <pre class="modal-cuerpo" id="modalCuerpo">—</pre>
+    </div>
+  </div>
+
+  <footer class="pie">
+    <span id="pieTexto">—</span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

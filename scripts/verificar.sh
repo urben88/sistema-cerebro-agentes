@@ -56,6 +56,8 @@ fi
 step 'Servidor OpenCode V1'
 [ -x "$HOME/.sistema-cerebro-agentes/server/node_modules/.bin/opencode" ] && test_item 0 'opencode-ai (servidor V1) instalado' || test_item 1 'opencode-ai (servidor V1) no instalado' 'Ejecuta install.sh'
 [ -f "$HOME/.sistema-cerebro-agentes/launcher.sh" ] && test_item 0 'Lanzador del MCP instalado' || test_item 1 'Lanzador del MCP no instalado' 'Ejecuta install.sh'
+[ -f "$HOME/.sistema-cerebro-agentes/panel.sh" ] && test_item 0 'Lanzador del panel web instalado' || test_item 1 'Lanzador del panel web no instalado' 'Ejecuta install.sh'
+[ -f "$HOME/.sistema-cerebro-agentes/web/servidor-web.mjs" ] && test_item 0 'Panel web instalado' || test_item 1 'Panel web no instalado' 'Ejecuta install.sh'
 bash "$HOME/.sistema-cerebro-agentes/servidor.sh" >/dev/null 2>&1 || true
 SRV_PORT=""
 [ -f "$HOME/.sistema-cerebro-agentes/server-port.txt" ] && SRV_PORT="$(tr -d '[:space:]' < "$HOME/.sistema-cerebro-agentes/server-port.txt")"

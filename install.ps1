@@ -208,6 +208,23 @@ foreach ($f in @('servidor.ps1', 'launcher.ps1')) {
   Write-Ok "Instalado: $dst"
 }
 
+# ---------------------------------------------------------------- 3b. Panel web
+Write-Step 'Panel web en tiempo real'
+$webSrc = Join-Path $ConfigRoot 'web'
+$webDst = Join-Path $SystemDir 'web'
+Backup-Item $webDst
+if (Test-Path -LiteralPath $webDst) { Remove-Item -LiteralPath $webDst -Recurse -Force }
+Copy-Item -LiteralPath $webSrc -Destination $webDst -Recurse -Force
+Write-Ok "Panel instalado: $webDst"
+$panelSrc = Join-Path $RepoRoot 'scripts\panel.ps1'
+$panelDst = Join-Path $SystemDir 'panel.ps1'
+Backup-Item $panelDst
+Copy-Item -LiteralPath $panelSrc -Destination $panelDst -Force
+Write-Ok "Instalado: $panelDst"
+$panelCfg = (@{ repoRoot = $RepoRoot } | ConvertTo-Json)
+[System.IO.File]::WriteAllText((Join-Path $SystemDir 'panel-config.json'), $panelCfg + "`n", (New-Object System.Text.UTF8Encoding($false)))
+Write-Ok 'panel-config.json escrito (ruta del repositorio)'
+
 # ---------------------------------------------------------------- 4. MCP en Claude Code
 Write-Step 'MCP opencode en Claude Code'
 
@@ -235,6 +252,7 @@ $skillSrc = Join-Path $ConfigRoot 'claude\skills\delegar-a-opencode'
 $skillDst = Join-Path $UserHome '.claude\skills\delegar-a-opencode'
 Backup-Item $skillDst
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $skillDst) | Out-Null
+if (Test-Path -LiteralPath $skillDst) { Remove-Item -LiteralPath $skillDst -Recurse -Force }
 Copy-Item -LiteralPath $skillSrc -Destination $skillDst -Recurse -Force
 Write-Ok "Skill instalada: $skillDst"
 
@@ -272,6 +290,8 @@ Write-Host '  1. Reinicia Claude Code si lo tienes abierto (para que cargue el M
 Write-Host '  2. Verifica el sistema:'
 Write-Host '       powershell -ExecutionPolicy Bypass -File .\scripts\verificar.ps1 -Smoke'
 Write-Host '  3. Uso: abre Claude Code en la carpeta de un proyecto y pide lo que quieras.'
+Write-Host '  4. Panel web en tiempo real:'
+Write-Host '       powershell -NoProfile -ExecutionPolicy Bypass -File ~\.sistema-cerebro-agentes\panel.ps1'
 if ($warnings.Count -gt 0) {
   Write-Host "`nAvisos:" -ForegroundColor Yellow
   foreach ($w in $warnings) { Write-Warn $w }

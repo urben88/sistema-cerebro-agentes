@@ -96,6 +96,23 @@ bash scripts/verificar.sh --smoke
 
 Detalles y ejemplos en [docs/uso-diario.md](docs/uso-diario.md).
 
+## Panel web en tiempo real
+
+Dashboard local (solo lectura) para ver qué está pasando y cómo está configurado todo:
+
+```powershell
+# Windows — desde el repositorio o instalado
+powershell -ExecutionPolicy Bypass -File .\scripts\panel.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File ~\.sistema-cerebro-agentes\panel.ps1
+```
+
+```bash
+# macOS / Linux
+bash scripts/panel.sh
+```
+
+Muestra: pipeline visual del sistema con estado en vivo, servidor V1 (puerto/versión), sesiones y trabajos MCP en tiempo real, los agentes con sus características (modo, modelo, descripción, sincronía con el repo) y un **visor de los ficheros de configuración** (agentes, CLAUDE.md, skill, lanzadores, docs…). Parar: `panel.ps1 -Stop`. Detalles en [docs/panel.md](docs/panel.md).
+
 ## Agentes de OpenCode
 
 | Agente | Papel | Modelo (v0.1.0) |
@@ -136,6 +153,7 @@ sistema-cerebro-agentes/
 │   │       ├── SKILL.md              ← protocolo de delegación
 │   │       └── plantilla-spec.md     ← plantilla de specs
 │   ├── mcp/                          ← lanzador del MCP y gestor del servidor V1
+│   ├── web/                          ← panel web en tiempo real (dashboard)
 │   └── opencode/
 │       └── agents/                   ← agentes implementador, revisor, testeador
 ├── docs/                             ← arquitectura, uso, pruebas, decisiones
