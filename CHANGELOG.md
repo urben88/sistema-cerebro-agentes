@@ -9,6 +9,13 @@ Versionado semántico (MAJOR.MINOR.PATCH).
 
 - **Agentes de OpenCode por esfuerzo** (variante de razonamiento del modelo): `cerebro-oc` (max, agente por defecto — el "cerebro" sin Claude), `implementador` (high), `debugger` (high), `revisor` (max), `testeador` (low), `explorador-ds` (low, solo lectura), `redactor-ds` (low, solo documentación) y `local` (Ollama/Qwen, solo bajo petición explícita).
 - **Regla de delegación cortada**: los subagentes no encadenan más agentes; `cerebro-oc` es el único que delega (máximo: preparación + ejecución + validación).
+- **Subagentes de Claude** (`config/claude/agents/`): `explorador` (leer/resumir), `redactor` (docs), `analista` (checklists), `arquitecto` (dirección intensa) y `subdirector` (control de bucles/gasto con el MCP dentro). Todos Haiku salvo `arquitecto` (Sonnet).
+- **Reglas de contexto y sesión**: volcado de estado al 70 % para `/clear` sin pérdidas, una sola cadena por tarea, sin fanout, y reconocimiento del repositorio delegado (el repo manda sus propias reglas).
+
+### Cambiado
+
+- El agente `cerebro` y el skill `delegar-a-opencode` se reescriben con la matriz de reparto completa, los topes de coste por job y el protocolo actualizado: **sin `providerID`/`modelID`** en `opencode_fire` (el modelo y el esfuerzo van fijados en el agente).
+- `~/.claude/settings.json`: esfuerzos por defecto de Claude a **medium** (Sonnet 5/5.5 y Haiku 5.5); Opus se deja intacto. Subir a `high` cuando la tarea lo merezca (`/effort high`).
 
 ### Cambiado
 
