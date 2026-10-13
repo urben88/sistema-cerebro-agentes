@@ -191,6 +191,21 @@ rl.on('line', async (line) => {
       }
       throw new Error(`herramienta desconocida: ${nombre}`)
     } catch (e) {
+      // Reporta el fallo al registro central del hub (best effort, sin bloquear).
+      try {
+        await fetch(`${HUB}/api/log`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            origen: 'mcp:triaje',
+            severidad: 'error',
+            mensaje: String(e?.message || e),
+            stack: e?.stack || null,
+            contexto: { herramienta: msg.params?.name || null },
+          }),
+          signal: AbortSignal.timeout(800),
+        })
+      } catch { /* hub apagado */ }
       return send({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: `Error: ${String(e?.message || e)}` }] } })
     }
   }

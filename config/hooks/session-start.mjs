@@ -12,6 +12,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { reportarError } from './reportar.mjs'
 
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
 const SYSTEM_DIR = process.env.SISTEMA_CEREBRO_DIR || path.join(os.homedir(), '.sistema-cerebro-agentes')

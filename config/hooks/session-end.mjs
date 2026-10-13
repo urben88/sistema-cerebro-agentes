@@ -8,6 +8,7 @@
  */
 import path from 'node:path'
 import os from 'node:os'
+import { reportarError } from './reportar.mjs'
 
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
 

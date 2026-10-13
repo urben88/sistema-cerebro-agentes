@@ -13,6 +13,7 @@
  */
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { reportarError } from './reportar.mjs'
 
 const RAIZ = process.env.SISTEMA_CEREBRO_DIR || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
@@ -62,6 +63,7 @@ try {
   // Sin process.exit(): en Windows, salir con sockets de fetch cerrándose revienta
   // con una aserción de libuv. Se deja que el proceso termine solo (código 0).
   process.exitCode = 0
-} catch {
+} catch (e) {
+  await reportarError('cerrar-trabajos', e)
   process.exitCode = 0
 }

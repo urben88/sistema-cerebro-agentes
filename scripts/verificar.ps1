@@ -135,6 +135,13 @@ if ($hubOk) {
     $claudeOk = ($ce.ok -eq $true)
   } catch { $claudeOk = $false }
   Test-Item $claudeOk 'GET /api/claude/estado responde (contexto real)' 'Revisa hub.mjs / estado-linea.mjs'
+  $logsOk = $false
+  try {
+    $lg = Invoke-RestMethod -Uri "http://127.0.0.1:$hubPort/api/logs?limite=5" -TimeoutSec 4
+    $logsOk = ($lg.ok -eq $true -and $null -ne $lg.errores)
+  } catch { $logsOk = $false }
+  Test-Item $logsOk 'GET /api/logs responde (registro de errores)' 'Revisa hub.mjs / lib/errores-log.mjs'
+  Test-Item (Test-Path -LiteralPath (Join-Path $sysDir 'hub\errores.mjs')) 'CLI de errores instalada (hub/errores.mjs)' 'Ejecuta install.ps1'
 }
 foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'estado.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'hallazgos.mjs')) {
   Test-Item (Test-Path -LiteralPath (Join-Path $sysDir "hooks\$f")) "Hook $f instalado" 'Ejecuta install.ps1'

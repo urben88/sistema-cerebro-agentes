@@ -17,6 +17,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import os from 'node:os'
 
 const MAX_EVENTOS = 800
 const MAX_TEXTO = 12000
@@ -76,14 +77,25 @@ function eventosDeLinea(e) {
   return eventos
 }
 
-export function crearVivo({ oc, dirDatos, emitir = null, latidos = () => [], intervaloMs = 4000 } = {}) {
+export function crearVivo({ oc, dirDatos, emitir = null, latidos = () => [], registrarLog = null, intervaloMs = 4000 } = {}) {
   const dir = path.join(dirDatos, 'trabajos-vivo')
   const porJob = new Map() // jobId -> entrada
   const porSesion = new Map() // sesion -> entrada (Claude)
+  const fallosVistos = new Set()
+  const ultimoLog = new Map()
   let timer = null
   let enCurso = false
   let ultimoTick = 0
   let ultimoError = null
+
+  /** Manda un error al registro central con freno (misma clave, 1/min). */
+  function log(clave, datos) {
+    if (!registrarLog) return
+    const ahora = Date.now()
+    if (ahora - (ultimoLog.get(clave) || 0) < 60000) return
+    ultimoLog.set(clave, ahora)
+    try { registrarLog(datos) } catch { /* nada */ }
+  }
 
   function entornoJob(jobId) {
     let e = porJob.get(jobId)
@@ -122,7 +134,7 @@ export function crearVivo({ oc, dirDatos, emitir = null, latidos = () => [], int
     const e = porSesion.get(sesion)
     if (!e) return
     const nombre = `claude-${sesion.replace(/[^a-zA-Z0-9_-]/g, '')}`
-    guardar(nombre, { sesion, agente: e.agente, ruta: e.ruta, offset: e.offset, resto: e.resto, eventos: e.eventos, actualizado: e.actualizado, ultimaLectura: e.ultimaLectura })
+    guardar(nombre, { sesion, agente: e.agente, ruta: e.ruta, offset: e.offset, resto: e.resto, eventos: e.eventos, actualizado: e.actualizado, ultimaLectura: e.ultimaLectura, ultimoIntento: e.ultimoIntento || null })
   }
 
   function cargarDeDisco() {
@@ -135,7 +147,7 @@ export function crearVivo({ oc, dirDatos, emitir = null, latidos = () => [], int
         if (nombre.startsWith('claude-')) {
           if (!j.sesion) continue
           const eventos = Array.isArray(j.eventos) ? j.eventos.slice(-MAX_EVENTOS) : []
-          porSesion.set(j.sesion, { agente: j.agente || null, ruta: j.ruta || null, offset: j.offset || 0, resto: j.resto || '', eventos, ids: new Set(eventos.map((x) => x.id).filter(Boolean)), ultimaLectura: j.ultimaLectura || null, error: null, actualizado: j.actualizado || null })
+          porSesion.set(j.sesion, { agente: j.agente || null, ruta: j.ruta || null, offset: j.offset || 0, resto: j.resto || '', eventos, ids: new Set(eventos.map((x) => x.id).filter(Boolean)), ultimaLectura: j.ultimaLectura || null, ultimoIntento: j.ultimoIntento || null, error: null, actualizado: j.actualizado || null })
         } else {
           const jobId = nombre.replace(/\.json$/, '')
           const eventos = Array.isArray(j.eventos) ? j.eventos.slice(-MAX_EVENTOS) : []
@@ -187,6 +199,7 @@ export function crearVivo({ oc, dirDatos, emitir = null, latidos = () => [], int
     const rm = await oc.sesionMensajes(e.sessionId)
     if (!rm.ok) {
       e.error = rm.error
+      log(`jobfetch:${job.jobId}`, { origen: 'vivo', severidad: 'aviso', mensaje: `No se pudo leer la sesión del trabajo: ${rm.error}`, contexto: { jobId: job.jobId, sesion: e.sessionId, directorio: job.directory } })
       return { clave: `job:${job.jobId}`, jobId: job.jobId, nuevos: [], todos: null, error: rm.error }
     }
     const nuevos = añadir(e, extraerEventos(rm.mensajes))
@@ -206,15 +219,46 @@ export function crearVivo({ oc, dirDatos, emitir = null, latidos = () => [], int
     return { clave: `job:${job.jobId}`, jobId: job.jobId, nuevos, todos: todoCambiado, error: null }
   }
 
+  /** Busca el transcript por id de sesión en el directorio de proyectos de Claude. */
+  function buscarTranscript(sesion) {
+    const base = path.join(process.env.CLAUDE_DIR || path.join(os.homedir(), '.claude'), 'projects')
+    try {
+      for (const d of fs.readdirSync(base)) {
+        const f = path.join(base, d, `${sesion}.jsonl`)
+        try { if (fs.statSync(f).isFile()) return f } catch { /* siguiente */ }
+      }
+    } catch { /* sin directorio de proyectos */ }
+    return null
+  }
+
   /** Lee lo nuevo del transcript de una sesión de Claude (solo actividad). */
   function revisarSesion(sesion, ruta, agente) {
     const e = entornoSesion(sesion)
     if (agente) e.agente = agente
     if (ruta) e.ruta = ruta
     if (!e.ruta) return { clave: `claude:${sesion}`, sesion, nuevos: [], error: 'sin transcript' }
-    let nuevos = []
+
+    // El fichero puede no existir todavía (sesión recién abierta) o estar en otro
+    // proyecto: se busca por id y se reintenta en cada ciclo hasta conseguirlo.
+    let st = null
+    try { st = fs.statSync(e.ruta) } catch (err) {
+      const encontrado = buscarTranscript(sesion)
+      if (encontrado && encontrado !== e.ruta) {
+        e.ruta = encontrado
+        e.offset = 0
+        e.resto = ''
+        try { st = fs.statSync(e.ruta) } catch { st = null }
+      }
+      if (!st) {
+        e.ultimoIntento = Date.now()
+        e.error = String(err?.message || err)
+        log(`claude:${sesion}`, { origen: 'vivo', severidad: 'aviso', mensaje: `No se pudo leer el transcript de Claude: ${e.error}`, contexto: { sesion, ruta: e.ruta } })
+        return { clave: `claude:${sesion}`, sesion, nuevos: [], error: e.error }
+      }
+    }
+
     try {
-      const st = fs.statSync(e.ruta)
+      let nuevos = []
       if (st.size < e.offset) { e.offset = 0; e.resto = '' } // el fichero se recreó
       if (st.size > e.offset) {
         const bytes = st.size - e.offset
@@ -235,6 +279,7 @@ export function crearVivo({ oc, dirDatos, emitir = null, latidos = () => [], int
       }
       nuevos = añadir(e, nuevos)
       e.ultimaLectura = Date.now()
+      e.ultimoIntento = e.ultimaLectura
       e.actualizado = st.mtimeMs
       e.error = null
       if (nuevos.length || !e.persistido) {
@@ -243,7 +288,9 @@ export function crearVivo({ oc, dirDatos, emitir = null, latidos = () => [], int
       }
       return { clave: `claude:${sesion}`, sesion, agente: e.agente, nuevos, error: null }
     } catch (err) {
+      e.ultimoIntento = Date.now()
       e.error = String(err?.message || err)
+      log(`claude:${sesion}`, { origen: 'vivo', severidad: 'aviso', mensaje: `No se pudo leer el transcript de Claude: ${e.error}`, contexto: { sesion, ruta: e.ruta } })
       return { clave: `claude:${sesion}`, sesion, nuevos: [], error: e.error }
     }
   }
@@ -254,6 +301,28 @@ export function crearVivo({ oc, dirDatos, emitir = null, latidos = () => [], int
     ultimoTick = Date.now()
     try {
       const jobs = oc.leerJobsRecientes(VENTANA_ACTIVO_MS, 60)
+      // Trabajos recién fallidos: al registro central con todo el contexto (una vez).
+      for (const j of jobs) {
+        if (j.status === 'failed' && !fallosVistos.has(j.jobId)) {
+          fallosVistos.add(j.jobId)
+          try {
+            registrarLog?.({
+              origen: 'job',
+              severidad: 'error',
+              mensaje: `Trabajo FALLIDO (${j.agent || 'agente'}): ${j.error || 'sin mensaje de error'}`,
+              contexto: {
+                jobId: j.jobId,
+                agente: j.agent,
+                titulo: j.title,
+                directorio: j.directory,
+                sesion: j.sessionId,
+                coste: j.cost,
+                actualizado: j.updatedAt ? new Date(j.updatedAt).toISOString() : null,
+              },
+            })
+          } catch { /* nada */ }
+        }
+      }
       const activos = jobs.filter((j) => j.sessionId && ['running', 'accepted', 'input_required'].includes(j.status))
       const recienTerminados = jobs.filter((j) =>
         j.sessionId &&
@@ -274,7 +343,8 @@ export function crearVivo({ oc, dirDatos, emitir = null, latidos = () => [], int
         if (l?.sesion && l?.transcript) claude.set(l.sesion, { ruta: l.transcript, agente: l.agente })
       }
       for (const [sesion, e] of porSesion) {
-        if (!claude.has(sesion) && e.ruta && e.ultimaLectura && Date.now() - e.ultimaLectura < SEGUIR_CLAUDE_MS) {
+        const ultimo = e.ultimaLectura || e.ultimoIntento
+        if (!claude.has(sesion) && e.ruta && ultimo && Date.now() - ultimo < SEGUIR_CLAUDE_MS) {
           claude.set(sesion, { ruta: e.ruta, agente: e.agente })
         }
       }

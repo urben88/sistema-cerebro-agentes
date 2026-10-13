@@ -27,6 +27,7 @@ import { crearTriaje } from './lib/triaje.mjs'
 import { crearActividad } from './lib/actividad.mjs'
 import { clasificarAlerta } from './lib/errores.mjs'
 import { crearVivo } from './lib/vivo.mjs'
+import { crearLogErrores } from './lib/errores-log.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HOME = os.homedir()
@@ -81,6 +82,17 @@ fs.mkdirSync(LOGS_DIR, { recursive: true })
 
 const memoria = crearMemoria(MEMORIA_DIR, { temporalDias: config.temporalDias, plantillasDir: PLANTILLAS_DIR })
 memoria.inicializar()
+
+// Registro central de errores: lo alimentan el hub, el colector, los hooks, el MCP
+// y el panel; se lee desde /api/logs y se exporta para pasárselo a una IA.
+const logErrores = crearLogErrores({ dirLogs: LOGS_DIR })
+process.on('unhandledRejection', (e) => {
+  try { logErrores.registrarYLog({ origen: 'hub', severidad: 'aviso', mensaje: `Promesa rechazada sin capturar: ${e?.message || e}`, stack: e?.stack }) } catch { /* nada */ }
+})
+process.on('uncaughtException', (e) => {
+  try { logErrores.registrarYLog({ origen: 'hub', severidad: 'critico', mensaje: `Excepción no capturada: ${e?.message || e}`, stack: e?.stack }) } catch { /* nada */ }
+  process.exit(1)
+})
 const oc = crearOpenCode({ systemDir: SYSTEM_DIR, host: OPENCODE_HOST })
 const organizacion = crearOrganizacion({ home: HOME, opencodeDir: OPENCODE_DIR, claudeDir: CLAUDE_DIR })
 const ventana = crearVentana({ baseDir: path.join(CLAUDE_DIR, 'projects') })
@@ -138,6 +150,15 @@ function cambiarEstadoHallazgo(id, estado) {
 
 function registrarAlerta(a) {
   try { fs.appendFileSync(path.join(LOGS_DIR, 'vigilante.jsonl'), JSON.stringify({ ...a, fecha: new Date().toISOString() }) + '\n') } catch { /* nada */ }
+  // Las alertas del vigilante también van al registro central (con contexto).
+  try {
+    logErrores.registrar({
+      origen: 'vigilante',
+      severidad: 'aviso',
+      mensaje: `Vigilante: ${a?.tipo || 'aviso'}${a?.minutos ? ` (${a.minutos} min)` : ''} · ${a?.title || a?.jobId || ''}`,
+      contexto: { jobId: a?.jobId || null, directory: a?.directory || null, sesionId: a?.sessionId || null },
+    })
+  } catch { /* nada */ }
 }
 const vigilante = crearVigilante({ leerJobs: (n) => oc.leerJobs(n), config, registrar: registrarAlerta })
 vigilante.arrancar(60 * 1000)
@@ -247,7 +268,7 @@ function difundirSSE(evento, datos) {
     try { c.write(texto) } catch { /* conexión muerta: se limpia sola al cerrar */ }
   }
 }
-const vivo = crearVivo({ oc, dirDatos: DATA_DIR, emitir: (ev) => difundirSSE('trabajo', ev), latidos: () => latidosActivos(), intervaloMs: 4000 })
+const vivo = crearVivo({ oc, dirDatos: DATA_DIR, emitir: (ev) => difundirSSE('trabajo', ev), latidos: () => latidosActivos(), registrarLog: (d) => logErrores.registrarYLog(d), intervaloMs: 4000 })
 vivo.arrancar()
 
 // ----------------------------------------------------------------- gasto
@@ -473,6 +494,34 @@ const servidor = http.createServer(async (req, res) => {
     if (ruta === '/api/claude/estado' && req.method === 'GET') {
       return enviarJson(res, { ok: true, estados: estadosClaudeActivos(u.searchParams.get('cwd')) })
     }
+    if (ruta === '/api/log' && req.method === 'POST') {
+      // Lo usan hooks, MCP y panel para reportar errores con su stack y contexto.
+      const b = await cuerpoJson(req)
+      const e = logErrores.registrar({
+        origen: b.origen,
+        severidad: b.severidad,
+        mensaje: b.mensaje,
+        stack: b.stack,
+        contexto: { ...(b.contexto && typeof b.contexto === 'object' ? b.contexto : {}), ...(b.cwd ? { cwd: b.cwd } : {}) },
+      })
+      return enviarJson(res, { ok: true, id: e.id })
+    }
+    if (ruta === '/api/logs') {
+      return enviarJson(res, {
+        ok: true,
+        resumen: logErrores.resumen(),
+        errores: logErrores.listar({
+          limite: parseInt(u.searchParams.get('limite'), 10) || 100,
+          origen: u.searchParams.get('origen') || null,
+          severidad: u.searchParams.get('severidad') || null,
+        }),
+      })
+    }
+    if (ruta === '/api/logs/exportar') {
+      const texto = logErrores.exportar({ limite: parseInt(u.searchParams.get('limite'), 10) || 50 })
+      res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8', 'Cache-Control': 'no-store' })
+      return res.end(texto)
+    }
     if (ruta === '/api/eventos') {
       // SSE: emite `actividad` solo cuando cambia el estado de algún personaje (cada 2 s).
       res.writeHead(200, {
@@ -538,6 +587,9 @@ const servidor = http.createServer(async (req, res) => {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
     res.end('No encontrado')
   } catch (e) {
+    try {
+      logErrores.registrarYLog({ origen: 'hub', severidad: 'error', mensaje: `Error atendiendo ${req.method} ${ruta}: ${e?.message || e}`, stack: e?.stack, contexto: { metodo: req.method, ruta } })
+    } catch { /* nada */ }
     enviarJson(res, { ok: false, error: String(e?.message || e) }, 500)
   }
 })

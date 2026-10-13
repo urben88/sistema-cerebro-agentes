@@ -155,6 +155,22 @@
         </section>
       </div>
     </section>
+
+    <section class="vista oculto" id="vista-errores" role="tabpanel" aria-label="Errores">
+      <div class="rejilla">
+        <section class="tarjeta ancho2">
+          <div class="cab-oficina">
+            <h2>Errores y avisos <span class="tenue">(todas las capas)</span></h2>
+            <div>
+              <span class="chip" id="erroresResumen"></span>
+              <button class="boton mini" id="copiarInforme" type="button" title="Copia un informe Markdown listo para pasárselo a una IA">📋 Copiar informe para la IA</button>
+            </div>
+          </div>
+          <p class="tenue">Cada error completo (mensaje, stack y contexto) queda en <code>hub-data/logs/errores.jsonl</code>. También desde la terminal: <code>node ~/.sistema-cerebro-agentes/hub/errores.mjs --exportar</code>.</p>
+          <div id="errores" class="lista"></div>
+        </section>
+      </div>
+    </section>
   </main>
 
   <!-- Panel lateral de detalle de personaje (R10) -->

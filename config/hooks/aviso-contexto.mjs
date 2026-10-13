@@ -16,6 +16,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { reportarError } from './reportar.mjs'
 
 const UMBRAL_MB = parseFloat(process.env.AVISO_CONTEXTO_MB || '2')
 const ENFRIAMIENTO_MIN = parseFloat(process.env.AVISO_CONTEXTO_MIN || '30')

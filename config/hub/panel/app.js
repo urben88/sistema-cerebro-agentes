@@ -1158,6 +1158,48 @@ function pintarHallazgos(hh) {
 
 // ---------------------------------------------------------------- pestañas
 
+// Registro de errores: lista completa (mensaje, stack y contexto) para revisar o
+// exportar. Cada capa (hub, trabajos, hooks, MCP, panel) reporta a /api/log.
+function pintarErrores(datos) {
+  const cont = vaciar($('errores'))
+  const errores = (datos && datos.errores) || []
+  const resumen = (datos && datos.resumen) || {}
+  $('erroresResumen').textContent = errores.length
+    ? `${errores.length} recientes · ${Object.entries(resumen.porOrigen || {}).map(([o, n]) => `${o}:${n}`).join(' ')}`
+    : 'sin errores'
+  if (!errores.length) {
+    cont.append(h('p', { clase: 'tenue', texto: 'Sin errores registrados. 🎉' }))
+    return
+  }
+  for (const e of errores) {
+    const card = h('div', { clase: 'agente' })
+    const cab = h('div', { clase: 'cab-oficina' })
+    cab.append(h('span', { clase: `badge ${e.severidad === 'critico' || e.severidad === 'error' ? 'ambar' : 'verde'}`, texto: e.severidad }))
+    cab.append(h('span', { clase: 'nombre', texto: `${e.origen} · ${new Date(e.fecha).toLocaleString()}` }))
+    card.append(cab)
+    card.append(h('div', { clase: 'desc', texto: e.mensaje }))
+    if (e.contexto) card.append(h('div', { clase: 'desc tenue', texto: String(e.contexto).slice(0, 320) }))
+    if (e.stack) {
+      const det = h('details', { clase: 'error-crudo' })
+      det.append(h('summary', { texto: 'Stack' }))
+      det.append(h('pre', { texto: e.stack }))
+      card.append(det)
+    }
+    cont.append(card)
+  }
+}
+
+function erroresDemo() {
+  return {
+    resumen: { porOrigen: { job: 1, 'hook:latido': 1, panel: 1 }, porSeveridad: { error: 2, aviso: 1 } },
+    errores: [
+      { id: 'err_demo1', fecha: new Date(Date.now() - 4 * 60000).toISOString(), severidad: 'error', origen: 'job', mensaje: 'Trabajo FALLIDO (testeador): Timeout esperando al servidor local', contexto: '{"jobId":"job_demo4","agente":"testeador","titulo":"Pruebas de lógica pura (A2/A3)","coste":0.001}', stack: null },
+      { id: 'err_demo2', fecha: new Date(Date.now() - 9 * 60000).toISOString(), severidad: 'aviso', origen: 'hook:latido', mensaje: 'ENOENT: no such file or directory, stat "...9cdf5b62....jsonl"', contexto: '{"sesion":"9cdf5b62-...","ruta":"~/.claude/projects/G--Mi-unidad-Universidad-TFG"}', stack: null },
+      { id: 'err_demo3', fecha: new Date(Date.now() - 15 * 60000).toISOString(), severidad: 'error', origen: 'panel', mensaje: 'TypeError: Cannot read properties of null (reading \'status\')', contexto: '{"url":"http://127.0.0.1:4597/?demo=1"}', stack: 'TypeError: Cannot read properties of null\n    at pintarDetalleVivo (app.js:1234)' },
+    ],
+  }
+}
+
 const PESTANAS = [
   ['oficina', 'Oficina'],
   ['organizacion', 'Organización'],
@@ -1168,6 +1210,7 @@ const PESTANAS = [
   ['datos', 'Datos'],
   ['mcps', 'MCPs'],
   ['hallazgos', 'Hallazgos'],
+  ['errores', 'Errores'],
 ]
 
 function pintarPestanas() {
@@ -1347,7 +1390,7 @@ async function refrescarLigero() {
 
 async function refrescarPesado() {
   try {
-    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo] = await Promise.all([
+    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs] = await Promise.all([
       fetch('/api/gasto').then((r) => r.json()),
       fetch('/api/ventana').then((r) => r.json()),
       fetch('/api/laya').then((r) => r.json()),
@@ -1355,12 +1398,14 @@ async function refrescarPesado() {
       fetch('/api/mcps').then((r) => r.json()),
       fetch('/api/hallazgos').then((r) => r.json()),
       fetch('/api/gasto/equipo').then((r) => r.json()).catch(() => null),
+      fetch('/api/logs?limite=80').then((r) => r.json()).catch(() => null),
     ])
     pintarGasto(gasto)
     pintarVentana(ventana)
     pintarTriaje(laya, dec)
     pintarMcps(mcps)
     pintarHallazgos(hallazgos)
+    pintarErrores(estado.demo ? erroresDemo() : (logs || { errores: [] }))
     estado.gastoEquipo = equipo
     pintarReparto(equipo)
   } catch { /* nada */ }
@@ -1374,6 +1419,36 @@ $('lateralCerrar').addEventListener('click', () => { pararDetalle(); $('lateral'
 $('pararTodo').addEventListener('click', async () => {
   if (await pararTrabajos({ todo: true }, '¿Parar TODOS los trabajos de OpenCode en segundo plano (todos los proyectos)?')) refrescarLigero()
 })
+$('copiarInforme').addEventListener('click', async () => {
+  if (estado.demo) { alert('Modo demo: usa el hub real para generar el informe de tus errores.'); return }
+  try {
+    const texto = await fetch('/api/logs/exportar?limite=50').then((r) => r.text())
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(texto)
+      alert('Informe copiado al portapapeles. Pégalo en tu IA para corregir los problemas.')
+    } else {
+      window.prompt('Copia el informe:', texto)
+    }
+  } catch { alert('No se pudo generar el informe (¿hub caído?).') }
+})
+
+// El propio panel también reporta sus errores al registro central (1/min como mucho).
+let ultimoReporteError = 0
+function reportarErrorPanel(mensaje, stack) {
+  if (estado.demo) return
+  const ahora = Date.now()
+  if (ahora - ultimoReporteError < 60000) return
+  ultimoReporteError = ahora
+  try {
+    fetch('/api/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origen: 'panel', severidad: 'error', mensaje: String(mensaje || 'error en el panel').slice(0, 1000), stack: stack || null, contexto: { url: location.href } }),
+    }).catch(() => { /* hub caído */ })
+  } catch { /* nada */ }
+}
+window.addEventListener('error', (ev) => reportarErrorPanel(ev.message, ev.error && ev.error.stack))
+window.addEventListener('unhandledrejection', (ev) => reportarErrorPanel(String((ev.reason && ev.reason.message) || ev.reason), ev.reason && ev.reason.stack))
 $('botonTema').addEventListener('click', () => {
   aplicarTema(document.documentElement.dataset.tema === 'claro' ? 'oscuro' : 'claro')
 })

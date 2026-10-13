@@ -14,6 +14,7 @@
  * `assistant`), leyendo solo el final del archivo y con tope de 1 s.
  */
 import fs from 'node:fs'
+import { reportarError } from './reportar.mjs'
 
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
 const EVENTOS = new Set(['UserPromptSubmit', 'Stop', 'SubagentStart', 'SubagentStop'])
@@ -107,6 +108,7 @@ try {
     } catch { /* hub apagado o lento: se ignora */ }
   }
   process.exit(0)
-} catch {
+} catch (e) {
+  await reportarError('latido', e)
   process.exit(0)
 }

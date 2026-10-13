@@ -140,6 +140,12 @@ if [ "$HUB_OK" -eq 1 ]; then
   else
     test_item 1 'GET /api/claude/estado no responde' 'Revisa hub.mjs / estado-linea.mjs'
   fi
+  if curl -fsS --max-time 4 "http://127.0.0.1:$HUB_PORT/api/logs?limite=5" 2>/dev/null | grep -q '"ok":true'; then
+    test_item 0 'GET /api/logs responde (registro de errores)'
+  else
+    test_item 1 'GET /api/logs no responde' 'Revisa hub.mjs / lib/errores-log.mjs'
+  fi
+  [ -f "$HOME/.sistema-cerebro-agentes/hub/errores.mjs" ] && test_item 0 'CLI de errores instalada (hub/errores.mjs)' || test_item 1 'CLI de errores no instalada' 'Ejecuta install.sh'
 else
   test_item 1 "Cerebro Hub responde en 127.0.0.1:${HUB_PORT:-?}" 'Arranca: bash ~/.sistema-cerebro-agentes/hub.sh'
 fi
