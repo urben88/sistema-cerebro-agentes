@@ -36,6 +36,7 @@ function leerDir(dir) {
         modo: fm.mode || null,
         modelo: fm.model || null,
         variant: fm.variant || null,
+        esfuerzo: fm.effort || fm.variant || null,
       })
     } catch { /* ilegible */ }
   }

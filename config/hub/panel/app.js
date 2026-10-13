@@ -83,6 +83,7 @@ const reducirMovimiento = () => {
 // (nunca «sin modelo»), y el variant se muestra solo si existe.
 const etiquetaModelo = (m) => (m ? String(m) : 'modelo no informado')
 const modeloYVariant = (m, v) => (v ? `${etiquetaModelo(m)} · ${v}` : etiquetaModelo(m))
+const nombreEsfuerzo = (v) => ({ low: 'bajo', medium: 'medio', high: 'alto', max: 'máximo', default: 'por defecto' })[String(v || '').toLowerCase()] || (v ? String(v) : null)
 
 // R7 · estados de job que siguen «en curso» y merecen refresco del detalle.
 const EN_CURSO = new Set(['trabajando', 'esperando', 'atascado'])
@@ -265,12 +266,15 @@ function crearPuesto(personaje, proyecto) {
   }
   const wrap = h('div', { clase: 'figura-wrap' })
   wrap.append(figuraSVG(personaje.familia, personaje.estado))
+  // El esfuerzo, en la propia figura y a la izquierda del circulito verde de actividad.
+  if (personaje.variant) {
+    wrap.append(h('span', { clase: 'esf-pill', texto: nombreEsfuerzo(personaje.variant), title: `esfuerzo ${nombreEsfuerzo(personaje.variant)} (${personaje.variant})` }))
+  }
   puesto.append(wrap)
   puesto.append(h('div', { clase: 'mesa' }, h('div', { clase: 'monitor' })))
   const pie = h('figcaption', { clase: 'puesto-pie' })
   pie.append(h('span', { clase: 'pers-nombre', texto: personaje.agente }))
   pie.append(h('span', { clase: 'chip modelo', texto: etiquetaModelo(personaje.modelo), title: personaje.modelo || '' }))
-  if (personaje.variant) pie.append(h('span', { clase: 'chip modelo' }, h('b', { texto: personaje.variant })))
   // R6 · chip de error con el título legible (el crudo queda en el detalle).
   if (personaje.errorInfo) pie.append(h('span', { clase: 'chip error', texto: personaje.errorInfo.titulo, title: personaje.errorInfo.causa || '' }))
   puesto.append(pie)
@@ -476,7 +480,8 @@ function pintarDetalleJob(cont, job) {
     d.append(h('span', { clase: 'fila-v', texto: String(valor) }))
     cont.append(d)
   }
-  fila('Modelo', modeloYVariant(job.modelo, job.variant))
+  fila('Modelo', etiquetaModelo(job.modelo))
+  fila('Esfuerzo', job.variant ? `${nombreEsfuerzo(job.variant)} (${job.variant})` : null)
   fila('Estado', job.status)
   const fin = EN_CURSO_JOB.has(job.status) ? Date.now() : job.updatedAt
   fila('Duración', job.createdAt && fin ? duracionHumana(fin - job.createdAt) : null)
@@ -661,7 +666,7 @@ function abrirDetalle(personaje, proyecto) {
   fila('Estado', personaje.estado)
   fila('Familia', metaFam(personaje.familia).nombre)
   fila('Modelo', personaje.modelo ? etiquetaModelo(personaje.modelo) : 'modelo no informado · hereda el del hilo principal')
-  fila('Variant', personaje.variant)
+  fila('Esfuerzo', personaje.variant ? `${nombreEsfuerzo(personaje.variant)} (${personaje.variant})` : null)
   // R8 · agentes sin job (Claude/latidos): solo lo que se sabe, sin inventar.
   fila('Origen', personaje.origen === 'claude' ? 'Claude (latido)' : personaje.origen)
   fila('Evento', personaje.evento)

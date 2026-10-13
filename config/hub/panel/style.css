@@ -179,6 +179,15 @@ code { background: var(--tarjeta2); border: 1px solid var(--borde); border-radiu
 .pers-nombre { font-size: 12px; font-weight: 600; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .puesto-pie .chip { font-size: 10px; padding: 0 7px; }
 
+/* esfuerzo del agente: en la figura, a la izquierda del circulito verde de actividad */
+.esf-pill {
+  position: absolute; right: 19px; top: 4px; font-size: 10.5px; line-height: 1;
+  padding: 4px 7px; border-radius: 999px; color: var(--ambar); white-space: nowrap;
+  background: rgba(251, 191, 36, .2); border: 1px solid rgba(251, 191, 36, .6);
+  font-weight: 600; letter-spacing: .02em; pointer-events: none; z-index: 2;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+}
+
 /* mesa y monitor */
 .mesa {
   width: 84px; height: 12px; border-radius: 3px; margin-top: -6px;
@@ -297,7 +306,7 @@ body.modo-demo .sala { border-top-style: dashed; }
 
 /* ---------------------------------------------------------------- panel lateral */
 .lateral {
-  position: fixed; top: 0; right: 0; height: 100%; width: min(380px, 92vw); z-index: 40;
+  position: fixed; top: 0; right: 0; height: 100%; width: min(560px, 94vw); z-index: 40;
   background: var(--tarjeta); border-left: 1px solid var(--borde); box-shadow: -18px 0 40px rgba(0, 0, 0, .35);
   display: flex; flex-direction: column; animation: entrarLateral .25s ease both;
 }
@@ -348,18 +357,20 @@ body.modo-demo .sala { border-top-style: dashed; }
   color: var(--ambar); background: rgba(251, 191, 36, .08); border-color: rgba(251, 191, 36, .35);
 }
 .vivo-pensando {
-  font-size: 12.5px; color: var(--texto); background: var(--tarjeta2);
+  font-size: 12px; color: var(--texto); background: var(--tarjeta2);
   border: 1px solid var(--borde); border-left: 3px solid var(--acento);
   border-radius: 6px; padding: 8px 10px; white-space: pre-wrap;
   margin: 0 0 10px; max-height: 240px; overflow: auto;
+  font-family: ui-monospace, Consolas, "Cascadia Mono", monospace;
 }
 .vivo-todos { list-style: none; margin: 0 0 10px; padding: 0; font-size: 12.5px; }
 .vivo-todo { display: flex; gap: 6px; padding: 3px 0; overflow-wrap: anywhere; }
 .vivo-todo.hecho { color: var(--tenue); text-decoration: line-through; }
 .vivo-todo.curso { color: var(--ambar); }
 .vivo-actividad {
-  max-height: 340px; overflow: auto; border: 1px solid var(--borde);
+  max-height: 46vh; overflow: auto; border: 1px solid var(--borde);
   border-radius: 6px; padding: 6px 8px; background: var(--tarjeta2);
+  font-family: ui-monospace, Consolas, "Cascadia Mono", monospace;
 }
 .vivo-evento { font-size: 12px; margin: 0 0 6px; }
 .vivo-evento.simple { display: flex; gap: 6px; align-items: baseline; overflow-wrap: anywhere; }

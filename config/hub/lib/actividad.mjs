@@ -105,13 +105,13 @@ export function crearActividad({
   // con lo que declara `organizacion.mjs` (los agentes desconocidos quedan genéricos).
   function mapaAgentes() {
     const mapa = new Map()
-    for (const [nombre, familia] of Object.entries(FAMILIAS)) mapa.set(nombre, { familia, modelo: null })
+    for (const [nombre, familia] of Object.entries(FAMILIAS)) mapa.set(nombre, { familia, modelo: null, esfuerzo: null })
     let datos = { claude: [], opencode: [] }
     try { datos = organizacion?.datos() || datos } catch { /* sin organización */ }
     for (const a of [...(datos.claude || []), ...(datos.opencode || [])]) {
       if (!a?.nombre) continue
-      const actual = mapa.get(a.nombre) || { familia: familiaGenerica, modelo: null }
-      mapa.set(a.nombre, { familia: actual.familia, modelo: a.modelo || actual.modelo || null })
+      const actual = mapa.get(a.nombre) || { familia: familiaGenerica, modelo: null, esfuerzo: null }
+      mapa.set(a.nombre, { familia: actual.familia, modelo: a.modelo || actual.modelo || null, esfuerzo: actual.esfuerzo || a.esfuerzo || null })
     }
     return mapa
   }
@@ -119,7 +119,7 @@ export function crearActividad({
   async function calcular() {
     const t = ahora()
     const agentes = mapaAgentes()
-    const info = (nombre) => agentes.get(nombre) || { familia: familiaGenerica, modelo: null }
+    const info = (nombre) => agentes.get(nombre) || { familia: familiaGenerica, modelo: null, esfuerzo: null }
 
     // Atascos marcados por el vigilante, por jobId
     const atascos = new Set()
@@ -176,7 +176,7 @@ export function crearActividad({
         familia: info(agente).familia,
         // R1 · el modelo real del job (y su variant) manda sobre el del frontmatter.
         modelo: j.modelo || info(agente).modelo,
-        variant: j.variant || null,
+        variant: j.variant || info(agente).esfuerzo || null,
         estado,
         tarea: j.title || null,
         desde: j.createdAt || j.updatedAt || t,
@@ -211,7 +211,7 @@ export function crearActividad({
         agente,
         familia: info(agente).familia,
         modelo: se.modelo || info(agente).modelo,
-        variant: se.variant || null,
+        variant: se.variant || info(agente).esfuerzo || null,
         estado: 'trabajando',
         tarea: se.title || null,
         desde: se.updatedAt,
@@ -239,7 +239,7 @@ export function crearActividad({
         familia: info(agente).familia,
         // R2 · el modelo del latido manda; si no lo trae, cae al del frontmatter.
         modelo: l.modelo || info(agente).modelo,
-        variant: l.variant || null,
+        variant: l.variant || info(agente).esfuerzo || null,
         estado,
         tarea: l.tarea || null,
         desde: l.desde || l.ts,
