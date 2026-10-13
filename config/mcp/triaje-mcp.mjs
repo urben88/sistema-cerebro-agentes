@@ -81,7 +81,7 @@ function formatearLista(lista) {
   const enCurso = lista.filter((j) => esActivo(j) && esReciente(j))
   const parados = lista.filter((j) => esActivo(j) && !esReciente(j)).slice(0, 5)
   const cerrados = lista.filter((j) => !esActivo(j)).slice(0, 5)
-  const fila = (j) => `- ${j.jobId} · ${j.agent || '?'} · ${estado(j.status)} · ${duracion(j.createdAt, j.updatedAt)} · ${dinero(j.cost)} · ${j.title || '(sin título)'} · ${hace(j.updatedAt)}`
+  const fila = (j) => `- ${j.jobId} · ${j.agent || '?'}${j.variant ? ` (${j.variant})` : ''} · ${estado(j.status)} · ${duracion(j.createdAt, j.updatedAt)} · ${dinero(j.cost)} · ${j.title || '(sin título)'} · ${hace(j.updatedAt)}`
   const partes = []
   if (enCurso.length) {
     partes.push(`Trabajos de OpenCode (${enCurso.length} en curso):`)

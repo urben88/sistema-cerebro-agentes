@@ -99,7 +99,7 @@ Guarda el `jobId` y el `sessionId` que devuelve. Publica la tarjeta de lanzamien
 
 - `opencode_wait({jobId, timeoutSeconds: 60})` en bucle, o `opencode_check({jobId, detailed: true})`.
 - Un timeout de observación **no** es un fallo: la tarea sigue; vuelve a llamar.
-- **Visibilidad por hitos**: como mínimo una vez por minuto, saca un resumen barato con `trabajo_estado` (MCP `triaje`) y publica 2-3 líneas para el usuario: estado, tiempo, coste y último paso, en cristiano. No vuelques conversaciones enteras; `opencode_conversation` solo si te lo piden o hay que resolver una duda concreta.
+- **Visibilidad por hitos**: como mínimo una vez por minuto, saca un resumen barato con `trabajo_estado` (MCP `triaje`) y publica 2-3 líneas para el usuario: agente · esfuerzo, estado, tiempo, coste y último paso, en cristiano. No vuelques conversaciones enteras; `opencode_conversation` solo si te lo piden o hay que resolver una duda concreta.
 - Si el estado es `input_required`: usa `opencode_question_list` / `opencode_permission_list`, **muestra la pregunta exacta al usuario** y responde con `opencode_job_input`. Consulta al usuario solo si la decisión no se deduce de la spec.
 - Si el trabajo parece atascado (dos vueltas sin avanzar), pásalo al subagente `subdirector` o cancela y replantea.
 

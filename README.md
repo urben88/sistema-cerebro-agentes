@@ -41,7 +41,7 @@ El puente entre capas es **[opencode-mcp](https://github.com/AlaeddineMessari/op
 
 - **Briefing automático**: al abrir cualquier sesión de Claude en un proyecto con memoria, el hub le inyecta el estado (tarea activa, quién la tiene, siguiente paso, alertas y trabajos en curso). Verificado: Claude responde "¿en qué estamos?" sin que se lo cuentes.
 - **Planifica antes de gastar**: en tareas ambiguas, el subagente `planificador` (Haiku) saca las preguntas mínimas que cambian el trabajo (máx. 5) con supuestos por defecto; el Cerebro te las pregunta antes de escribir la spec o delegar código.
-- **Ves a las manos trabajar**: el Cerebro te cuenta el progreso de cada job de OpenCode (estado, tiempo, coste y último paso) sin volcar conversaciones; la barra de estado de Claude Code muestra el modelo, el contexto y el trabajo en curso.
+- **Ves a las manos trabajar**: el Cerebro te cuenta el progreso de cada job de OpenCode (agente · esfuerzo, estado, tiempo, coste y último paso) sin volcar conversaciones; la barra de estado de Claude Code muestra el modelo, el contexto y el trabajo en curso.
 - **`/clear` sin miedo**: al ~70 % de contexto, el agente vuelca el estado; al abrir la siguiente sesión, todo está de vuelta. Antes de compactar, un hook guarda un checkpoint solo.
 - **Reparto por esfuerzos**: DeepSeek low/high/max según el trabajo (`testeador` low, `implementador`/`debugger` high, `revisor` max); Claude medium por defecto; el código **no consume tu ventana de Claude**.
 - **Triaje local (Laya)**: decide a quién mandar cada tarea; si duda (confianza < 0,60), mandan las reglas; **cada decisión queda registrada** para afinar Laya con tu uso real.

@@ -46,6 +46,22 @@ opencode_fire({
 - **Costes.** Claude (suscripción) piensa; OpenCode gasta tokens baratos. Los subagentes baratos de Claude son **Haiku** (`planificador`, `explorador`, `redactor`, `analista`, `subdirector`); solo `arquitecto` usa Sonnet a propósito. `local` (Ollama) es gratis y solo se usa si lo pides.
 - **Ver estado sin Claude:** `scripts/verificar.ps1` / `verificar.sh`.
 
+## Ver quién hace qué (modelos, esfuerzo y progreso)
+
+**Subagentes de Claude** (`planificador`, `explorador`, `redactor`, `analista`, `subdirector`; `arquitecto` es el único Sonnet):
+
+- **`/tasks`** dentro de Claude Code: lista los subagentes con su **modelo y esfuerzo**; Enter abre su transcript en vivo.
+- Mientras corren aparecen en el **panel de subagentes** bajo el prompt; el Cerebro te anuncia al lanzarlos el tipo y su modelo («explorador · Haiku»). Si ves un subagente en Sonnet sin querer, es que se lanzó como `general-purpose`/`fork`: pide el tipo por su nombre (desde v0.3.0 el Cerebro ya lo hace).
+- Todos son Haiku salvo `arquitecto` (Sonnet · high, solo para lo difícil).
+
+**Manos de OpenCode** (`implementador`, `debugger`, `revisor`, `testeador`, exploradores…):
+
+- **Barra de estado** de Claude Code, en el proyecto donde trabaja: `🤖 implementador (high) · 12m · $0.08` (o `⏳ pregunta` si te necesita; `✅/❌` al cerrar).
+- **En el chat**: el Cerebro te cuenta hitos cada ~1 min; pregúntale «¿cómo va?» cuando quieras — saca el resumen con `trabajo_estado` (estado, tiempo, coste, tokens, último paso y herramientas usadas).
+- **Panel del hub** (`http://127.0.0.1:4597`): «La oficina» y la tarjeta de trabajos en vivo; el vigilante avisa de atascos.
+
+Reparto de esfuerzos en OpenCode: `implementador` y `debugger` **high** · `revisor` **max** · `testeador` **low** · `explorador-ds`/`redactor-ds` **low** · `planificador` **high** · `cerebro-oc` **max**.
+
 ## Cambiar el modelo de un agente
 
 Edita `config/opencode/agents/<agente>.md` en el repo, en la línea `model:`, y despliega:

@@ -47,14 +47,18 @@ try {
     const oc = crearOpenCode({ systemDir: __dirname })
     const jobs = oc.leerJobsRecientes(60 * MIN, 40).filter((j) => norm(j.directory) === norm(dir))
     const activos = jobs.filter((j) => ['running', 'accepted', 'input_required'].includes(j.status) && Date.now() - (j.updatedAt || 0) < 60 * MIN)
+    // Prioriza el que más información da: espera respuesta > en marcha > aceptado; y el más reciente.
+    const peso = { input_required: 0, running: 1, accepted: 2 }
+    activos.sort((a, b) => (peso[a.status] ?? 3) - (peso[b.status] ?? 3) || (b.updatedAt || 0) - (a.updatedAt || 0))
     const cerrado = jobs.find((j) => ['completed', 'failed'].includes(j.status) && Date.now() - (j.updatedAt || 0) < 5 * MIN)
     if (activos.length) {
       const j = activos[0]
       const extra = activos.length > 1 ? ` (+${activos.length - 1})` : ''
+      const esfuerzo = j.variant ? ` (${j.variant})` : ''
       if (j.status === 'input_required') {
-        partes.push(`🤖 ${j.agent || '?'} ⏳ pregunta · ${duracion(j.createdAt, j.updatedAt)}${extra}`)
+        partes.push(`🤖 ${j.agent || '?'}${esfuerzo} ⏳ pregunta · ${duracion(j.createdAt, j.updatedAt)}${extra}`)
       } else {
-        partes.push(`🤖 ${j.agent || '?'} · ${duracion(j.createdAt, j.updatedAt)}${typeof j.cost === 'number' ? ` · $${j.cost.toFixed(2)}` : ''}${extra}`)
+        partes.push(`🤖 ${j.agent || '?'}${esfuerzo} · ${duracion(j.createdAt, j.updatedAt)}${typeof j.cost === 'number' ? ` · $${j.cost.toFixed(2)}` : ''}${extra}`)
       }
     } else if (cerrado) {
       partes.push(`${cerrado.status === 'completed' ? '✅' : '❌'} ${cerrado.agent || '?'} ${cerrado.status === 'completed' ? 'terminó' : 'falló'} hace ${duracion(cerrado.updatedAt, Date.now())}`)
