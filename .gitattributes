@@ -1,0 +1,6 @@
+# Normalización de finales de línea entre Windows, macOS y Linux
+* text=auto
+*.sh  text eol=lf
+*.mjs text eol=lf
+*.md  text eol=lf
+*.ps1 text eol=crlf
