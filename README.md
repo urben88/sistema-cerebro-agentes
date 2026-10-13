@@ -5,7 +5,7 @@ Arquitectura de dos capas para desarrollo con IA, instalable en **Windows, macOS
 | Capa | Quién | Qué hace | Coste |
 |---|---|---|---|
 | 🧠 **Cerebro** | Claude Code (tu suscripción) | Piensa, investiga, decide y escribe la documentación (specs, arquitectura, planes) | Suscripción de Claude |
-| 🤖 **Manos** | OpenCode + modelos baratos | Escribe, revisa y prueba el código siguiendo las specs del Cerebro | Tokens baratos (DeepSeek vía OpenRouter; GPT-6 Luna cuando se active) |
+| 🤖 **Manos** | OpenCode + modelos baratos | Escribe, revisa y prueba el código siguiendo las specs del Cerebro | Tokens baratos (DeepSeek V4.1 Flash; GPT-6 Luna cuando la cuenta de OpenRouter tenga crédito) |
 
 El puente entre ambas capas es **[opencode-mcp](https://github.com/AlaeddineMessadi/opencode-mcp)** (servidor MCP local por stdio, sin Docker).
 
@@ -40,7 +40,7 @@ Este repositorio es la **fuente de verdad** del sistema: configuración, agentes
 ## Requisitos
 
 - **Node.js ≥ 22** — [nodejs.org](https://nodejs.org)
-- **OpenCode V2** — [opencode.ai](https://opencode.ai), con la integración de **OpenRouter** conectada (`opencode auth login`, o `/connect` en la TUI). También sirve el proveedor oficial de DeepSeek (ver «Cambiar de modelo»).
+- **OpenCode V2** — [opencode.ai](https://opencode.ai), con el proveedor **DeepSeek** conectado (`opencode auth login`, o `/connect` en la TUI). Opcional: conecta también **OpenRouter** si quieres usar GPT-6 Luna (requiere crédito en la cuenta). El instalador añade su propio servidor **opencode-ai (V1)** en `~/.sistema-cerebro-agentes/server` — es el que usa el MCP; tu OpenCode V2 (TUI) no se toca.
 - **Claude Code** — [claude.com/claude-code](https://claude.com/claude-code), con tu suscripción de Claude.
 - **Git** — para clonar y actualizar este repositorio.
 
@@ -80,7 +80,9 @@ bash scripts/verificar.sh --smoke
 
 | Componente | Destino | Origen en el repo |
 |---|---|---|
-| MCP `opencode` en Claude Code (scope de usuario) | Configuración de Claude Code | `install.ps1` / `install.sh` |
+| Servidor OpenCode V1 (`opencode-ai`, el que usa el MCP) | `~/.sistema-cerebro-agentes/server/` (datos aislados en `server-data/`) | se instala con npm (`opencode-ai@1.18.35`) |
+| Lanzador del MCP y gestor del servidor | `~/.sistema-cerebro-agentes/launcher.*`, `servidor.*` | `config/mcp/` |
+| MCP `opencode` en Claude Code (scope de usuario, vía lanzador) | Configuración de Claude Code | `install.ps1` / `install.sh` |
 | Rol Cerebro (memoria global) | `~/.claude/CLAUDE.md` → bloque gestionado | `config/claude/CLAUDE.md` |
 | Skill de delegación | `~/.claude/skills/delegar-a-opencode/` | `config/claude/skills/delegar-a-opencode/` |
 | Agentes de OpenCode | `~/.config/opencode/agents/` | `config/opencode/agents/` |
@@ -98,20 +100,22 @@ Detalles y ejemplos en [docs/uso-diario.md](docs/uso-diario.md).
 
 | Agente | Papel | Modelo (v0.1.0) |
 |---|---|---|
-| `constructor` | Implementa la spec (código, build, tests) | `openrouter/deepseek/deepseek-v4.1-flash` |
-| `revisor` | Revisa el diff contra la spec, sin editar | `openrouter/deepseek/deepseek-v4.1-flash` |
-| `testeador` | Escribe y ejecuta pruebas | `openrouter/deepseek/deepseek-v4.1-flash` |
+| `implementador` | Implementa la spec (código, build, tests) | `deepseek/deepseek-flash` |
+| `revisor` | Revisa el diff contra la spec, sin editar | `deepseek/deepseek-flash` |
+| `testeador` | Escribe y ejecuta pruebas | `deepseek/deepseek-flash` |
 
-### Cambiar de modelo (activar GPT-6 Luna)
+### Cambiar de modelo (p. ej. activar GPT-6 Luna)
 
 Edita el `model:` del agente en `config/opencode/agents/*.md` y reinstala:
 
 ```yaml
 # config/opencode/agents/revisor.md
-model: openrouter/openai/gpt-6-luna
+model: openrouter/openai/gpt-6-luna   # requiere crédito en la cuenta de OpenRouter
 ```
 
 Después: `git add -A && git commit -m "revisor: usa GPT-6 Luna" && git push` y ejecuta el instalador (o `scripts/actualizar`) en cada máquina.
+
+> Los modelos vía OpenRouter solo funcionan con crédito en la cuenta. Si una petición falla con «requires more credits, or fewer max_tokens», recarga tu cuenta de OpenRouter (o vuelve a `deepseek/deepseek-flash`).
 
 ## Evolución (varias máquinas)
 
@@ -131,8 +135,9 @@ sistema-cerebro-agentes/
 │   │   └── skills/delegar-a-opencode/
 │   │       ├── SKILL.md              ← protocolo de delegación
 │   │       └── plantilla-spec.md     ← plantilla de specs
+│   ├── mcp/                          ← lanzador del MCP y gestor del servidor V1
 │   └── opencode/
-│       └── agents/                   ← agentes constructor, revisor, testeador
+│       └── agents/                   ← agentes implementador, revisor, testeador
 ├── docs/                             ← arquitectura, uso, pruebas, decisiones
 └── scripts/                          ← verificar, actualizar, smoke test del MCP
 ```

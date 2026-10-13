@@ -44,10 +44,25 @@ command -v claude >/dev/null 2>&1 && test_item 0 'Claude Code instalado' || test
 
 step 'Proveedores (OpenCode)'
 AUTH_JSON="$HOME/.local/share/opencode/auth.json"
-if [ -f "$AUTH_JSON" ] && grep -q '"openrouter"' "$AUTH_JSON"; then
-  test_item 0 'OpenRouter conectado'
+if [ -f "$AUTH_JSON" ] && grep -q '"deepseek"' "$AUTH_JSON"; then
+  test_item 0 'Proveedor DeepSeek (oficial) conectado'
 else
-  test_item 1 'OpenRouter no conectado' "Conecta OpenRouter: 'opencode auth login' (o /connect en la TUI)"
+  test_item 1 'DeepSeek no conectado' "Conecta DeepSeek: 'opencode auth login' (o /connect en la TUI)"
+fi
+if [ -f "$AUTH_JSON" ] && grep -q '"openrouter"' "$AUTH_JSON"; then
+  printf '  %s[OK]%s   OpenRouter también conectado (opcional)\n' "$C_OK" "$C_OFF"; PASS=$((PASS+1))
+fi
+
+step 'Servidor OpenCode V1'
+[ -x "$HOME/.sistema-cerebro-agentes/server/node_modules/.bin/opencode" ] && test_item 0 'opencode-ai (servidor V1) instalado' || test_item 1 'opencode-ai (servidor V1) no instalado' 'Ejecuta install.sh'
+[ -f "$HOME/.sistema-cerebro-agentes/launcher.sh" ] && test_item 0 'Lanzador del MCP instalado' || test_item 1 'Lanzador del MCP no instalado' 'Ejecuta install.sh'
+bash "$HOME/.sistema-cerebro-agentes/servidor.sh" >/dev/null 2>&1 || true
+SRV_PORT=""
+[ -f "$HOME/.sistema-cerebro-agentes/server-port.txt" ] && SRV_PORT="$(tr -d '[:space:]' < "$HOME/.sistema-cerebro-agentes/server-port.txt")"
+if [ -n "$SRV_PORT" ] && curl -fsS --max-time 4 "http://127.0.0.1:$SRV_PORT/config" >/dev/null 2>&1; then
+  test_item 0 "Servidor V1 responde en 127.0.0.1:$SRV_PORT"
+else
+  test_item 1 'Servidor V1 no responde' 'Relanza: bash ~/.sistema-cerebro-agentes/servidor.sh'
 fi
 
 step 'Rol Cerebro (Claude Code)'
@@ -60,7 +75,7 @@ fi
 [ -f "$HOME/.claude/skills/delegar-a-opencode/SKILL.md" ] && test_item 0 'Skill delegar-a-opencode instalada' || test_item 1 'Skill delegar-a-opencode no instalada' 'Ejecuta install.sh'
 
 step 'Agentes de OpenCode'
-for name in constructor.md revisor.md testeador.md; do
+for name in implementador.md revisor.md testeador.md; do
   [ -f "$HOME/.config/opencode/agents/$name" ] && test_item 0 "Agente $name" || test_item 1 "Agente $name no encontrado" 'Ejecuta install.sh'
 done
 

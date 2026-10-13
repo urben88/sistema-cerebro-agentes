@@ -26,7 +26,7 @@ Regla de oro: **tú piensas y documentas; OpenCode ejecuta el código**. Ninguna
 
 | Agente | Para qué |
 |---|---|
-| `constructor` | Implementa la spec (código, build, pruebas básicas) |
+| `implementador` | Implementa la spec (código, build, pruebas básicas) |
 | `revisor` | Revisa el diff contra la spec, sin editar archivos |
 | `testeador` | Escribe y ejecuta pruebas del cambio |
 
@@ -43,13 +43,17 @@ Crea o actualiza `docs/specs/NN-slug.md` en el proyecto (usa `plantilla-spec.md`
 ```
 opencode_fire({
   directory: "RUTA ABSOLUTA del proyecto",
-  agent: "constructor",
+  agent: "implementador",
+  providerID: "deepseek",
+  modelID: "deepseek-flash",
   title: "nombre corto de la feature",
   prompt: "Lee docs/specs/NN-slug.md y impleméntala. Trabaja por pasos; al terminar compila y ejecuta los tests disponibles; reporta archivos tocados, comandos, resultados y dudas."
 })
 ```
 
 Guarda el `jobId` y el `sessionId` que devuelve.
+
+> **Pasa siempre `providerID` y `modelID` explícitos** (los de arriba). El modelo por defecto del servidor puede ser cualquier otro (p. ej. el último usado en la TUI) y no conviene depender de él.
 
 ### Paso 3 — Vigilar
 
@@ -77,6 +81,7 @@ Resume al usuario: qué se hizo, archivos, pruebas y qué queda pendiente. Actua
 
 ## Reglas
 
+- Si una llamada devuelve el servidor como no disponible (`UNREACHABLE`) o una tarea aparece como `unknown`, espera unos segundos y vuelve a intentarlo: el servidor local puede estar arrancando en frío.
 - Un proyecto = un `directory` absoluto. Nunca rutas relativas.
 - Para cambios de modelo/proveedor: editar el `model:` del agente en el repo `sistema-cerebro-agentes` y reinstalar; no improvisar configuración suelta en la máquina.
 - Nunca delegues trabajo de código sin spec (las preguntas puntuales con `opencode_ask` son la excepción).

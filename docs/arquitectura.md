@@ -27,7 +27,7 @@ Dos capas con un puente MCP local:
                        ▼
 ┌──────────────────────────────────────────────────┐
 │ 🤖 OpenCode — MANOS                              │
-│   agentes: constructor · revisor · testeador     │
+│   agentes: implementador · revisor · testeador    │
 │   modelos: DeepSeek V4.1 Flash (OpenRouter)      │
 │            GPT-6 Luna disponible (1 línea)       │
 └──────────────────────────────────────────────────┘
@@ -61,9 +61,10 @@ Dos capas con un puente MCP local:
 
 ## Ciclo de vida del servidor OpenCode
 
-- El MCP arranca con Claude Code (proceso hijo, stdio).
-- Con `OPENCODE_AUTO_SERVE=true`, el MCP levanta un servidor OpenCode local **solo cuando se necesita** y lo apaga al desconectarse.
-- La TUI de OpenCode usa su propio servicio en segundo plano; ambos conviven, pero si algún día notas conflictos por uso intensivo simultáneo (dos servidores compartiendo almacenamiento), la alternativa es un único servidor persistente (`opencode serve` + `OPENCODE_BASE_URL`). No es necesario hoy.
+- El MCP `opencode` se lanza con Claude Code (proceso hijo, stdio) a través del **lanzador** (`~/.sistema-cerebro-agentes/launcher.ps1` / `launcher.sh`).
+- El lanzador asegura un **servidor OpenCode V1 (`opencode-ai` 1.18.35)** con datos **aislados** en `~/.sistema-cerebro-agentes/server-data` (las credenciales se sincronizan desde tu instalación principal). El puerto se elige dinámicamente desde **4599** (el primero libre) y se guarda en `server-port.txt`; así se esquivan los "listeners fantasma" que Windows deja a veces. Si no está activo lo arranca en segundo plano; si está, lo reutiliza.
+- El MCP (opencode-mcp v3) habla la **API V1** de OpenCode; por eso el sistema usa `opencode-ai` V1, y **no** tu OpenCode V2 de la TUI — que queda intacto y sin compartir almacén con las tareas delegadas.
+- El puerto es dinámico desde **4599** (`server-port.txt`) porque el auto-arranque original del MCP resultó frágil y los puertos fijos acumulaban listeners fantasma en esta máquina. Se puede cambiar la base en `servidor.*`. 
 
 ## Evolución del sistema
 

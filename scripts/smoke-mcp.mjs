@@ -3,7 +3,7 @@
  * Smoke test del MCP opencode-mcp para sistema-cerebro-agentes.
  *
  * Comprueba, sin depender de Claude Code:
- *   1. Arranque del MCP por stdio (npx -y opencode-mcp, con auto-serve).
+ *   1. Arranque del MCP por stdio a través del lanzador instalado (~/.sistema-cerebro-agentes).
  *   2. Handshake MCP y lista de herramientas (perfil essential).
  *   3. Llamada real: opencode_status.
  *   --ask        además: una pregunta trivial al modelo por defecto (inferencia real).
@@ -16,6 +16,7 @@
  *   node scripts/smoke-mcp.mjs --e2e "C:\ruta\proyecto-de-prueba"
  */
 import { spawn } from 'node:child_process'
+import fs from 'node:fs'
 import process from 'node:process'
 
 const argv = process.argv.slice(2)
@@ -28,18 +29,27 @@ if (e2eIdx >= 0 && (!e2eDir || e2eDir.startsWith('--'))) {
 }
 
 const isWin = process.platform === 'win32'
-const cmd = isWin ? 'cmd' : 'npx'
-const cmdArgs = isWin ? ['/c', 'npx', '-y', 'opencode-mcp'] : ['-y', 'opencode-mcp']
+const home = process.env.USERPROFILE || process.env.HOME || ''
+const launcherPath = isWin
+  ? `${home}\\.sistema-cerebro-agentes\\launcher.ps1`
+  : `${home}/.sistema-cerebro-agentes/launcher.sh`
 
-console.log('Arrancando MCP: npx -y opencode-mcp …')
+let cmd
+let cmdArgs
+if (fs.existsSync(launcherPath)) {
+  cmd = isWin ? 'cmd' : 'bash'
+  cmdArgs = isWin
+    ? ['/c', 'powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', launcherPath]
+    : [launcherPath]
+  console.log(`Arrancando MCP vía lanzador: ${launcherPath}`)
+} else {
+  cmd = isWin ? 'cmd' : 'npx'
+  cmdArgs = isWin ? ['/c', 'npx', '-y', 'opencode-mcp'] : ['-y', 'opencode-mcp']
+  console.log('Aviso: lanzador no encontrado; se usa npx directo (requiere un servidor V1 en OPENCODE_BASE_URL)')
+}
+
 const child = spawn(cmd, cmdArgs, {
-  env: {
-    ...process.env,
-    OPENCODE_AUTO_SERVE: 'true',
-    OPENCODE_TOOL_PROFILE: 'essential',
-    OPENCODE_DEFAULT_PROVIDER: 'openrouter',
-    OPENCODE_DEFAULT_MODEL: 'deepseek/deepseek-v4.1-flash',
-  },
+  env: { ...process.env },
   stdio: ['pipe', 'pipe', 'pipe'],
 })
 
@@ -126,8 +136,15 @@ try {
     else fail(`falta la herramienta ${required}`)
   }
 
-  const status = await request('tools/call', { name: 'opencode_status', arguments: {} }, 180000)
-  const statusText = toolText(status)
+  let status = null
+  let statusText = ''
+  for (let attempt = 1; attempt <= 30; attempt++) {
+    status = await request('tools/call', { name: 'opencode_status', arguments: {} }, 60000)
+    statusText = toolText(status)
+    if (!/UNREACHABLE/i.test(statusText)) break
+    console.log(`   servidor no disponible aún (intento ${attempt}); esperando 3s…`)
+    await new Promise((r) => setTimeout(r, 3000))
+  }
   console.log('3) opencode_status:')
   console.log(statusText.split('\n').slice(0, 15).map((l) => `   ${l}`).join('\n'))
   if (status?.isError || status?.structuredContent?.isError) fail('opencode_status devolvió error')
@@ -136,7 +153,7 @@ try {
     console.log('4) opencode_ask (inferencia real, puede tardar)…')
     const ask = await request('tools/call', {
       name: 'opencode_ask',
-      arguments: { prompt: 'Responde solo con: OK' },
+      arguments: { prompt: 'Responde solo con: OK', providerID: 'deepseek', modelID: 'deepseek-flash' },
     }, 360000)
     const askText = toolText(ask)
     console.log(`   respuesta: ${askText.trim().slice(0, 200)}`)
@@ -145,17 +162,23 @@ try {
   }
 
   if (e2eDir) {
-    console.log(`5) E2E: delegando mini-tarea al constructor en ${e2eDir} …`)
-    const fire = await request('tools/call', {
-      name: 'opencode_fire',
-      arguments: {
-        directory: e2eDir,
-        agent: 'constructor',
-        title: 'smoke e2e',
-        prompt: 'Crea el archivo saludo.mjs que exporte la función saludar(nombre) que devuelva "Hola, " + nombre, y el archivo prueba.mjs que usando node:test verifique que saludar("mundo") devuelve "Hola, mundo". Ejecuta "node --test prueba.mjs" y reporta el resultado.',
-      },
-    }, 180000)
-    const sc = fire?.structuredContent ?? {}
+    console.log(`5) E2E: delegando mini-tarea al implementador en ${e2eDir} …`)
+    const fireArgs = {
+      directory: e2eDir,
+      agent: 'implementador',
+      providerID: 'deepseek',
+      modelID: 'deepseek-flash',
+      title: 'smoke e2e',
+      prompt: 'Crea el archivo saludo.mjs que exporte la función saludar(nombre) que devuelva "Hola, " + nombre, y el archivo prueba.mjs que usando node:test verifique que saludar("mundo") devuelve "Hola, mundo". Ejecuta "node --test prueba.mjs" y reporta el resultado.',
+    }
+    let sc = {}
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      const fire = await request('tools/call', { name: 'opencode_fire', arguments: fireArgs }, 180000)
+      sc = fire?.structuredContent ?? {}
+      if (sc.status !== 'unknown') break
+      console.log('   el servidor aún estaba arrancando; reintento en 15s…')
+      await new Promise((r) => setTimeout(r, 15000))
+    }
     console.log(`   lanzado: status=${sc.status} jobId=${sc.jobId ?? '?'}`)
     let final = sc
     const startedAt = Date.now()
@@ -167,7 +190,7 @@ try {
     }
     console.log('')
     if (final.status === 'completed') {
-      ok('la tarea del constructor terminó')
+      ok('la tarea del implementador terminó')
       const review = await request('tools/call', { name: 'opencode_review_changes', arguments: { sessionId: sc.sessionId } }, 120000)
       const reviewText = toolText(review)
       console.log('   diff (resumen):')

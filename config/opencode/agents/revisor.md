@@ -1,7 +1,7 @@
 ---
 description: Revisa cambios de código contra su especificación. No edita archivos — informa hallazgos por severidad con archivo y línea, y un veredicto final.
 mode: subagent
-model: openrouter/deepseek/deepseek-v4.1-flash
+model: deepseek/deepseek-flash
 permissions:
   - action: edit
     resource: "*"
@@ -25,4 +25,4 @@ Informe (siempre), ordenado por severidad:
 
 Termina con un veredicto: **Apto** o **No apto** + motivos.
 
-No arregles nada: tu salida es un informe para que decidan el constructor o el Cerebro. Responde en el idioma del prompt.
+No arregles nada: tu salida es un informe para que decidan el implementador o el Cerebro. Responde en el idioma del prompt.

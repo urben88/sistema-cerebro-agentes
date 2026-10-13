@@ -22,7 +22,7 @@ Tú no tienes que invocar el MCP a mano: la skill `delegar-a-opencode` hace que 
 ```
 opencode_fire({
   directory: "C:\\dev\\mi-proyecto",
-  agent: "constructor",
+  agent: "implementador",
   title: "endpoint POST /api/tareas",
   prompt: "Lee docs/specs/01-api-tareas.md y impleméntala. Trabaja por pasos; al terminar compila y ejecuta los tests disponibles; reporta archivos tocados, comandos, resultados y dudas."
 })
@@ -51,24 +51,26 @@ git add -A; git commit -m "agente: cambio de modelo"; git push
 .\scripts\actualizar.ps1
 ```
 
-Ejemplo — activar GPT-6 Luna en el revisor:
+Ejemplo — activar GPT-6 Luna en el revisor (requiere crédito en OpenRouter):
 
 ```yaml
 model: openrouter/openai/gpt-6-luna
 ```
 
-Disponibles verificados (a fecha de v0.1.0):
+Modelos relevantes (a fecha de v0.1.0):
 
-| Modelo | ID en OpenCode |
-|---|---|
-| DeepSeek V4.1 Flash (OpenRouter) | `openrouter/deepseek/deepseek-v4.1-flash` |
-| GPT-6 Luna (OpenRouter) | `openrouter/openai/gpt-6-luna` |
-| DeepSeek oficial | `deepseek/deepseek-flash` |
-| DeepSeek oficial Pro | `deepseek/deepseek-v4-pro` |
+| Modelo | ID en OpenCode | Requisito |
+|---|---|---|
+| DeepSeek V4.1 Flash (oficial, por defecto) | `deepseek/deepseek-flash` | Cuenta DeepSeek conectada |
+| DeepSeek V4 Pro (oficial) | `deepseek/deepseek-v4-pro` | Cuenta DeepSeek conectada |
+| DeepSeek V4.1 Flash (OpenRouter) | `openrouter/deepseek/deepseek-v4.1-flash` | OpenRouter con crédito |
+| GPT-6 Luna (OpenRouter) | `openrouter/openai/gpt-6-luna` | OpenRouter con crédito |
+
+> Si las peticiones fallan con «requires more credits, or fewer max_tokens», la cuenta de OpenRouter no tiene crédito suficiente: recarga o vuelve al modelo oficial.
 
 ## Añadir un agente nuevo
 
-1. Crea `config/opencode/agents/<nombre>.md` (copia la estructura de `constructor.md`: frontmatter `description`, `mode`, `model`, y el prompt en el cuerpo).
+1. Crea `config/opencode/agents/<nombre>.md` (copia la estructura de `implementador.md`: frontmatter `description`, `mode`, `model`, y el prompt en el cuerpo). **No uses nombres que sean propiedades reservadas de JavaScript** (`constructor`, `hasOwnProperty`, `toString`…): rompen el servidor V1.
 2. `git add`, `commit`, `push`.
 3. Despliega en cada máquina (`scripts/actualizar`).
 4. Documenta el cambio en `CHANGELOG.md` y, si hace falta, en `docs/uso-diario.md`.

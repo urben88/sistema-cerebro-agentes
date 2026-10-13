@@ -36,12 +36,37 @@ function Backup-Item([string]$Path) {
   Write-Note "backup: $Path"
 }
 
+function Invoke-Cli([string]$File, [string[]]$Arguments) {
+  # Quirk de PowerShell 5.1: stderr de comandos externos + EAP=Stop = error fatal.
+  $prevEap = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $output = (& $File @Arguments 2>&1 | Out-String)
+    $code   = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $prevEap
+  }
+  return [pscustomobject]@{ Output = $output; Code = $code }
+}
+
 Write-Step 'Desinstalando sistema-cerebro-agentes'
 
 # 1. MCP en Claude Code
-& claude mcp remove opencode --scope user 2>&1 | Out-Null
-if ($LASTEXITCODE -eq 0) { Write-Ok 'MCP opencode eliminado de Claude Code' }
+$removeResult = Invoke-Cli 'claude' @('mcp', 'remove', 'opencode', '--scope', 'user')
+if ($removeResult.Code -eq 0) { Write-Ok 'MCP opencode eliminado de Claude Code' }
 else { Write-Warn 'El MCP opencode no estaba registrado (o no se pudo eliminar)' }
+
+# 1b. Servidor y lanzador
+$sysDir = Join-Path $UserHome '.sistema-cerebro-agentes'
+$srvScript = Join-Path $sysDir 'servidor.ps1'
+if (Test-Path -LiteralPath $srvScript) {
+  & powershell -NoProfile -ExecutionPolicy Bypass -File $srvScript -Stop 2>$null | Out-Null
+  Write-Ok 'Servidor V1 detenido'
+}
+foreach ($f in @('launcher.ps1', 'servidor.ps1')) {
+  $p = Join-Path $sysDir $f
+  if (Test-Path -LiteralPath $p) { Backup-Item $p; Remove-Item -LiteralPath $p -Force; Write-Ok "Eliminado: $p" }
+}
 
 # 2. Bloque gestionado en CLAUDE.md
 $claudeMd = Join-Path $UserHome '.claude\CLAUDE.md'
@@ -69,7 +94,7 @@ if (Test-Path -LiteralPath $skillDst) {
 
 # 4. Agentes de OpenCode
 $agentsDst = Join-Path $UserHome '.config\opencode\agents'
-foreach ($name in @('constructor.md', 'revisor.md', 'testeador.md')) {
+foreach ($name in @('implementador.md', 'revisor.md', 'testeador.md', 'constructor.md')) {
   $p = Join-Path $agentsDst $name
   if (Test-Path -LiteralPath $p) {
     Backup-Item $p

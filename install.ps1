@@ -5,13 +5,17 @@
 
 .DESCRIPTION
   Despliega la arquitectura Cerebro (Claude Code) -> Manos (OpenCode):
-   1. Comprueba prerrequisitos (Node >= 22, OpenCode, Claude Code, OpenRouter).
-   2. Registra el MCP opencode-mcp en Claude Code (scope de usuario).
-   3. Instala el rol Cerebro (CLAUDE.md, bloque gestionado) y la skill delegar-a-opencode.
-   4. Instala los agentes constructor/revisor/testeador en OpenCode.
+   1. Comprueba prerrequisitos (Node >= 22, OpenCode, Claude Code, proveedor DeepSeek).
+   2. Instala el servidor OpenCode V1 (opencode-ai) que usa el MCP, con datos aislados.
+   3. Copia el lanzador del MCP a ~/.sistema-cerebro-agentes.
+   4. Registra el MCP opencode en Claude Code (scope de usuario).
+   5. Instala el rol Cerebro (CLAUDE.md, bloque gestionado) y la skill delegar-a-opencode.
+   6. Instala los agentes implementador/revisor/testeador en OpenCode y retira el
+      antiguo constructor.md (renombrado: era una palabra reservada de JavaScript).
+   7. Arranca el servidor local.
 
-  Es idempotente (se puede ejecutar las veces que haga falta) y hace copia de
-  seguridad de todo lo que reemplaza en ~/.sistema-cerebro-agentes/backups/<fecha>/.
+  Es idempotente y hace copia de seguridad de todo lo que reemplaza en
+  ~/.sistema-cerebro-agentes/backups/<fecha>/.
 
 .PARAMETER Check
   Solo comprueba prerrequisitos y estado; no cambia nada.
@@ -30,13 +34,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$RepoRoot    = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ConfigRoot  = Join-Path $RepoRoot 'config'
-$UserHome    = $env:USERPROFILE
-$MarkerBegin = '<!-- BEGIN sistema-cerebro-agentes -->'
-$MarkerEnd   = '<!-- END sistema-cerebro-agentes -->'
-$BackupRoot  = Join-Path $UserHome '.sistema-cerebro-agentes\backups'
-$BackupDir   = Join-Path $BackupRoot (Get-Date -Format 'yyyyMMdd-HHmmss')
+$RepoRoot       = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ConfigRoot     = Join-Path $RepoRoot 'config'
+$UserHome       = $env:USERPROFILE
+$SystemDir      = Join-Path $UserHome '.sistema-cerebro-agentes'
+$ServerDir      = Join-Path $SystemDir 'server'
+$ServerExe      = Join-Path $ServerDir 'node_modules\opencode-ai\bin\opencode.exe'
+$LauncherPath   = Join-Path $SystemDir 'launcher.ps1'
+$VersionServidor = '1.18.35'
+$MarkerBegin    = '<!-- BEGIN sistema-cerebro-agentes -->'
+$MarkerEnd      = '<!-- END sistema-cerebro-agentes -->'
+$BackupRoot     = Join-Path $SystemDir 'backups'
+$BackupDir      = Join-Path $BackupRoot (Get-Date -Format 'yyyyMMdd-HHmmss')
 
 function Write-Step([string]$m) { Write-Host "`n=== $m ===" -ForegroundColor Cyan }
 function Write-Ok([string]$m)   { Write-Host "  [OK]   $m" -ForegroundColor Green }
@@ -51,6 +60,20 @@ function Backup-Item([string]$Path) {
   $dest = Join-Path $BackupDir $name
   Copy-Item -LiteralPath $Path -Destination $dest -Recurse -Force
   Write-Note "backup: $Path"
+}
+
+function Invoke-Cli([string]$File, [string[]]$Arguments) {
+  # Envoltorio para comandos externos: nunca lanza por stderr (quirk de PowerShell 5.1
+  # con $ErrorActionPreference='Stop'); devuelve salida combinada y codigo de salida.
+  $prevEap = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $output = (& $File @Arguments 2>&1 | Out-String)
+    $code   = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $prevEap
+  }
+  return [pscustomobject]@{ Output = $output; Code = $code }
 }
 
 function Set-ManagedBlock([string]$TargetPath, [string]$BlockPath) {
@@ -95,35 +118,40 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
   $fatal.Add('Instala Node.js 22 o superior: https://nodejs.org')
 }
 
+if (Get-Command npx -ErrorAction SilentlyContinue) { Write-Ok 'npx disponible' }
+else { Write-Err 'npx no encontrado'; $fatal.Add('npx no encontrado (viene con Node.js >= 22)') }
+
 if (Get-Command opencode -ErrorAction SilentlyContinue) {
-  $ocVer = (& opencode --version 2>$null | Select-Object -First 1)
-  Write-Ok "OpenCode $ocVer"
+  $ocRes = Invoke-Cli 'opencode' @('--version')
+  Write-Ok "OpenCode $($ocRes.Output.Trim()) (para tu TUI; el MCP usara el servidor V1 propio)"
 } else {
-  Write-Err 'OpenCode no encontrado'
-  $fatal.Add('Instala OpenCode: https://opencode.ai  (npm: npm install -g @opencode/cli)')
+  Write-Warn 'OpenCode no encontrado (no es imprescindible para el MCP, pero lo usaras como TUI)'
 }
 
 if (Get-Command claude -ErrorAction SilentlyContinue) {
-  $ccVer = (& claude --version 2>$null | Select-Object -First 1)
-  Write-Ok "Claude Code $ccVer"
+  $ccRes = Invoke-Cli 'claude' @('--version')
+  Write-Ok "Claude Code $($ccRes.Output.Trim())"
 } else {
   Write-Err 'Claude Code no encontrado'
   $fatal.Add('Instala Claude Code: https://claude.com/claude-code')
 }
 
 $authPath      = Join-Path $UserHome '.local\share\opencode\auth.json'
-$hasOpenRouter = $false
+$authProviders = @()
 if (Test-Path -LiteralPath $authPath) {
   try {
     $auth          = Get-Content -LiteralPath $authPath -Raw | ConvertFrom-Json
-    $hasOpenRouter = @($auth.PSObject.Properties.Name) -contains 'openrouter'
+    $authProviders = @($auth.PSObject.Properties.Name)
   } catch { }
 }
-if ($hasOpenRouter) {
-  Write-Ok 'OpenRouter conectado en OpenCode'
+if ($authProviders -contains 'deepseek') {
+  Write-Ok 'Proveedor DeepSeek (oficial) conectado'
 } else {
-  Write-Warn 'OpenRouter no esta conectado en OpenCode'
-  $warnings.Add("Conecta OpenRouter en OpenCode: ejecuta 'opencode auth login' (o /connect en la TUI) y elige OpenRouter")
+  Write-Warn 'DeepSeek no esta conectado en OpenCode'
+  $warnings.Add("Conecta DeepSeek en OpenCode: ejecuta 'opencode auth login' (o /connect en la TUI) y elige DeepSeek")
+}
+if ($authProviders -contains 'openrouter') {
+  Write-Ok 'OpenRouter tambien conectado (opcional: habilita GPT-6 Luna cuando la cuenta tenga credito)'
 }
 
 if ($fatal.Count -gt 0) {
@@ -138,28 +166,67 @@ if ($Check) {
   exit 0
 }
 
-# ---------------------------------------------------------------- 2. MCP en Claude Code
-Write-Step 'MCP opencode-mcp en Claude Code'
+# ---------------------------------------------------------------- 2. Servidor OpenCode V1
+Write-Step "Servidor OpenCode V1 (opencode-ai $VersionServidor)"
 
-& claude mcp remove opencode --scope user 2>$null | Out-Null
-$mcpArgs = @(
-  'mcp', 'add', 'opencode', '--scope', 'user',
-  '--env', 'OPENCODE_AUTO_SERVE=true',
-  '--env', 'OPENCODE_TOOL_PROFILE=essential',
-  '--env', 'OPENCODE_DEFAULT_PROVIDER=openrouter',
-  '--env', 'OPENCODE_DEFAULT_MODEL=deepseek/deepseek-v4.1-flash',
-  '--', 'cmd', '/c', 'npx', '-y', 'opencode-mcp'
-)
-$mcpOut = (& claude @mcpArgs 2>&1 | Out-String)
-if ($LASTEXITCODE -eq 0) {
-  Write-Ok 'MCP registrado (scope de usuario)'
-} else {
-  Write-Warn 'No se pudo registrar el MCP automaticamente:'
-  Write-Host $mcpOut -ForegroundColor DarkGray
-  $warnings.Add('Registra el MCP a mano: claude mcp add opencode --scope user --env OPENCODE_AUTO_SERVE=true --env OPENCODE_TOOL_PROFILE=essential --env OPENCODE_DEFAULT_PROVIDER=openrouter --env OPENCODE_DEFAULT_MODEL=deepseek/deepseek-v4.1-flash -- cmd /c npx -y opencode-mcp')
+New-Item -ItemType Directory -Force -Path $ServerDir | Out-Null
+$pkgJson = Join-Path $ServerDir 'package.json'
+if (-not (Test-Path -LiteralPath $pkgJson)) {
+  [System.IO.File]::WriteAllText($pkgJson, '{"name":"cerebro-server","private":true}', (New-Object System.Text.UTF8Encoding($false)))
 }
 
-# ---------------------------------------------------------------- 3. Rol Cerebro (Claude Code)
+$needInstall = $true
+if (Test-Path -LiteralPath $ServerExe) {
+  $verRes = Invoke-Cli $ServerExe @('--version')
+  if ($verRes.Output.Trim() -eq $VersionServidor) {
+    $needInstall = $false
+    Write-Ok "opencode-ai $VersionServidor ya instalado"
+  }
+}
+
+if ($needInstall) {
+  Write-Host "  Instalando opencode-ai@$VersionServidor con npm (puede tardar un par de minutos)..." -ForegroundColor DarkGray
+  $npmRes = Invoke-Cli 'npm' @('install', '--prefix', $ServerDir, "opencode-ai@$VersionServidor", '--no-audit', '--no-fund')
+  if (Test-Path -LiteralPath $ServerExe) {
+    Write-Ok "opencode-ai $VersionServidor instalado"
+  } else {
+    Write-Err 'No se pudo instalar opencode-ai'
+    Write-Host $npmRes.Output -ForegroundColor DarkGray
+    $warnings.Add("Instala manualmente: npm install --prefix `"$ServerDir`" opencode-ai@$VersionServidor")
+  }
+}
+
+# ---------------------------------------------------------------- 3. Lanzador del MCP
+Write-Step 'Lanzador del MCP'
+
+New-Item -ItemType Directory -Force -Path $SystemDir | Out-Null
+foreach ($f in @('servidor.ps1', 'launcher.ps1')) {
+  $src = Join-Path $ConfigRoot "mcp\$f"
+  $dst = Join-Path $SystemDir $f
+  Backup-Item $dst
+  Copy-Item -LiteralPath $src -Destination $dst -Force
+  Write-Ok "Instalado: $dst"
+}
+
+# ---------------------------------------------------------------- 4. MCP en Claude Code
+Write-Step 'MCP opencode en Claude Code'
+
+$mcpArgs = @(
+  'mcp', 'add', 'opencode', '--scope', 'user',
+  '--', 'cmd', '/c', 'powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $LauncherPath
+)
+$removeResult = Invoke-Cli 'claude' @('mcp', 'remove', 'opencode', '--scope', 'user')
+if ($removeResult.Code -eq 0) { Write-Note 'Registro MCP anterior sustituido' }
+$addResult = Invoke-Cli 'claude' $mcpArgs
+if ($addResult.Code -eq 0) {
+  Write-Ok 'MCP registrado (scope de usuario, via lanzador)'
+} else {
+  Write-Warn 'No se pudo registrar el MCP automaticamente:'
+  Write-Host $addResult.Output -ForegroundColor DarkGray
+  $warnings.Add("Registra el MCP a mano: claude mcp add opencode --scope user -- cmd /c powershell -NoProfile -ExecutionPolicy Bypass -File `"$LauncherPath`"")
+}
+
+# ---------------------------------------------------------------- 5. Rol Cerebro (Claude Code)
 Write-Step 'Rol Cerebro en Claude Code'
 
 Set-ManagedBlock (Join-Path $UserHome '.claude\CLAUDE.md') (Join-Path $ConfigRoot 'claude\CLAUDE.md')
@@ -171,7 +238,7 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $skillDst) | Out-N
 Copy-Item -LiteralPath $skillSrc -Destination $skillDst -Recurse -Force
 Write-Ok "Skill instalada: $skillDst"
 
-# ---------------------------------------------------------------- 4. Agentes de OpenCode
+# ---------------------------------------------------------------- 6. Agentes de OpenCode
 Write-Step 'Agentes de OpenCode'
 
 $agentsSrc = Join-Path $ConfigRoot 'opencode\agents'
@@ -182,6 +249,20 @@ foreach ($f in Get-ChildItem -LiteralPath $agentsSrc -Filter '*.md') {
   Backup-Item $dst
   Copy-Item -LiteralPath $f.FullName -Destination $dst -Force
   Write-Ok "Agente: $dst"
+}
+$legacy = Join-Path $agentsDst 'constructor.md'
+if (Test-Path -LiteralPath $legacy) {
+  Backup-Item $legacy
+  Remove-Item -LiteralPath $legacy -Force
+  Write-Warn 'Retirado constructor.md (renombrado a implementador.md: era una palabra reservada de JavaScript que rompia el servidor V1)'
+}
+
+# ---------------------------------------------------------------- 7. Arrancar servidor
+Write-Step 'Arrancando servidor local'
+if (Test-Path -LiteralPath (Join-Path $SystemDir 'servidor.ps1')) {
+  $srvRes = Invoke-Cli 'powershell' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $SystemDir 'servidor.ps1'))
+  if ($srvRes.Code -eq 0) { Write-Ok 'Servidor V1 activo (puerto en server-port.txt)' }
+  else { Write-Warn 'El servidor no respondio; se arrancara en la primera llamada del MCP'; Write-Host $srvRes.Output -ForegroundColor DarkGray }
 }
 
 # ---------------------------------------------------------------- Resumen

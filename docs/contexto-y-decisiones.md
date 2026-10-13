@@ -39,9 +39,11 @@ Suficiente para delegación, vigilancia y resolución de entradas (`input_requir
 
 ### D5 — `OPENCODE_AUTO_SERVE=true` · 2026-10-13
 El MCP arranca su propio servidor OpenCode local cuando hace falta y lo apaga al terminar. Evita depender del servicio en segundo plano de la TUI, cuyo puerto y contraseña son dinámicos (`~/.config/opencode/service.json`, puerto efímero — comprobado). Si aparecieran conflictos por uso simultáneo intenso de TUI + Claude (dos servidores compartiendo almacenamiento), la alternativa es un servidor único persistente + `OPENCODE_BASE_URL`; no es el caso hoy.
+→ **Sustituida por D13**: en la práctica el auto-serve resultó frágil (dependía del binario que encontrara en PATH y del estado del puerto).
 
-### D6 — OpenRouter como proveedor de las manos · 2026-10-13
+### D6 — OpenRouter como proveedor de las manos (decisión inicial) · 2026-10-13
 Decisión del usuario: unificar proveedor (DeepSeek oficial queda conectado como alternativa). v0.1.0 usa DeepSeek V4.1 Flash para los tres agentes; GPT-6 Luna se activa cambiando 1 línea en el agente que se quiera.
+→ **Ajustada durante las pruebas: ver D12.** El proveedor por defecto final de v0.1.0 es DeepSeek oficial.
 
 ### D7 — Agentes en `~/.config/opencode/agents/` (plural) · 2026-10-13
 La documentación V2 indica `<config>/agents/`; la instalación existente tenía `agent/` (V1, sigue funcionando). Verificado empíricamente en v2.0.27 con un agente de prueba y `GET /api/agent`: **ambos directorios se descubren**. Se adopta el plural (canónico) y no se tocan los agentes existentes (`chat-deepseek`, `chat-local`).
@@ -58,12 +60,23 @@ Ninguna clave API entra en el repo. Las credenciales viven en OpenCode (`~/.loca
 ### D11 — Repositorio privado como fuente de verdad · 2026-10-13
 Sistema pensado para evolucionar: cambios en `config/`, versionado (`VERSION`, `CHANGELOG.md`, tags) y despliegue por `scripts/actualizar` en cada máquina (Windows, macOS y Linux soportados).
 
+### D12 — Pivote a DeepSeek oficial como proveedor por defecto (v0.1.0) · 2026-10-13
+Durante las pruebas de aceptación se detectó que la cuenta de OpenRouter está en free tier con 0 créditos: las peticiones con `max_tokens` alto (OpenCode pide hasta 256000 en algunos modelos) fallan con «requires more credits, or fewer max_tokens», y el manejo de ese error en OpenCode v2.0.27 provoca además un crash interno («Attempted to assign to readonly property» en `Agent.state`) que deja la tarea colgada en `accepted` con 0 tokens. No se encontró forma de capar el `max_tokens` por configuración (probado `body.max_tokens` y `limit.output` en OpenCode, tanto en configuración de proyecto como en variable de entorno: sin efecto).
+Conclusión: los agentes usan `deepseek/deepseek-flash` (proveedor oficial, ya conectado y verificado). OpenRouter queda listo para GPT-6 Luna en cuanto la cuenta tenga crédito. Lecciones incorporadas a la skill: pasar siempre `providerID`/`modelID` explícitos (el modelo por defecto del servidor puede ser cualquiera; se detectó `meta/muse-wonder` con verificación 18+ pendiente) y documentar el requisito de crédito antes de mover agentes a OpenRouter.
+
+### D13 — Servidor OpenCode V1 propio, gestionado por lanzador · 2026-10-13
+El MCP `opencode-mcp` v3 habla la **API V1** (`POST /session`), que solo sirve `opencode-ai` (1.x). El OpenCode V2 (`@opencode/cli`) que usa la TUI expone `/api/...` y rechaza al MCP (405). Solución final: el instalador instala `opencode-ai@1.18.35` en `~/.sistema-cerebro-agentes/server` y despliega un **lanzador** que (1) asegura el servidor en `127.0.0.1:4599` con almacén de datos **aislado** (`server-data`, credenciales sincronizadas desde `~/.local/share/opencode/auth.json`) y (2) arranca `npx -y opencode-mcp` contra él. El MCP de Claude Code apunta al lanzador (scope usuario). Se eligió el puerto 4599 porque el 4096 quedó con un listener fantasma que impedía reutilizarlo. Verificado de punta a punta: `opencode_fire` → `completed` → archivo creado por el agente.
+
+### D14 — `constructor` → `implementador` (palabra reservada de JavaScript) · 2026-10-13
+Un agente llamado `constructor` hace crashear **todas** las peticiones del servidor V1 (`TypeError: Attempted to assign to readonly property` en `Agent.state`), incluso las que no lo usan: `constructor` es una propiedad heredada de todos los objetos JavaScript y rompe el mapa de agentes del servidor. Regla para el futuro: **no usar nombres de agentes que sean propiedades de Object** (`constructor`, `hasOwnProperty`, `toString`…). El agente se renombró a `implementador` y el instalador retira automáticamente el antiguo `constructor.md`.
+
 ## Notas técnicas útiles
 
 - **Herramientas clave del MCP (perfil essential):** `opencode_setup`, `opencode_context`, `opencode_status`, `opencode_ask`, `opencode_fire`, `opencode_run`, `opencode_reply`, `opencode_check`, `opencode_wait`, `opencode_job_get/list/cancel/input`, `opencode_question_*`, `opencode_permission_*`, `opencode_conversation`, `opencode_review_changes`.
 - **Estados de un trabajo:** `accepted`, `running`, `input_required`, `completed`, `failed`, `cancelled`, `unknown`. Un timeout de observación **no** es un fallo.
-- **`opencode_fire` acepta `agent`, `providerID`, `modelID` y `directory` por llamada**; además el agente configurado ya fija su modelo, por lo que el flujo normal solo necesita `directory`, `agent` y `prompt`.
-- **Whitelist V1 en `opencode.jsonc`:** si existe un bloque `provider.openrouter.whitelist` de V1, OpenCode V2 lo ignora (el catálogo completo aparece en `opencode models`). No afecta a este sistema porque cada agente fija su modelo.
+- **`opencode_fire` acepta `agent`, `providerID`, `modelID` y `directory` por llamada**. Pasa siempre `providerID` + `modelID` explícitos: en V2 el modelo es de la sesión y puede quedar en otro distinto al del archivo del agente (p. ej. el último usado en la TUI).
+- **Whitelist V1 en `opencode.jsonc`:** si existe un bloque `provider.openrouter.whitelist` de V1, OpenCode V2 lo ignora (el catálogo completo aparece en `opencode models`). No afecta a este sistema porque las llamadas fijan proveedor y modelo explícitos.
 - **Claude Code debe reiniciarse** tras `claude mcp add` para cargar el MCP.
 - **Permisos headless:** por defecto las herramientas están permitidas en el espacio de trabajo; lecturas sensibles o accesos fuera del proyecto pueden pedir aprobación y aparecen como `input_required`. El Cerebro los resuelve con `opencode_job_input` / `opencode_session_permission`.
+- **Nunca llames a un agente con una propiedad reservada de JavaScript** (`constructor`, `hasOwnProperty`, `toString`…): el servidor V1 crashea en todas las peticiones (`Agent.state`, «Attempted to assign to readonly property»). Ocurrió con `constructor`; renombrado a `implementador`.
 - **Incidencia conocida de opencode-mcp (#18):** posible conflicto si dos servidores OpenCode comparten almacenamiento a la vez; razón de más para no fijar servidores manuales sin necesidad.

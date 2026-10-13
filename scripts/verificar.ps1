@@ -48,14 +48,30 @@ Test-Item ([bool](Get-Command claude -ErrorAction SilentlyContinue)) 'Claude Cod
 
 Write-Step 'Proveedores (OpenCode)'
 $authPath = Join-Path $UserHome '.local\share\opencode\auth.json'
-$hasOpenRouter = $false
+$authProviders = @()
 if (Test-Path -LiteralPath $authPath) {
-  try {
-    $auth = Get-Content -LiteralPath $authPath -Raw | ConvertFrom-Json
-    $hasOpenRouter = @($auth.PSObject.Properties.Name) -contains 'openrouter'
-  } catch { }
+  try { $auth = Get-Content -LiteralPath $authPath -Raw | ConvertFrom-Json; $authProviders = @($auth.PSObject.Properties.Name) } catch { }
 }
-Test-Item $hasOpenRouter 'OpenRouter conectado' "Conecta OpenRouter: 'opencode auth login' (o /connect en la TUI)"
+Test-Item ($authProviders -contains 'deepseek') 'Proveedor DeepSeek (oficial) conectado' "Conecta DeepSeek: 'opencode auth login' (o /connect en la TUI)"
+if ($authProviders -contains 'openrouter') {
+  Write-Host '  [OK]   OpenRouter tambien conectado (opcional)' -ForegroundColor Green
+  $script:pass++
+}
+
+Write-Step 'Servidor OpenCode V1'
+$sysDir = Join-Path $UserHome '.sistema-cerebro-agentes'
+$srvExe = Join-Path $sysDir 'server\node_modules\opencode-ai\bin\opencode.exe'
+Test-Item (Test-Path -LiteralPath $srvExe) 'opencode-ai (servidor V1) instalado' 'Ejecuta install.ps1'
+Test-Item (Test-Path -LiteralPath (Join-Path $sysDir 'launcher.ps1')) 'Lanzador del MCP instalado' 'Ejecuta install.ps1'
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $sysDir 'servidor.ps1') 2>$null | Out-Null
+$srvPort = 0
+$portFile = Join-Path $sysDir 'server-port.txt'
+if (Test-Path -LiteralPath $portFile) { [void][int]::TryParse((Get-Content -LiteralPath $portFile -Raw).Trim(), [ref]$srvPort) }
+$srvOk = $false
+if ($srvPort -gt 0) {
+  try { $null = Invoke-WebRequest -Uri "http://127.0.0.1:$srvPort/config" -UseBasicParsing -TimeoutSec 4; $srvOk = $true } catch { }
+}
+Test-Item $srvOk "Servidor V1 responde en 127.0.0.1:$srvPort" 'Relanza: powershell -File ~/.sistema-cerebro-agentes/servidor.ps1'
 
 Write-Step 'Rol Cerebro (Claude Code)'
 $claudeMd = Join-Path $UserHome '.claude\CLAUDE.md'
@@ -66,7 +82,7 @@ Test-Item $skillOk 'Skill delegar-a-opencode instalada' 'Ejecuta install.ps1'
 
 Write-Step 'Agentes de OpenCode'
 $agentsDst = Join-Path $UserHome '.config\opencode\agents'
-foreach ($name in @('constructor.md', 'revisor.md', 'testeador.md')) {
+foreach ($name in @('implementador.md', 'revisor.md', 'testeador.md')) {
   Test-Item (Test-Path -LiteralPath (Join-Path $agentsDst $name)) "Agente $name" 'Ejecuta install.ps1'
 }
 

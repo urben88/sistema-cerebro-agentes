@@ -36,6 +36,17 @@ else
   warn 'El MCP opencode no estaba registrado (o no se pudo eliminar)'
 fi
 
+# 1b. Servidor y lanzador
+SYSTEM_DIR="$HOME/.sistema-cerebro-agentes"
+if [ -f "$SYSTEM_DIR/servidor.sh" ]; then
+  bash "$SYSTEM_DIR/servidor.sh" --stop >/dev/null 2>&1 || true
+  ok 'Servidor V1 detenido'
+fi
+for f in launcher.sh servidor.sh; do
+  p="$SYSTEM_DIR/$f"
+  if [ -e "$p" ]; then backup_item "$p"; rm -f "$p"; ok "Eliminado: $p"; fi
+done
+
 # 2. Bloque gestionado en CLAUDE.md
 CLAUDE_MD="$HOME/.claude/CLAUDE.md"
 if [ -f "$CLAUDE_MD" ] && grep -qF "$MARKER_BEGIN" "$CLAUDE_MD"; then
@@ -64,7 +75,7 @@ fi
 
 # 4. Agentes de OpenCode
 AGENTS_DST="$HOME/.config/opencode/agents"
-for name in constructor.md revisor.md testeador.md; do
+for name in implementador.md revisor.md testeador.md constructor.md; do
   p="$AGENTS_DST/$name"
   if [ -f "$p" ]; then
     backup_item "$p"

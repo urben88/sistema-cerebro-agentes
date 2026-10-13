@@ -5,9 +5,14 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_ROOT="$REPO_ROOT/config"
+SYSTEM_DIR="$HOME/.sistema-cerebro-agentes"
+SERVER_DIR="$SYSTEM_DIR/server"
+SERVER_BIN="$SERVER_DIR/node_modules/.bin/opencode"
+LAUNCHER="$SYSTEM_DIR/launcher.sh"
+VERSION_SERVIDOR="1.18.35"
 MARKER_BEGIN='<!-- BEGIN sistema-cerebro-agentes -->'
 MARKER_END='<!-- END sistema-cerebro-agentes -->'
-BACKUP_ROOT="$HOME/.sistema-cerebro-agentes/backups"
+BACKUP_ROOT="$SYSTEM_DIR/backups"
 BACKUP_DIR="$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S)"
 
 CHECK=0
@@ -58,11 +63,12 @@ else
   FATAL+=('Instala Node.js 22 o superior: https://nodejs.org')
 fi
 
+command -v npx >/dev/null 2>&1 && ok 'npx disponible' || { err 'npx no encontrado'; FATAL+=('npx no encontrado (viene con Node.js >= 22)'); }
+
 if command -v opencode >/dev/null 2>&1; then
-  ok "OpenCode $(opencode --version 2>/dev/null | head -n1)"
+  ok "OpenCode $(opencode --version 2>/dev/null | head -n1) (para tu TUI; el MCP usará el servidor V1 propio)"
 else
-  err 'OpenCode no encontrado'
-  FATAL+=('Instala OpenCode: https://opencode.ai  (npm: npm install -g @opencode/cli)')
+  warn 'OpenCode no encontrado (no es imprescindible para el MCP, pero lo usarás como TUI)'
 fi
 
 if command -v claude >/dev/null 2>&1; then
@@ -73,11 +79,14 @@ else
 fi
 
 AUTH_JSON="$HOME/.local/share/opencode/auth.json"
-if [ -f "$AUTH_JSON" ] && grep -q '"openrouter"' "$AUTH_JSON"; then
-  ok 'OpenRouter conectado en OpenCode'
+if [ -f "$AUTH_JSON" ] && grep -q '"deepseek"' "$AUTH_JSON"; then
+  ok 'Proveedor DeepSeek (oficial) conectado'
 else
-  warn 'OpenRouter no está conectado en OpenCode'
-  WARNINGS+=("Conecta OpenRouter en OpenCode: ejecuta 'opencode auth login' (o /connect en la TUI) y elige OpenRouter")
+  warn 'DeepSeek no está conectado en OpenCode'
+  WARNINGS+=("Conecta DeepSeek en OpenCode: ejecuta 'opencode auth login' (o /connect en la TUI)")
+fi
+if [ -f "$AUTH_JSON" ] && grep -q '"openrouter"' "$AUTH_JSON"; then
+  ok 'OpenRouter también conectado (opcional: GPT-6 Luna cuando la cuenta tenga crédito)'
 fi
 
 if [ "${#FATAL[@]}" -gt 0 ]; then
@@ -92,23 +101,53 @@ if [ "$CHECK" -eq 1 ]; then
   exit 0
 fi
 
-# ---------------------------------------------------------------- 2. MCP en Claude Code
-step 'MCP opencode-mcp en Claude Code'
+# ---------------------------------------------------------------- 2. Servidor OpenCode V1
+step "Servidor OpenCode V1 (opencode-ai $VERSION_SERVIDOR)"
 
-claude mcp remove opencode --scope user >/dev/null 2>&1 || true
-if claude mcp add opencode --scope user \
-    --env OPENCODE_AUTO_SERVE=true \
-    --env OPENCODE_TOOL_PROFILE=essential \
-    --env OPENCODE_DEFAULT_PROVIDER=openrouter \
-    --env OPENCODE_DEFAULT_MODEL=deepseek/deepseek-v4.1-flash \
-    -- npx -y opencode-mcp >/dev/null 2>&1; then
-  ok 'MCP registrado (scope de usuario)'
-else
-  warn 'No se pudo registrar el MCP automáticamente'
-  WARNINGS+=('Registra el MCP a mano: claude mcp add opencode --scope user --env OPENCODE_AUTO_SERVE=true --env OPENCODE_TOOL_PROFILE=essential --env OPENCODE_DEFAULT_PROVIDER=openrouter --env OPENCODE_DEFAULT_MODEL=deepseek/deepseek-v4.1-flash -- npx -y opencode-mcp')
+mkdir -p "$SERVER_DIR"
+[ -f "$SERVER_DIR/package.json" ] || printf '{"name":"cerebro-server","private":true}\n' > "$SERVER_DIR/package.json"
+
+NEED_INSTALL=1
+if [ -x "$SERVER_BIN" ]; then
+  if [ "$("$SERVER_BIN" --version 2>/dev/null | head -n1)" = "$VERSION_SERVIDOR" ]; then
+    NEED_INSTALL=0
+    ok "opencode-ai $VERSION_SERVIDOR ya instalado"
+  fi
 fi
 
-# ---------------------------------------------------------------- 3. Rol Cerebro (Claude Code)
+if [ "$NEED_INSTALL" -eq 1 ]; then
+  note "Instalando opencode-ai@$VERSION_SERVIDOR con npm (puede tardar un par de minutos)…"
+  if npm install --prefix "$SERVER_DIR" "opencode-ai@$VERSION_SERVIDOR" --no-audit --no-fund >/dev/null 2>&1 && [ -x "$SERVER_BIN" ]; then
+    ok "opencode-ai $VERSION_SERVIDOR instalado"
+  else
+    err 'No se pudo instalar opencode-ai'
+    WARNINGS+=("Instala manualmente: npm install --prefix \"$SERVER_DIR\" opencode-ai@$VERSION_SERVIDOR")
+  fi
+fi
+
+# ---------------------------------------------------------------- 3. Lanzador del MCP
+step 'Lanzador del MCP'
+
+mkdir -p "$SYSTEM_DIR"
+for f in servidor.sh launcher.sh; do
+  backup_item "$SYSTEM_DIR/$f"
+  cp -f "$CONFIG_ROOT/mcp/$f" "$SYSTEM_DIR/$f"
+  chmod +x "$SYSTEM_DIR/$f"
+  ok "Instalado: $SYSTEM_DIR/$f"
+done
+
+# ---------------------------------------------------------------- 4. MCP en Claude Code
+step 'MCP opencode en Claude Code'
+
+claude mcp remove opencode --scope user >/dev/null 2>&1 || true
+if claude mcp add opencode --scope user -- bash "$LAUNCHER" >/dev/null 2>&1; then
+  ok 'MCP registrado (scope de usuario, vía lanzador)'
+else
+  warn 'No se pudo registrar el MCP automáticamente'
+  WARNINGS+=("Registra el MCP a mano: claude mcp add opencode --scope user -- bash \"$LAUNCHER\"")
+fi
+
+# ---------------------------------------------------------------- 5. Rol Cerebro (Claude Code)
 step 'Rol Cerebro en Claude Code'
 
 set_managed_block(){
@@ -158,7 +197,7 @@ rm -rf "$SKILL_DST"
 cp -R "$SKILL_SRC" "$SKILL_DST"
 ok "Skill instalada: $SKILL_DST"
 
-# ---------------------------------------------------------------- 4. Agentes de OpenCode
+# ---------------------------------------------------------------- 6. Agentes de OpenCode
 step 'Agentes de OpenCode'
 
 AGENTS_DST="$HOME/.config/opencode/agents"
@@ -169,6 +208,19 @@ for f in "$CONFIG_ROOT/opencode/agents/"*.md; do
   cp -f "$f" "$AGENTS_DST/$name"
   ok "Agente: $AGENTS_DST/$name"
 done
+if [ -f "$AGENTS_DST/constructor.md" ]; then
+  backup_item "$AGENTS_DST/constructor.md"
+  rm -f "$AGENTS_DST/constructor.md"
+  warn 'Retirado constructor.md (renombrado a implementador.md: era una palabra reservada de JavaScript que rompía el servidor V1)'
+fi
+
+# ---------------------------------------------------------------- 7. Arrancar servidor
+step 'Arrancando servidor local'
+if [ -f "$SYSTEM_DIR/servidor.sh" ] && bash "$SYSTEM_DIR/servidor.sh" >/dev/null 2>&1; then
+  ok 'Servidor V1 activo (puerto en server-port.txt)'
+else
+  warn 'El servidor no respondió; se arrancará en la primera llamada del MCP'
+fi
 
 # ---------------------------------------------------------------- Resumen
 step 'Resumen'
