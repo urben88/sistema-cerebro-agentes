@@ -99,15 +99,18 @@ Detalles y ejemplos en [docs/uso-diario.md](docs/uso-diario.md).
 
 El flujo combinado (pensar → documentar → **codificar con OpenCode**) vive en un agente de Claude Code llamado **`cerebro`**, y el MCP de OpenCode **solo existe dentro de ese agente**: en tus sesiones normales de Claude no hay herramientas `opencode_*`.
 
-Actívalo así:
+### Rotar entre modos (conservando la conversación)
 
-| Forma | Cómo |
+> Claude Code **no permite añadir modos personalizados al ciclo de Shift+Tab** (ese ciclo solo cambia modos de permisos: manual → aceptar ediciones → plan → [auto]). La rotación práctica es el comando `cerebro`, que cambia de modo **sin perder la conversación** (verificado).
+
+| Quieres | Escribe |
 |---|---|
-| **@-mención** (una tarea) | Escribe `@cerebro` en el prompt y elígelo en el autocompletado |
-| **Lenguaje natural** | "usa el agente cerebro para …" (o "modo cerebro") |
-| **Sesión completa** | `claude --agent cerebro` (todos los turnos son el Cerebro) |
+| Pasar a **modo Cerebro** (continúa tu conversación actual) | `cerebro` |
+| Volver a **Claude normal** (la misma conversación) | `claude --continue` |
+| Cerebro en una **sesión nueva** | `claude --agent cerebro` |
+| Cerebro **solo para una tarea** desde una sesión normal | `@cerebro …` o "usa el agente cerebro" |
 
-La primera vez que se crea `~/.claude/agents/`, reinicia Claude Code para que lo descubra (después, los cambios se detectan en caliente).
+`cerebro` se instala en `~/.local/bin` (junto a `claude`), así que funciona desde cualquier terminal. La primera vez que se crea `~/.claude/agents/`, reinicia Claude Code para que descubra el agente (después, los cambios se detectan en caliente).
 
 ## Panel web en tiempo real
 

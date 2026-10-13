@@ -102,6 +102,11 @@ if (Test-Path -LiteralPath $agentDst) {
   Write-Warn 'El agente cerebro no estaba instalado'
 }
 
+foreach ($f in @('cerebro.cmd', 'cerebro')) {
+  $p = Join-Path $UserHome ".local\bin\$f"
+  if (Test-Path -LiteralPath $p) { Backup-Item $p; Remove-Item -LiteralPath $p -Force; Write-Ok "Eliminado: $p" }
+}
+
 # 4. Agentes de OpenCode
 $agentsDst = Join-Path $UserHome '.config\opencode\agents'
 foreach ($name in @('implementador.md', 'revisor.md', 'testeador.md', 'constructor.md')) {

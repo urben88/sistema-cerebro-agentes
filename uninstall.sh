@@ -83,6 +83,13 @@ else
   warn 'El agente cerebro no estaba instalado'
 fi
 
+BIN_CEREBRO="$HOME/.local/bin/cerebro"
+if [ -e "$BIN_CEREBRO" ]; then
+  backup_item "$BIN_CEREBRO"
+  rm -f "$BIN_CEREBRO"
+  ok "Eliminado: $BIN_CEREBRO"
+fi
+
 # 4. Agentes de OpenCode
 AGENTS_DST="$HOME/.config/opencode/agents"
 for name in implementador.md revisor.md testeador.md constructor.md; do

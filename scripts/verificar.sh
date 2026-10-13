@@ -98,6 +98,7 @@ if [ -f "$AGENT_DST" ]; then
 else
   test_item 1 'Agente cerebro no instalado' 'Ejecuta install.sh'
 fi
+[ -x "$HOME/.local/bin/cerebro" ] && test_item 0 'Comando cerebro instalado (~/.local/bin)' || test_item 1 'Comando cerebro no instalado' 'Ejecuta install.sh'
 MCP_LIST="$(claude mcp list 2>&1 || true)"
 MCP_LINE="$(printf '%s\n' "$MCP_LIST" | grep -E '^[[:space:]]*opencode:' | head -n1 || true)"
 if [ -n "$MCP_LINE" ]; then

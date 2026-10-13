@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Cerebro: continúa la conversación actual en modo Cerebro (Claude + OpenCode).
+# Para volver al modo normal: claude --continue
+exec claude --agent cerebro --continue "$@"

@@ -243,6 +243,17 @@ $tpl = [System.IO.File]::ReadAllText($agentSrc).Replace('__COMANDO__', 'cmd').Re
 Write-Ok "Agente cerebro instalado: $agentDst"
 Write-Note 'Activalo con @cerebro, "usa el agente cerebro" o claude --agent cerebro'
 
+$binDir = Join-Path $UserHome '.local\bin'
+New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+foreach ($f in @('cerebro.cmd', 'cerebro')) {
+  $binSrc = Join-Path $ConfigRoot "bin\$f"
+  $binDst = Join-Path $binDir $f
+  Backup-Item $binDst
+  Copy-Item -LiteralPath $binSrc -Destination $binDst -Force
+  Write-Ok "Comando instalado: $binDst"
+}
+Write-Note 'Rotacion: escribe "cerebro" para continuar la conversacion en modo Cerebro; "claude --continue" para volver al modo normal'
+
 # ---------------------------------------------------------------- 5. Rol Cerebro (Claude Code)
 Write-Step 'Rol Cerebro en Claude Code'
 

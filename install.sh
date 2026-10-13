@@ -162,6 +162,17 @@ node -e 'const fs=require("fs");const [src,dst,cmd,args]=process.argv.slice(1);l
 ok "Agente cerebro instalado: $AGENT_DST"
 note 'Actívalo con @cerebro, "usa el agente cerebro" o claude --agent cerebro'
 
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$BIN_DIR"
+backup_item "$BIN_DIR/cerebro"
+cp -f "$CONFIG_ROOT/bin/cerebro" "$BIN_DIR/cerebro"
+chmod +x "$BIN_DIR/cerebro"
+ok "Comando instalado: $BIN_DIR/cerebro"
+case ":$PATH:" in
+  *":$BIN_DIR:"*) ;;
+  *) note "Añade $BIN_DIR al PATH para usar 'cerebro' desde cualquier terminal" ;;
+esac
+
 # ---------------------------------------------------------------- 5. Rol Cerebro (Claude Code)
 step 'Rol Cerebro en Claude Code'
 

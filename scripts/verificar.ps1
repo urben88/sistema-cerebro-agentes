@@ -97,6 +97,7 @@ if ($agentOk) {
   Test-Item (-not $agentTxt.Contains('__COMANDO__')) 'Agente templado (ruta del lanzador aplicada)' 'Ejecuta install.ps1 de nuevo'
   Test-Item ($agentTxt.Contains('mcpServers') -and $agentTxt.Contains('launcher.ps1')) 'El MCP va inline dentro del agente' 'Ejecuta install.ps1 de nuevo'
 }
+Test-Item (Test-Path -LiteralPath (Join-Path $UserHome '.local\bin\cerebro.cmd')) 'Comando cerebro instalado (~/.local/bin)' 'Ejecuta install.ps1'
 $mcpList = (& claude mcp list 2>&1 | Out-String)
 $globalLine = ($mcpList -split "`n" | Where-Object { $_ -match '^\s*opencode:' } | Select-Object -First 1)
 Test-Item (-not $globalLine) 'MCP no registrado globalmente (solo dentro del agente)' 'Retiralo: claude mcp remove opencode --scope user'
