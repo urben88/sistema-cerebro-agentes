@@ -25,31 +25,55 @@ for (const modelo of ['claude-sonnet-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'
 }
 
 s.hooks = s.hooks || {}
+
+/** Ficheros que gestiona el sistema: se registran solo si existen en disco. */
+const GESTIONADOS = ['session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'latido.mjs', 'aviso-contexto.mjs']
+const existe = (f) => fs.existsSync(path.join(hooksDir, f))
 const comando = (f) => `node "${path.join(hooksDir, f)}"`
-s.hooks.SessionStart = [{ matcher: 'startup|resume|clear|compact', hooks: [{ type: 'command', command: comando('session-start.mjs') }] }]
-s.hooks.PreCompact = [{ matcher: 'manual|auto', hooks: [{ type: 'command', command: comando('pre-compact.mjs') }] }]
-s.hooks.SessionEnd = [{ matcher: 'clear', hooks: [{ type: 'command', command: comando('session-end.mjs') }] }]
+const faltan = []
+
+// Limpieza: retira registros nuestros que apunten a ficheros que ya no están.
+// (Si un hook no se desplegó, mejor no registrarlo que romper cada sesión con un
+// MODULE_NOT_FOUND; el instalador copia los hooks antes de llamar aquí.)
+for (const evento of Object.keys(s.hooks)) {
+  const grupos = Array.isArray(s.hooks[evento]) ? s.hooks[evento] : null
+  if (!grupos) continue
+  const limpios = grupos.filter((g) => !(Array.isArray(g?.hooks) && g.hooks.some((h) => typeof h?.command === 'string' && GESTIONADOS.some((f) => h.command.includes(f) && !existe(f)))))
+  if (limpios.length) s.hooks[evento] = limpios
+  else delete s.hooks[evento]
+}
+
+function registrarContexto(evento, matcher, archivo) {
+  if (!existe(archivo)) { faltan.push(archivo); return }
+  s.hooks[evento] = [{ matcher, hooks: [{ type: 'command', command: comando(archivo) }] }]
+}
+registrarContexto('SessionStart', 'startup|resume|clear|compact', 'session-start.mjs')
+registrarContexto('PreCompact', 'manual|auto', 'pre-compact.mjs')
+registrarContexto('SessionEnd', 'clear', 'session-end.mjs')
 
 // Latidos de actividad (panel «La oficina»): se añaden sin pisar los hooks del usuario
-// y sin duplicar si ya estaban registrados (idempotente).
-const eventosLatido = ['UserPromptSubmit', 'Stop', 'SubagentStart', 'SubagentStop']
-const comandoLatido = comando('latido.mjs')
-for (const evento of eventosLatido) {
-  const grupos = Array.isArray(s.hooks[evento]) ? s.hooks[evento] : []
-  const yaEsta = grupos.some((g) => Array.isArray(g?.hooks) && g.hooks.some((h) => typeof h?.command === 'string' && h.command.includes('latido.mjs')))
-  if (!yaEsta) grupos.push({ hooks: [{ type: 'command', command: comandoLatido }] })
-  s.hooks[evento] = grupos
-}
+// y sin duplicar si ya estaban registrados (idempotente). Solo si el fichero existe.
+if (existe('latido.mjs')) {
+  const eventosLatido = ['UserPromptSubmit', 'Stop', 'SubagentStart', 'SubagentStop']
+  const comandoLatido = comando('latido.mjs')
+  for (const evento of eventosLatido) {
+    const grupos = Array.isArray(s.hooks[evento]) ? s.hooks[evento] : []
+    const yaEsta = grupos.some((g) => Array.isArray(g?.hooks) && g.hooks.some((h) => typeof h?.command === 'string' && h.command.includes('latido.mjs')))
+    if (!yaEsta) grupos.push({ hooks: [{ type: 'command', command: comandoLatido }] })
+    s.hooks[evento] = grupos
+  }
+} else faltan.push('latido.mjs')
 
 // Guardián de contexto: aviso corto (con enfriamiento) cuando el hilo crece demasiado.
 // Se suma a los latidos de UserPromptSubmit sin pisarlos (idempotente).
-{
+if (existe('aviso-contexto.mjs')) {
   const grupos = Array.isArray(s.hooks.UserPromptSubmit) ? s.hooks.UserPromptSubmit : []
   const yaEsta = grupos.some((g) => Array.isArray(g?.hooks) && g.hooks.some((h) => typeof h?.command === 'string' && h.command.includes('aviso-contexto.mjs')))
   if (!yaEsta) grupos.push({ hooks: [{ type: 'command', command: comando('aviso-contexto.mjs') }] })
   s.hooks.UserPromptSubmit = grupos
-}
+} else faltan.push('aviso-contexto.mjs')
 
 fs.mkdirSync(path.dirname(ruta), { recursive: true })
 fs.writeFileSync(ruta, JSON.stringify(s, null, 2) + '\n')
 console.log('settings.json actualizado: esfuerzos medium (si faltaban) y hooks de contexto.')
+if (faltan.length) console.log(`Aviso: hooks no desplegados (no se registran): ${[...new Set(faltan)].join(', ')}. Ejecuta install.ps1/install.sh para copiarlos.`)

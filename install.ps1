@@ -382,16 +382,12 @@ if (Get-Command docker -ErrorAction SilentlyContinue) {
   [System.IO.File]::WriteAllText($composePath, $composeTxt, (New-Object System.Text.UTF8Encoding($false)))
   Write-Ok "Stack Docker instalado: $dockerDst"
 
-  $porConstruir = $false
-  foreach ($img in @('cerebro-hub:latest', 'cerebro-hub-laya:latest')) {
-    if ((Invoke-Cli 'docker' @('image', 'inspect', $img)).Code -ne 0) { $porConstruir = $true }
-  }
-  if ($porConstruir) {
-    Write-Note 'Construyendo imagenes de Docker (la de Laya descarga torch; puede tardar varios minutos)...'
-    $b = Invoke-Cli 'docker' @('compose', '-f', $composePath, 'build')
-    if ($b.Code -eq 0) { Write-Ok 'Imagenes construidas' }
-    else { Write-Warn 'No se pudieron construir las imagenes'; Write-Host $b.Output -ForegroundColor DarkGray }
-  }
+  # Reconstruye siempre (las capas sin cambios salen de cache): asi una actualizacion
+  # del hub llega de verdad al contenedor; antes solo se construia si faltaba la imagen.
+  Write-Note 'Construyendo imagenes de Docker si hay cambios (la primera vez, Laya descarga torch; puede tardar)...'
+  $b = Invoke-Cli 'docker' @('compose', '-f', $composePath, 'build')
+  if ($b.Code -eq 0) { Write-Ok 'Imagenes listas' }
+  else { Write-Warn 'No se pudieron construir las imagenes'; Write-Host $b.Output -ForegroundColor DarkGray }
   $up = Invoke-Cli 'docker' @('compose', '-f', $composePath, 'up', '-d')
   if ($up.Code -eq 0) { Write-Ok 'Hub + Laya en marcha (cerebro-hub, cerebro-laya)' }
   else { Write-Warn 'No se pudo levantar el stack Docker'; Write-Host $up.Output -ForegroundColor DarkGray }
