@@ -111,6 +111,16 @@ function pintarTriaje(laya, dec) {
     : '<p class="tenue">Sin decisiones registradas todavía.</p>'
 }
 
+function pintarMcps(m) {
+  const lista = m.mcps || []
+  $('mcps').innerHTML = lista.length
+    ? lista.map((x) => `<div class="agente"><div><span class="nombre">${esc(x.nombre)}</span>
+        ${x.habilitado ? '' : '<span class="badge gris">deshabilitado</span>'}
+        <span class="chip">${esc(x.origen)}</span></div>
+      <div class="desc">${esc((x.capacidades || []).join(', '))}${x.detalle ? ' · ' + esc(String(x.detalle).slice(0, 60)) : ''}</div></div>`).join('')
+    : '<p class="tenue">Sin inventario todavía: ejecuta <code>hub/mcps.mjs</code> o invoca al agente <code>adaptador-mcps</code>.</p>'
+}
+
 async function refrescar() {
   try {
     const [salud, org, proyectos, vig] = await Promise.all([
@@ -139,17 +149,46 @@ async function refrescar() {
   }
 }
 
+function pintarHallazgos(h) {
+  const lista = h.hallazgos || []
+  $('hallazgos').innerHTML = lista.length
+    ? lista.slice(0, 12).map((x) => {
+        const color = x.estado === 'validado' ? 'verde' : x.estado === 'descartado' ? 'gris' : x.estado === 'integrado' ? 'azul' : 'ambar'
+        return `<div class="agente"><div><span class="nombre">${esc(x.nombre)}</span>
+        <span class="badge ${color}">${esc(x.estado)}</span>
+        ${x.url ? `<a class="tenue" href="${esc(x.url)}" target="_blank" rel="noreferrer">enlace</a>` : ''}</div>
+      <div class="desc">${esc((x.nota || '').slice(0, 120))}${x.por ? ' · por ' + esc(x.por) : ''}</div>
+      ${x.estado === 'propuesto' ? `<div class="desc"><button class="boton mini" data-hallazgo="${esc(x.id)}" data-estado="validado">✅ validar</button> <button class="boton mini" data-hallazgo="${esc(x.id)}" data-estado="descartado">❌ descartar</button> <button class="boton mini" data-hallazgo="${esc(x.id)}" data-estado="integrado">📦 integrado</button></div>` : ''}</div>`
+      }).join('')
+    : '<p class="tenue">Sin hallazgos. Los agentes apuntan aquí lo que encuentran antes de crear nada nuevo.</p>'
+  for (const b of $('hallazgos').querySelectorAll('button[data-hallazgo]')) {
+    b.addEventListener('click', async () => {
+      try {
+        await fetch('/api/hallazgos/estado', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: b.dataset.hallazgo, estado: b.dataset.estado }),
+        })
+        refrescarPesado()
+      } catch { /* nada */ }
+    })
+  }
+}
+
 async function refrescarPesado() {
   try {
-    const [gasto, ventana, laya, dec] = await Promise.all([
+    const [gasto, ventana, laya, dec, mcps, hallazgos] = await Promise.all([
       fetch('/api/gasto').then((r) => r.json()),
       fetch('/api/ventana').then((r) => r.json()),
       fetch('/api/laya').then((r) => r.json()),
       fetch('/api/decisiones').then((r) => r.json()),
+      fetch('/api/mcps').then((r) => r.json()),
+      fetch('/api/hallazgos').then((r) => r.json()),
     ])
     pintarGasto(gasto)
     pintarVentana(ventana)
     pintarTriaje(laya, dec)
+    pintarMcps(mcps)
+    pintarHallazgos(hallazgos)
   } catch { /* nada */ }
 }
 

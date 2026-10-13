@@ -24,6 +24,7 @@ import { crearVigilante } from './lib/vigilante.mjs'
 import { crearOrganizacion } from './lib/organizacion.mjs'
 import { crearVentana } from './lib/ventana.mjs'
 import { crearTriaje } from './lib/triaje.mjs'
+import { crearActividad } from './lib/actividad.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HOME = os.homedir()
@@ -84,11 +85,106 @@ function cargarReglas() {
 const reglas = cargarReglas()
 const triaje = crearTriaje({ reglas, logDecisiones: path.join(LOGS_DIR, 'decisiones.jsonl') })
 
+// ---------------------------------------------------------------- hallazgos (buscar antes de crear)
+const HALLAZGOS_JSONL = path.join(DATA_DIR, 'hallazgos.jsonl')
+
+function leerHallazgos(estado = null) {
+  let texto = ''
+  try { texto = fs.readFileSync(HALLAZGOS_JSONL, 'utf8') } catch { return [] }
+  const porId = new Map()
+  for (const linea of texto.split('\n')) {
+    if (!linea.trim()) continue
+    try {
+      const e = JSON.parse(linea)
+      porId.set(e.id, { ...(porId.get(e.id) || {}), ...e })
+    } catch { /* nada */ }
+  }
+  let lista = [...porId.values()].sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))
+  if (estado) lista = lista.filter((h) => h.estado === estado)
+  return lista
+}
+
+function registrarHallazgo(datos) {
+  const entrada = {
+    id: 'h_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    fecha: new Date().toISOString(),
+    estado: 'propuesto',
+    nombre: String(datos.nombre || '').slice(0, 200),
+    url: String(datos.url || '').slice(0, 500),
+    nota: String(datos.nota || '').slice(0, 500),
+    por: String(datos.por || 'agente').slice(0, 60),
+    proyecto: String(datos.proyecto || '').slice(0, 300),
+  }
+  fs.appendFileSync(HALLAZGOS_JSONL, JSON.stringify(entrada) + '\n')
+  return entrada
+}
+
+function cambiarEstadoHallazgo(id, estado) {
+  if (!['propuesto', 'validado', 'descartado', 'integrado'].includes(estado)) return { ok: false, error: 'estado inválido' }
+  const actual = leerHallazgos().find((h) => h.id === id)
+  if (!actual) return { ok: false, error: 'hallazgo no encontrado' }
+  const entrada = { ...actual, estado, fecha: new Date().toISOString() }
+  fs.appendFileSync(HALLAZGOS_JSONL, JSON.stringify(entrada) + '\n')
+  return { ok: true, hallazgo: entrada }
+}
+
 function registrarAlerta(a) {
   try { fs.appendFileSync(path.join(LOGS_DIR, 'vigilante.jsonl'), JSON.stringify({ ...a, fecha: new Date().toISOString() }) + '\n') } catch { /* nada */ }
 }
 const vigilante = crearVigilante({ leerJobs: (n) => oc.leerJobs(n), config, registrar: registrarAlerta })
 vigilante.arrancar(60 * 1000)
+
+// ----------------------------------------------------------------- latidos (R3)
+
+// Mapa en memoria de latidos de Claude. Cada latido se identifica por sesión+agente y
+// caduca a los 3 min sin renovarse. Nunca se persiste: si el hub se reinicia, se pierde.
+const LATIDO_TTL = 3 * 60 * 1000
+const latidos = new Map()
+
+function registrarLatido(b) {
+  const ahora = Date.now()
+  const clave = `${b.sesion || 'anon'}:${b.agente || 'cerebro'}`
+  const previo = latidos.get(clave)
+  latidos.set(clave, {
+    cwd: b.cwd || previo?.cwd || process.cwd(),
+    sesion: b.sesion || previo?.sesion || null,
+    evento: b.evento || previo?.evento || 'desconocido',
+    agente: b.agente || previo?.agente || 'cerebro',
+    tarea: b.tarea || null,
+    ts: ahora,
+    desde: previo && ahora - previo.ts < LATIDO_TTL ? previo.desde : ahora,
+  })
+}
+
+function latidosActivos() {
+  const ahora = Date.now()
+  const activos = []
+  for (const [clave, l] of latidos) {
+    if (ahora - l.ts >= LATIDO_TTL) { latidos.delete(clave); continue }
+    activos.push(l)
+  }
+  return activos
+}
+
+// Cache corto de sesiones de OpenCode: la actividad puede pedirse cada 2 s (SSE) y no
+// queremos martillear al servidor V1.
+let cacheSesiones = { ts: 0, datos: [] }
+async function sesionesActivas() {
+  const ahora = Date.now()
+  if (ahora - cacheSesiones.ts < 3000) return cacheSesiones.datos
+  const r = await oc.sesionesRecientes(5 * 60 * 1000)
+  cacheSesiones = { ts: ahora, datos: r.ok ? r.sesiones : [] }
+  return cacheSesiones.datos
+}
+
+const actividad = crearActividad({
+  leerJobs: (n) => oc.leerJobs(n),
+  sesiones: () => sesionesActivas(),
+  latidos: () => latidosActivos(),
+  organizacion,
+  buscarProyecto: (ruta) => memoria.buscarProyecto(ruta),
+  vigilante,
+})
 try { memoria.limpiarTemporales() } catch { /* nada */ }
 setInterval(() => { try { memoria.limpiarTemporales() } catch { /* nada */ } }, config.autolimpiarHoras * 60 * 60 * 1000).unref?.()
 
@@ -126,6 +222,32 @@ async function gasto(forzar = false) {
   } catch (e) { datos.sesiones = { ok: false, error: String(e?.message || e) } }
   cacheGasto = { ts: ahora, datos }
   return datos
+}
+
+// Reparto por familia/modelo del equipo activo (R6). Solo datos reales: si no hay
+// personajes activos, los arrays van vacíos (no se inventa nada).
+async function gastoEquipo() {
+  const act = await actividad.calcular()
+  const porFamilia = new Map()
+  const porModelo = new Map()
+  for (const p of act.proyectos) {
+    for (const c of p.personajes) {
+      const f = porFamilia.get(c.familia) || { familia: c.familia, personajes: 0, agentes: new Set() }
+      f.personajes++
+      f.agentes.add(c.agente)
+      porFamilia.set(c.familia, f)
+      const m = porModelo.get(c.modelo || 'desconocido') || { modelo: c.modelo || null, personajes: 0, agentes: new Set() }
+      m.personajes++
+      m.agentes.add(c.agente)
+      porModelo.set(c.modelo || 'desconocido', m)
+    }
+  }
+  return {
+    ok: true,
+    generado: Date.now(),
+    familias: [...porFamilia.values()].map((f) => ({ familia: f.familia, personajes: f.personajes, agentes: [...f.agentes] })).sort((a, b) => b.personajes - a.personajes),
+    modelos: [...porModelo.values()].map((m) => ({ modelo: m.modelo, personajes: m.personajes, agentes: [...m.agentes] })).sort((a, b) => b.personajes - a.personajes),
+  }
 }
 
 // ----------------------------------------------------------------- utilidades HTTP
@@ -178,9 +300,23 @@ const servidor = http.createServer(async (req, res) => {
       return enviarJson(res, {
         ok: true,
         proyecto: memoria.buscarProyecto(cwd),
-        texto: memoria.briefing(cwd, { alertas: vigilante.alertas(), jobs: oc.leerJobs(80) }),
+        texto: memoria.briefing(cwd, { alertas: vigilante.alertas(), jobs: oc.leerJobs(80), hallazgos: leerHallazgos('propuesto') }),
         alertas: vigilante.alertas(),
       })
+    }
+    if (ruta === '/api/hallazgos' && req.method === 'GET') {
+      const estado = u.searchParams.get('estado') || null
+      return enviarJson(res, { ok: true, hallazgos: leerHallazgos(estado) })
+    }
+    if (ruta === '/api/hallazgos' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (!b.nombre) return enviarJson(res, { ok: false, error: 'falta nombre' }, 400)
+      return enviarJson(res, { ok: true, hallazgo: registrarHallazgo(b) })
+    }
+    if (ruta === '/api/hallazgos/estado' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      const r = cambiarEstadoHallazgo(String(b.id || ''), String(b.estado || ''))
+      return enviarJson(res, r, r.ok ? 200 : 400)
     }
     if (ruta === '/api/proyectos') return enviarJson(res, { ok: true, proyectos: memoria.proyectos() })
     if (ruta === '/api/memoria/proyecto') {
@@ -221,6 +357,51 @@ const servidor = http.createServer(async (req, res) => {
       return enviarJson(res, { ok: true, alertas: vigilante.alertas() })
     }
     if (ruta === '/api/organizacion') return enviarJson(res, { ok: true, ...organizacion.datos() })
+    if (ruta === '/api/mcps') {
+      try {
+        const j = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'mcps.json'), 'utf8'))
+        return enviarJson(res, { ok: true, ...j })
+      } catch {
+        return enviarJson(res, { ok: true, total: 0, mcps: [], nota: 'sin inventario todavía; ejecuta hub/mcps.mjs o el agente adaptador-mcps' })
+      }
+    }
+    if (ruta === '/api/actividad') return enviarJson(res, { ok: true, ...(await actividad.calcular()) })
+    if (ruta === '/api/latido' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (!b.cwd) return enviarJson(res, { ok: false, error: 'falta cwd' }, 400)
+      registrarLatido(b)
+      return enviarJson(res, { ok: true })
+    }
+    if (ruta === '/api/eventos') {
+      // SSE: emite `actividad` solo cuando cambia el estado de algún personaje (cada 2 s).
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-store',
+        Connection: 'keep-alive',
+      })
+      res.write(': conectado\n\n')
+      let firmaAnterior = null
+      let cerrado = false
+      const emitir = async () => {
+        if (cerrado) return
+        try {
+          const datos = await actividad.calcular()
+          const firma = JSON.stringify(datos.proyectos)
+          if (firma !== firmaAnterior) {
+            firmaAnterior = firma
+            res.write(`event: actividad\ndata: ${JSON.stringify(datos)}\n\n`)
+          } else {
+            res.write(': latido\n\n')
+          }
+        } catch { /* se reintenta en el siguiente ciclo */ }
+      }
+      const timer = setInterval(emitir, 2000)
+      timer.unref?.()
+      emitir()
+      req.on('close', () => { cerrado = true; clearInterval(timer) })
+      return
+    }
+    if (ruta === '/api/gasto/equipo') return enviarJson(res, await gastoEquipo())
     if (ruta === '/api/gasto') return enviarJson(res, await gasto())
     if (ruta === '/api/ventana') return enviarJson(res, { ok: true, ...(await ventana.calcular()) })
     if (ruta === '/api/reglas') return enviarJson(res, { ok: true, reglas })

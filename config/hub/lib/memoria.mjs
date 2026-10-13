@@ -172,7 +172,7 @@ export function crearMemoria(raiz, { temporalDias = 14, plantillasDir = null } =
     return borrados
   }
 
-  function briefing(cwd, { alertas = [], jobs = [] } = {}) {
+  function briefing(cwd, { alertas = [], jobs = [], hallazgos = [] } = {}) {
     const p = buscarProyecto(cwd)
     const lineas = []
     lineas.push(`# Briefing · ${p ? p.nombre : nombreDe(cwd)}`)
@@ -198,6 +198,11 @@ export function crearMemoria(raiz, { temporalDias = 14, plantillasDir = null } =
     if (jobsVivos.length) {
       lineas.push('', '## Trabajos en curso en esta carpeta')
       for (const j of jobsVivos) lineas.push(`- ${j.status} · ${j.title || j.jobId} · jobId ${j.jobId}`)
+    }
+    if (hallazgos.length) {
+      lineas.push('', '## Hallazgos pendientes de validar (buscar antes de crear)')
+      for (const h of hallazgos.slice(0, 5)) lineas.push(`- ${h.nombre}${h.url ? ` — ${h.url}` : ''} (propuesto por ${h.por || 'un agente'}) · id ${h.id}`)
+      lineas.push('Pregúntale al usuario si quiere usar alguno (validar / descartar) ANTES de crear nada nuevo; si valida, intégralo en vez de construirlo.')
     }
     const texto = lineas.join('\n')
     return texto.length > 6000 ? texto.slice(0, 6000) + '\n… (briefing truncado)' : texto

@@ -7,6 +7,18 @@ description: Delega trabajo de código a OpenCode (implementar, depurar, revisar
 
 Regla de oro: **tú piensas y documentas; OpenCode ejecuta el código**. Ninguna delegación sin spec escrita.
 
+## Filosofía: buscar antes de crear (ahorra tokens)
+
+Antes de construir algo nuevo (una utilidad, una integración, una feature con cremillas), **busca primero si ya existe**; solo si nada encaja, se crea de cero:
+
+1. **Busca**: registro de hallazgos (`node ~/.sistema-cerebro-agentes/hooks/hallazgos.mjs --listar`) + MCPs (documentación de librerías, búsqueda web, GitHub, npm/PyPI…). Los exploradores (`explorador` / `explorador-ds`) son los encargados de esta búsqueda.
+2. **Apunta el candidato con enlace**: `hallazgos.mjs --proponer "nombre" --url "..." --nota "por qué encaja"` (queda como `propuesto`).
+3. **Pregúntale al usuario** (esto lo haces tú, el Cerebro): «He encontrado X (enlace). ¿Lo usamos, lo descartamos o lo dejamos apuntado?» — **no integres nada sin validación**.
+4. **Actualiza el estado**: `hallazgos.mjs --validar <id>` / `--descartar <id>`; al integrarlo de verdad: `--integrar <id>`.
+5. Si nada encaja: se crea de cero (o se adapta el candidato **con permiso** del usuario).
+
+El briefing de sesión ya te trae los hallazgos **pendientes de validar**: pregúntaselos al usuario al empezar o cuando toque.
+
 ## El equipo (a quién delegas y con qué esfuerzo)
 
 | Agente | Modelo · esfuerzo | Para qué | Tope por job |
@@ -96,3 +108,4 @@ Resume al usuario: qué se hizo, archivos, pruebas y qué queda pendiente. Actua
 - Nunca delegues trabajo de código sin spec (preguntas puntuales con `opencode_ask` son la excepción).
 - Mantén el contexto de la delegación (jobId, sessionId, ruta de la spec) para poder retomar el trabajo.
 - **Sin Claude** (cuota agotada): el mismo flujo lo dirige el agente `cerebro-oc` dentro de OpenCode; tú solo tienes que decírselo al usuario.
+- **MCPs**: inventario automático en la memoria del hub (`memoria/global/MCPS.md`, endpoint `/api/mcps`). Antes de asumir que algo no se puede hacer, mira si hay un MCP para ello (web, docs de librerías, repos, servidores, navegador…) y úsalo; cita fuentes. Si falta una capacidad recurrente, propón instalar ese MCP y re-ejecutar el agente `adaptador-mcps`.

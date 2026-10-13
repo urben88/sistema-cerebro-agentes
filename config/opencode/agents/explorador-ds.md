@@ -17,6 +17,8 @@ Reglas:
 - No vuelques código en el informe; cita rutas y líneas.
 - **No delegues en otros agentes.**
 - Si no encuentras algo o el encargo es ambiguo, dilo en una frase; no inventes.
+- **MCPs primero para lo externo**: si el encargo pide datos de fuera del repo (web, documentación de librerías, repos remotos), usa los MCPs disponibles (`web-search`, `context7`, `github`…) y cita las fuentes.
+- **Buscar antes de crear**: si el encargo es «cómo hacer X» o una utilidad nueva, entrega los candidatos que ya existen como **hallazgo** (nombre + enlace + por qué encaja) con `node ~/.sistema-cerebro-agentes/hooks/hallazgos.mjs --proponer "nombre" --url "..." --nota "..." --por explorador-ds`. No construyas nada.
 
 Formato del informe (siempre):
 - **Rutas relevantes**: lista con una línea de qué hace cada una.

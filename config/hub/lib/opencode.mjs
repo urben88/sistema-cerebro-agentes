@@ -45,6 +45,30 @@ export function crearOpenCode({ systemDir, host = null }) {
     } catch { return { ok: false, error: 'respuesta no JSON' } }
   }
 
+  /**
+   * Lista de sesiones normalizada para la actividad del panel: expone `directory` y
+   * `time.updated` (como `updatedAt`) y filtra las que no se han tocado en la ventana
+   * indicada (por defecto 5 min). Devuelve hoja plana, ordenada de más reciente a más
+   * antigua, para no obligar a quien la use a conocer la forma cruda de `/session`.
+   */
+  async function sesionesRecientes(ventanaMs = 5 * 60 * 1000) {
+    const r = await sesiones()
+    if (!r.ok) return { ok: false, error: r.error, sesiones: [] }
+    const ahora = Date.now()
+    const lista = r.sesiones
+      .map((s) => ({
+        id: s?.id || null,
+        directory: s?.directory || null,
+        updatedAt: s?.time?.updated || null,
+        title: s?.title || null,
+        agent: s?.agent || null,
+        cost: typeof s?.cost === 'number' ? s.cost : 0,
+      }))
+      .filter((s) => s.directory && s.updatedAt && ahora - s.updatedAt < ventanaMs)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+    return { ok: true, sesiones: lista }
+  }
+
   function leerJobs(limite = 60) {
     const out = []
     const walk = (dir) => {
@@ -76,5 +100,5 @@ export function crearOpenCode({ systemDir, host = null }) {
     return out.slice(0, limite)
   }
 
-  return { puerto, get, sesiones, leerJobs }
+  return { puerto, get, sesiones, sesionesRecientes, leerJobs }
 }

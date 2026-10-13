@@ -24,11 +24,13 @@ Versionado semántico (MAJOR.MINOR.PATCH).
   - **Stack Docker** (`docker/docker-compose.yml`): servicios `hub` (127.0.0.1:4597) y `laya`, con `restart: unless-stopped`, healthchecks y la memoria del host montada; el puente MCP y el servidor V1 siguen en el host (el hub los alcanza por `host.docker.internal`). Gestor: `docker/gestion.ps1` / `gestion.sh` (`up/down/status/logs`).
   - Panel: tarjeta de **Triaje · Laya** con estado y últimas decisiones.
 - **Hooks de contexto** (`config/hooks/`, desplegados en `~/.sistema-cerebro-agentes/hooks/` y registrados en `~/.claude/settings.json`):
-  - `SessionStart` (startup/resume/clear/compact): inyecta el briefing del proyecto (estado, contexto, bitácora, alertas y trabajos) al abrir cualquier sesión; si el hub está apagado, lee la memoria del disco; si el proyecto no tiene memoria, no dice nada.
+  - `SessionStart` (startup/resume/clear/compact): inyecta el briefing del proyecto (estado, contexto, bitácora, alertas, trabajos y hallazgos pendientes) al abrir cualquier sesión; si el hub está apagado, lee la memoria del disco; si el proyecto no tiene memoria, no dice nada.
   - `PreCompact` (manual/auto): guarda un checkpoint antes de comprimir y recuerda completar el `ESTADO.md`.
   - `SessionEnd(clear)`: checkpoint de seguridad al cerrar la sesión con `/clear`.
   - CLI `estado` (`--leer`, `--escribir --archivo`, `--bitacora`, `--checkpoint`) para que los agentes actualicen la memoria en una línea.
   - Verificado de punta a punta: una sesión real de Claude respondió la tarea activa del proyecto **sin que se le dijera**, solo desde el briefing inyectado.
+- **Filosofía «buscar antes de crear»** con registro de hallazgos compartido (API `/api/hallazgos`, CLI `hallazgos` y tarjeta en el panel): los exploradores buscan primero soluciones ya hechas (MCPs), apuntan candidatos con enlace y el Cerebro **pregunta al usuario** (validar / descartar / integrar) antes de construir nada; si nada encaja, se crea de cero. El briefing trae los pendientes de validar.
+- **Descubrimiento genérico de MCPs** (`hub/mcps.mjs`, `/api/mcps` y tarjeta en el panel): inventario automático de los MCPs de OpenCode y Claude con sus capacidades y prioridad de uso. El agente `adaptador-mcps` se ejecuta solo cuando se pide (p. ej. al instalar o quitar MCPs), verifica que los agentes puedan usarlos y propone mejoras **sin tocar nada**.
 
 ### Corregido
 
@@ -36,15 +38,12 @@ Versionado semántico (MAJOR.MINOR.PATCH).
 
 ### Cambiado
 
+- El trío del sistema pasa a **DeepSeek oficial V4.1 Flash con esfuerzos**: `implementador` high, `revisor` max, `testeador` low (verificado en real por CLI y por el puente MCP).
+- `opencode.jsonc`: `default_agent` = `cerebro-oc` (al abrir OpenCode sin Claude, atiende el agente más capaz y delega él).
 - El agente `cerebro` y el skill `delegar-a-opencode` se reescriben con la matriz de reparto completa, los topes de coste por job y el protocolo actualizado: **sin `providerID`/`modelID`** en `opencode_fire` (el modelo y el esfuerzo van fijados en el agente).
 - **Esfuerzo por agente también en Claude** (campo `effort` del frontmatter, verificado contra el propio Claude Code): `cerebro` medium, `arquitecto` **high**, `explorador`/`redactor` **low**, `analista`/`subdirector` medium — la misma lógica que las variantes de DeepSeek.
 - `~/.claude/settings.json`: esfuerzos por defecto de Claude a **medium** (Sonnet 5/5.5 y Haiku 5.5); Opus se deja intacto. Subir a `high` cuando la tarea lo merezca (`/effort high`).
-- **Instaladores** (`install.ps1` / `install.sh`): ahora despliegan también el hub, los hooks, el MCP de triaje y los subagentes; fusionan `settings.json` (esfuerzos + hooks, con backup) mediante `config/hub/settings-merge.mjs`; copian el stack Docker (con el compose ajustado a la ruta instalada), levantan los contenedores y, en Windows, registran el **autoarranque** con una tarea programada. El desinstalador retira todo lo nuevo (conservando memoria y backups) y `verificar` comprueba hub, Laya, hooks, subagentes y settings.
-
-### Cambiado
-
-- El trío del sistema pasa a **DeepSeek oficial V4.1 Flash con esfuerzos**: `implementador` high, `revisor` max, `testeador` low (verificado en real por CLI y por el puente MCP).
-- `opencode.jsonc`: `default_agent` = `cerebro-oc` (al abrir OpenCode sin Claude, atiende el agente más capaz y delega él).
+- **Instaladores** (`install.ps1` / `install.sh`): ahora despliegan también el hub, los hooks, el MCP de triaje y los subagentes; fusionan `settings.json` (esfuerzos + hooks, con backup) mediante `config/hub/settings-merge.mjs`; copian el stack Docker (con el compose ajustado a la ruta instalada), levantan los contenedores y registran el **autoarranque** en Windows (tarea programada y, si el sistema la deniega, carpeta de Inicio). El desinstalador retira todo lo nuevo (conservando memoria y backups) y `verificar` comprueba hub, Laya, hooks, subagentes y settings.
 
 ### Eliminado
 
