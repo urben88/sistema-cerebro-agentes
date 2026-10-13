@@ -120,6 +120,36 @@ function simboloEstado(e) {
   return { simbolo: '•', clase: 'neutro' }
 }
 
+// ----------------------------------------------------- consumo y parada de trabajos
+
+const normRuta = (r) => String(r || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+
+/** Estado real de Claude (lo empuja la barra de estado) para la ruta de una sala. */
+function claudeDeSala(ruta) {
+  return (estado.claudeEstados || []).find((e) => normRuta(e.cwd) === normRuta(ruta)) || null
+}
+
+function horaReset(epochSeg) {
+  if (!epochSeg) return null
+  try { return new Date(epochSeg * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) } catch { return null }
+}
+
+/** Botón de emergencia: pide confirmación, cancela y avisa del resultado. */
+async function pararTrabajos(cuerpo, mensaje) {
+  if (estado.demo) { alert('Modo demo: aquí no se para nada.'); return false }
+  if (!confirm(mensaje)) return false
+  try {
+    const r = await fetch('/api/trabajos/cancelar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpo),
+    }).then((x) => x.json())
+    if (r.ok) alert(r.revisados === 0 ? 'No había trabajos activos que parar.' : `Cancelados ${r.cancelados} de ${r.revisados} trabajos.`)
+    else alert(`No se pudo parar: ${r.error || 'error desconocido'}`)
+    return true
+  } catch { alert('El hub no respondió.'); return false }
+}
+
 // ---------------------------------------------------------------- familias y agentes
 
 // A4 · figuras planas: cada familia tiene color y accesorio propios.
@@ -239,6 +269,7 @@ const estado = {
   proyectos: [],
   vigilante: null,
   gastoEquipo: null,
+  claudeEstados: [],
   salaAbierta: null,
   desplegadas: new Set(),
   plegar: true,
@@ -266,15 +297,13 @@ function crearPuesto(personaje, proyecto) {
   }
   const wrap = h('div', { clase: 'figura-wrap' })
   wrap.append(figuraSVG(personaje.familia, personaje.estado))
-  // El esfuerzo, en la propia figura y a la izquierda del circulito verde de actividad.
-  if (personaje.variant) {
-    wrap.append(h('span', { clase: 'esf-pill', texto: nombreEsfuerzo(personaje.variant), title: `esfuerzo ${nombreEsfuerzo(personaje.variant)} (${personaje.variant})` }))
-  }
   puesto.append(wrap)
   puesto.append(h('div', { clase: 'mesa' }, h('div', { clase: 'monitor' })))
   const pie = h('figcaption', { clase: 'puesto-pie' })
   pie.append(h('span', { clase: 'pers-nombre', texto: personaje.agente }))
   pie.append(h('span', { clase: 'chip modelo', texto: etiquetaModelo(personaje.modelo), title: personaje.modelo || '' }))
+  // El esfuerzo va debajo, al lado del modelo (no encima de la figura).
+  if (personaje.variant) pie.append(h('span', { clase: 'chip esfuerzo', texto: `esfuerzo ${nombreEsfuerzo(personaje.variant)}`, title: `Esfuerzo: ${nombreEsfuerzo(personaje.variant)} (${personaje.variant})` }))
   // R6 · chip de error con el título legible (el crudo queda en el detalle).
   if (personaje.errorInfo) pie.append(h('span', { clase: 'chip error', texto: personaje.errorInfo.titulo, title: personaje.errorInfo.causa || '' }))
   puesto.append(pie)
@@ -308,6 +337,15 @@ function crearSala(proyecto, opciones) {
   meta.append(h('span', { clase: 'chip', texto: `última actividad ${hace(proyecto.ultimaActividad)}` }))
   const n = proyecto.personajes.length
   meta.append(h('span', { clase: 'chip', texto: `${n} personaje${n === 1 ? '' : 's'}` }))
+  // Consumo de la sala: contexto/ventanas reales de Claude y coste de OpenCode.
+  const claudeSala = claudeDeSala(proyecto.ruta)
+  if (claudeSala) {
+    if (claudeSala.contextoPct != null) meta.append(h('span', { clase: 'chip', texto: `Claude ctx ${Math.round(claudeSala.contextoPct)}%`, title: `Contexto de la sesión de Claude${claudeSala.nombre ? ` «${claudeSala.nombre}»` : ''}` }))
+    if (claudeSala.cincoPct != null) meta.append(h('span', { clase: 'chip', texto: `5h ${Math.round(claudeSala.cincoPct)}%`, title: claudeSala.cincoReset ? `Ventana de 5 h · reinicia a las ${horaReset(claudeSala.cincoReset)}` : 'Ventana de 5 h' }))
+    if (claudeSala.sietePct != null) meta.append(h('span', { clase: 'chip', texto: `7d ${Math.round(claudeSala.sietePct)}%`, title: claudeSala.sieteReset ? `Ventana de 7 días · reinicia a las ${horaReset(claudeSala.sieteReset)}` : 'Ventana de 7 días' }))
+  }
+  const costeSala = proyecto.personajes.reduce((s, p) => s + (typeof p.coste === 'number' ? p.coste : 0), 0)
+  if (costeSala > 0) meta.append(h('span', { clase: 'chip', texto: `OpenCode ${costeSala.toFixed(3)} $`, title: 'Coste DeepSeek de los trabajos listados en esta sala' }))
   cab.append(meta)
 
   const acciones = h('div', { clase: 'sala-acciones' })
@@ -327,6 +365,15 @@ function crearSala(proyecto, opciones) {
       pintarOficina()
     })
     acciones.append(b2)
+  }
+  // Botón de emergencia por sala: para los trabajos de este proyecto.
+  if (proyecto.personajes.some((p) => EN_CURSO.has(p.estado))) {
+    const bp = h('button', { clase: 'boton mini peligro', type: 'button', texto: '⛔ Parar' })
+    bp.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      if (await pararTrabajos({ directory: proyecto.ruta }, `¿Parar los trabajos de OpenCode de «${proyecto.nombre}»?`)) refrescarLigero()
+    })
+    acciones.append(bp)
   }
   cab.append(acciones)
   sala.append(cab)
@@ -488,6 +535,15 @@ function pintarDetalleJob(cont, job) {
   fila('Coste', typeof job.cost === 'number' ? `${job.cost.toFixed(4)} $` : null)
   fila('Tokens', textoTokens(job.tokens))
   fila('Carpeta', job.directory)
+  if (EN_CURSO_JOB.has(job.status)) {
+    const bp = h('button', { clase: 'boton mini peligro', type: 'button', texto: '⛔ Parar este trabajo' })
+    bp.addEventListener('click', async () => {
+      if (await pararTrabajos({ jobId: job.jobId }, `¿Parar el trabajo de ${job.agent || 'este agente'}?`)) {
+        if (detalleAbierto && detalleAbierto.cargar) detalleAbierto.cargar()
+      }
+    })
+    cont.append(bp)
+  }
 
   if (job.ultimoTexto) {
     cont.append(h('h3', { texto: 'Último paso' }))
@@ -543,6 +599,15 @@ function lineaVivo(e) {
     const s = simboloEstado(e.estado)
     d.append(h('span', { clase: `marca ${s.clase}`, texto: s.simbolo }))
     d.append(h('span', { clase: 'vivo-texto', texto: `${e.tool || 'tool'}${e.entrada ? ` · ${recortar(e.entrada, 110)}` : ''}` }))
+  } else if (e.tipo === 'subtarea') {
+    d.append(h('span', { clase: 'vivo-tipo', texto: '🧩' }))
+    d.append(h('span', { clase: 'vivo-texto', texto: `subtarea${e.subagente ? ` (${e.subagente})` : ''} · ${recortar(e.texto, 110)}` }))
+  } else if (e.tipo === 'resultado') {
+    d.append(h('span', { clase: `marca ${e.error ? 'mal' : 'bien'}`, texto: e.error ? '✗' : '✓' }))
+    d.append(h('span', { clase: 'vivo-texto tenue', texto: recortar(e.texto || 'resultado', 120) }))
+  } else if (e.tipo === 'pregunta') {
+    d.append(h('span', { clase: 'vivo-tipo', texto: '🧑' }))
+    d.append(h('span', { clase: 'vivo-texto tenue', texto: recortar(e.texto, 140) }))
   } else if (e.tipo === 'parche') {
     d.append(h('span', { clase: 'vivo-tipo', texto: '📝' }))
     d.append(h('span', { clase: 'vivo-texto', texto: `Archivos: ${(e.archivos || []).slice(0, 4).join(', ') || '—'}` }))
@@ -579,6 +644,10 @@ function pintarVivo(caja, vivo, job) {
 
   caja.append(h('p', { clase: `vivo-estado${col.error ? ' mal' : ''}`, texto: textoEstado }))
 
+  if (vivo && vivo.origen === 'claude') {
+    caja.append(h('p', { clase: 'tenue vivo-nota', texto: 'Claude no expone su pensamiento interno; aquí ves todo lo que está haciendo en tiempo real: herramientas, archivos, textos y subtareas lanzadas.' }))
+  }
+
   if (ultimoPensamiento) {
     caja.append(h('h3', { texto: 'Pensando ahora' }))
     caja.append(h('pre', { clase: 'vivo-pensando', texto: ultimoPensamiento.texto }))
@@ -609,6 +678,22 @@ function pintarVivo(caja, vivo, job) {
   caja.append(activ)
   if (pegadoAbajo) activ.scrollTop = activ.scrollHeight
   else if (scrollPrevio != null) activ.scrollTop = scrollPrevio
+}
+
+// Demo de la vista viva de una sesión de Claude (actividad, sin pensamiento interno).
+function vivoDemoClaude() {
+  const ahora = Date.now()
+  const m = (n) => n * 60 * 1000
+  const ev = (o) => ({ id: `demo-claude-${o.n}`, ts: ahora - o.hace, ...o })
+  const eventos = [
+    ev({ n: 1, hace: m(4), tipo: 'pregunta', texto: 'Añade el apagado de trabajos al cerrar la sesión y documenta.' }),
+    ev({ n: 2, hace: m(4) + 4000, tipo: 'herramienta', tool: 'Read', entrada: 'file_path: config/hub/lib/opencode.mjs' }),
+    ev({ n: 3, hace: m(3), tipo: 'subtarea', subagente: 'explorador', texto: 'Revisar cómo aborta OpenCode una sesión' }),
+    ev({ n: 4, hace: m(3) + 3000, tipo: 'resultado', error: false, texto: 'Encontrado: POST /session/{id}/abort en el servidor V1.' }),
+    ev({ n: 5, hace: m(2), tipo: 'texto', texto: 'Voy a escribir el hook de cierre y el comando cerebro-parar.' }),
+    ev({ n: 6, hace: m(1), tipo: 'herramienta', tool: 'Edit', entrada: 'file_path: config/hooks/cerrar-trabajos.mjs' }),
+  ]
+  return { recopilado: true, origen: 'claude', eventos, todos: [], colector: { ultimaLectura: ahora - 2000, error: null, activo: true } }
 }
 
 // Demo de la vista viva: razonamiento, herramientas, parche, paso y siguientes pasos.
@@ -683,27 +768,48 @@ function abrirDetalle(personaje, proyecto) {
   b.addEventListener('click', () => verProyecto(proyecto.ruta))
   cuerpo.append(b)
 
-  if (personaje.jobId) {
+  const esClaude = personaje.origen === 'claude' && !!personaje.sesion
+  // Contexto y ventanas reales de Claude para esta sesión (los empuja la barra de estado).
+  if (esClaude) {
+    const ce = (estado.claudeEstados || []).find((x) => x.sesion === personaje.sesion)
+    if (ce) {
+      fila('Contexto Claude', ce.contextoPct != null ? `${Math.round(ce.contextoPct)} % usado` : null)
+      const r5 = horaReset(ce.cincoReset)
+      fila('Ventana 5 h', ce.cincoPct != null ? `${Math.round(ce.cincoPct)} %${r5 ? ` · reinicia ${r5}` : ''}` : null)
+      const r7 = horaReset(ce.sieteReset)
+      fila('Ventana 7 d', ce.sietePct != null ? `${Math.round(ce.sietePct)} %${r7 ? ` · reinicia ${r7}` : ''}` : null)
+      fila('Coste Claude (est.)', ce.coste != null ? `${ce.coste.toFixed(2)} $` : null)
+    }
+  }
+  if (personaje.jobId || esClaude) {
     const seccion = h('div', { clase: 'detalle-job' })
     const vivoCaja = h('div', { clase: 'detalle-vivo' })
     cuerpo.append(seccion)
     cuerpo.append(vivoCaja)
+    const clave = personaje.jobId ? `job:${personaje.jobId}` : `claude:${personaje.sesion}`
     const cargar = async () => {
       let r = null
       try {
-        r = estado.demo ? detalleDemo(personaje.jobId)
-          : await fetch(`/api/trabajos/${encodeURIComponent(personaje.jobId)}`).then((x) => x.json())
+        if (estado.demo) {
+          r = esClaude ? { ok: true, vivo: vivoDemoClaude() } : detalleDemo(personaje.jobId)
+        } else if (personaje.jobId) {
+          r = await fetch(`/api/trabajos/${encodeURIComponent(personaje.jobId)}`).then((x) => x.json())
+        } else {
+          r = await fetch(`/api/vivo/agente?sesion=${encodeURIComponent(personaje.sesion)}`).then((x) => x.json())
+        }
       } catch { r = null }
       if (!r || r.ok === false) {
-        if (!seccion.childElementCount) seccion.append(h('p', { clase: 'tenue', texto: (r && r.error) || 'Sin detalle del trabajo.' }))
+        if (!seccion.childElementCount) seccion.append(h('p', { clase: 'tenue', texto: (r && r.error) || (esClaude ? 'Sin actividad recopilada de esta sesión.' : 'Sin detalle del trabajo.') }))
         pararDetalle()
         return
       }
-      pintarDetalleJob(seccion, r.job)
-      pintarVivo(vivoCaja, r.vivo || null, r.job)
-      if (!EN_CURSO_JOB.has(r.job.status)) pararDetalle()
+      if (r.job) pintarDetalleJob(seccion, r.job)
+      else vaciar(seccion)
+      pintarVivo(vivoCaja, r.vivo || null, r.job || null)
+      const sigue = esClaude ? EN_CURSO.has(personaje.estado) : (!r.job || EN_CURSO_JOB.has(r.job.status))
+      if (!sigue) pararDetalle()
     }
-    detalleAbierto = { jobId: personaje.jobId, cargar }
+    detalleAbierto = { clave, cargar }
     cargar()
     // R7 · refresco cada ~3 s solo si el personaje sigue en curso.
     if (EN_CURSO.has(personaje.estado)) temporizadorDetalle = setInterval(cargar, 3000)
@@ -1112,6 +1218,7 @@ function actividadDemo() {
     id: o.id, agente: o.agente, familia: o.familia, modelo: o.modelo, variant: o.variant || null,
     estado: o.estado, tarea: o.tarea, desde: ahora - o.hace, origen: o.origen || 'opencode-job',
     evento: o.evento || null, jobId: o.jobId || null, sesion: o.sesion || null,
+    coste: typeof o.coste === 'number' ? o.coste : null,
     error: o.error || null, errorInfo: o.errorInfo || null,
   })
   return {
@@ -1121,9 +1228,9 @@ function actividadDemo() {
       {
         ruta: 'C:/demo/panel-la-oficina', nombre: 'panel-la-oficina', slug: 'demo-panel', ultimaActividad: ahora,
         personajes: [
-          p({ id: 'demo-1', agente: 'cerebro', familia: 'direccion', modelo: 'claude-sonnet-4-5', estado: 'trabajando', tarea: 'Coordinar el tramo B del panel visual', hace: m(4), jobId: 'demo-job-1' }),
-          p({ id: 'demo-2', agente: 'implementador', familia: 'implementacion', modelo: 'deepseek-v3.2', variant: 'high', estado: 'trabajando', tarea: 'La oficina: salas, mesas y monitores', hace: m(6), jobId: 'demo-job-2' }),
-          p({ id: 'demo-3', agente: 'revisor', familia: 'revision', modelo: 'deepseek-v3.2', variant: 'max', estado: 'esperando', tarea: 'Revisar el diff contra la spec', hace: m(9), jobId: 'demo-job-3' }),
+          p({ id: 'demo-1', agente: 'cerebro', familia: 'direccion', modelo: 'claude-sonnet-4-5', estado: 'trabajando', tarea: 'Coordinar el tramo B del panel visual', hace: m(4), jobId: 'demo-job-1', origen: 'claude', sesion: 'demo-ses-cerebro' }),
+          p({ id: 'demo-2', agente: 'implementador', familia: 'implementacion', modelo: 'deepseek-v3.2', variant: 'high', estado: 'trabajando', tarea: 'La oficina: salas, mesas y monitores', hace: m(6), jobId: 'demo-job-2', coste: 0.012 }),
+          p({ id: 'demo-3', agente: 'revisor', familia: 'revision', modelo: 'deepseek-v3.2', variant: 'max', estado: 'esperando', tarea: 'Revisar el diff contra la spec', hace: m(9), jobId: 'demo-job-3', coste: 0.021 }),
           p({
             id: 'demo-4', agente: 'testeador', familia: 'pruebas', modelo: 'deepseek-flash', variant: 'low', estado: 'atascado',
             tarea: 'Pruebas de lógica pura (A2/A3)', hace: m(42), jobId: 'demo-job-4',
@@ -1141,7 +1248,7 @@ function actividadDemo() {
         ruta: 'C:/demo/api-actividad', nombre: 'api-actividad', slug: 'demo-api', ultimaActividad: ahora - m(12),
         personajes: [
           p({ id: 'demo-6', agente: 'arquitecto', familia: 'direccion', modelo: 'claude-sonnet-4-5', estado: 'esperando', tarea: 'Diseñar el esquema de actividad', hace: m(8) }),
-          p({ id: 'demo-7', agente: 'explorador-ds', familia: 'exploracion', modelo: 'deepseek-flash', estado: 'trabajando', tarea: 'Reconocer lib/actividad.mjs', hace: m(3), jobId: 'demo-job-5' }),
+          p({ id: 'demo-7', agente: 'explorador-ds', familia: 'exploracion', modelo: 'deepseek-flash', estado: 'trabajando', tarea: 'Reconocer lib/actividad.mjs', hace: m(3), jobId: 'demo-job-5', coste: 0.004 }),
           p({ id: 'demo-8', agente: 'Agente', familia: 'generica', modelo: null, estado: 'trabajando', tarea: 'Tarea sin agente declarado (A3)', hace: m(7) }),
           p({ id: 'demo-9', agente: 'local', familia: 'mecanico', modelo: 'qwen3.5:9b', estado: 'terminado', tarea: 'Renombrar campos de la tabla', hace: m(5) }),
         ],
@@ -1193,7 +1300,7 @@ function conectarSse() {
     fuente.addEventListener('trabajo', (e) => {
       try {
         const d = JSON.parse(e.data)
-        if (detalleAbierto && d && d.jobId === detalleAbierto.jobId) detalleAbierto.cargar()
+        if (detalleAbierto && d && d.clave === detalleAbierto.clave) detalleAbierto.cargar()
       } catch { /* nada */ }
     })
     fuente.addEventListener('error', () => {
@@ -1210,16 +1317,18 @@ function conectarSse() {
 
 async function refrescarLigero() {
   try {
-    const [salud, org, proyectos, vig] = await Promise.all([
+    const [salud, org, proyectos, vig, claude] = await Promise.all([
       fetch('/api/salud').then((r) => r.json()),
       fetch('/api/organizacion').then((r) => r.json()),
       fetch('/api/proyectos').then((r) => r.json()),
       fetch('/api/vigilante').then((r) => r.json()),
+      fetch('/api/claude/estado').then((r) => r.json()).catch(() => null),
     ])
     estado.salud = salud
     estado.organizacion = org
     estado.proyectos = proyectos.proyectos || []
     estado.vigilante = vig
+    estado.claudeEstados = (claude && claude.estados) || []
     pintarOrganizacion(org)
     pintarProyectos(estado.proyectos)
     pintarVigilante(vig)
@@ -1262,6 +1371,9 @@ async function refrescarPesado() {
 $('cerrar').addEventListener('click', () => $('modal').classList.add('oculto'))
 $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) $('modal').classList.add('oculto') })
 $('lateralCerrar').addEventListener('click', () => { pararDetalle(); $('lateral').classList.add('oculto') })
+$('pararTodo').addEventListener('click', async () => {
+  if (await pararTrabajos({ todo: true }, '¿Parar TODOS los trabajos de OpenCode en segundo plano (todos los proyectos)?')) refrescarLigero()
+})
 $('botonTema').addEventListener('click', () => {
   aplicarTema(document.documentElement.dataset.tema === 'claro' ? 'oscuro' : 'claro')
 })
@@ -1286,6 +1398,12 @@ function arrancar() {
     document.body.classList.add('modo-demo')
     $('sub').textContent = 'modo demostración · actividad simulada'
     $('pie').textContent = 'Cerebro Hub · demo (?demo=1) · sin datos reales'
+    const ahoraSeg = Math.floor(Date.now() / 1000)
+    estado.claudeEstados = [{
+      cwd: 'C:/demo/panel-la-oficina', sesion: 'demo-ses-cerebro', nombre: 'panel-oficina',
+      contextoPct: 37, cincoPct: 22, sietePct: 41, coste: 2.4,
+      cincoReset: ahoraSeg + 3600, sieteReset: ahoraSeg + 86400,
+    }]
     aplicarActividad(actividadDemo())
   }
 

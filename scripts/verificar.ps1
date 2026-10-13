@@ -129,6 +129,12 @@ if ($hubOk) {
     $vivoOk = ($vv.ok -eq $true)
   } catch { $vivoOk = $false }
   Test-Item $vivoOk 'GET /api/vivo responde (vista viva)' 'Revisa hub.mjs / lib/vivo.mjs (spec 05)'
+  $claudeOk = $false
+  try {
+    $ce = Invoke-RestMethod -Uri "http://127.0.0.1:$hubPort/api/claude/estado" -TimeoutSec 4
+    $claudeOk = ($ce.ok -eq $true)
+  } catch { $claudeOk = $false }
+  Test-Item $claudeOk 'GET /api/claude/estado responde (contexto real)' 'Revisa hub.mjs / estado-linea.mjs'
 }
 foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'estado.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'hallazgos.mjs')) {
   Test-Item (Test-Path -LiteralPath (Join-Path $sysDir "hooks\$f")) "Hook $f instalado" 'Ejecuta install.ps1'

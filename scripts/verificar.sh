@@ -135,6 +135,11 @@ if [ "$HUB_OK" -eq 1 ]; then
   else
     test_item 1 'GET /api/vivo no responde' 'Revisa hub.mjs / lib/vivo.mjs (spec 05)'
   fi
+  if curl -fsS --max-time 4 "http://127.0.0.1:$HUB_PORT/api/claude/estado" 2>/dev/null | grep -q '"ok":true'; then
+    test_item 0 'GET /api/claude/estado responde (contexto real)'
+  else
+    test_item 1 'GET /api/claude/estado no responde' 'Revisa hub.mjs / estado-linea.mjs'
+  fi
 else
   test_item 1 "Cerebro Hub responde en 127.0.0.1:${HUB_PORT:-?}" 'Arranca: bash ~/.sistema-cerebro-agentes/hub.sh'
 fi

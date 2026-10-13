@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url'
 import { crearOpenCode } from './lib/opencode.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
 
 function leerStdin() {
   return new Promise((res) => {
@@ -64,6 +65,29 @@ try {
       partes.push(`${cerrado.status === 'completed' ? '✅' : '❌'} ${cerrado.agent || '?'} ${cerrado.status === 'completed' ? 'terminó' : 'falló'} hace ${duracion(cerrado.updatedAt, Date.now())}`)
     }
   } catch { /* sin trabajos legibles: se enseña solo la parte de Claude */ }
+
+  // Estado real para el panel: contexto, ventanas de 5 h/7 d y coste que da Claude
+  // en vivo. Best effort y corto: si el hub no está, la barra no se bloquea.
+  try {
+    const rl = datos.rate_limits || {}
+    await fetch(`${HUB}/api/claude/estado`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cwd: dir || null,
+        sesion: datos.session_id || null,
+        nombre: datos.session_name || null,
+        modelo: datos.model?.display_name || null,
+        contextoPct: typeof datos.context_window?.used_percentage === 'number' ? datos.context_window.used_percentage : null,
+        cincoPct: typeof rl.five_hour?.used_percentage === 'number' ? rl.five_hour.used_percentage : null,
+        sietePct: typeof rl.seven_day?.used_percentage === 'number' ? rl.seven_day.used_percentage : null,
+        coste: typeof datos.cost?.total_cost_usd === 'number' ? datos.cost.total_cost_usd : null,
+        cincoReset: rl.five_hour?.resets_at || null,
+        sieteReset: rl.seven_day?.resets_at || null,
+      }),
+      signal: AbortSignal.timeout(600),
+    })
+  } catch { /* hub apagado o lento */ }
 
   console.log(partes.join(' · '))
 } catch {

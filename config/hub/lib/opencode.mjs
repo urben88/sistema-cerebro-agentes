@@ -177,6 +177,7 @@ export function crearOpenCode({ systemDir, host = null }) {
               title: j.session?.title || null,
               modelo: j.session?.model?.id || null,
               variant: j.session?.model?.variant || null,
+              cost: typeof j.session?.cost === 'number' ? j.session.cost : null,
               error: j.error?.message || null,
             })
           } catch { /* job corrupto */ }
@@ -320,11 +321,11 @@ export function crearOpenCode({ systemDir, host = null }) {
   }
 
   /**
-   * Cancela trabajos de OpenCode: los del directorio indicado o todos (`todo`).
-   * Aborta la sesión en el servidor V1 y marca el fichero del trabajo; con
-   * `dryRun` solo informa de lo que cancelaría.
+   * Cancela trabajos de OpenCode: uno concreto (`jobId`), los del directorio
+   * indicado, o todos (`todo`). Aborta la sesión en el servidor V1 y marca el
+   * fichero del trabajo; con `dryRun` solo informa de lo que cancelaría.
    */
-  async function cancelarTrabajos({ directory = null, todo = false, dryRun = false, maxHoras = 24 } = {}) {
+  async function cancelarTrabajos({ directory = null, todo = false, dryRun = false, maxHoras = 24, jobId = null } = {}) {
     const normalizar = (r) => String(r || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
     const objetivo = directory ? normalizar(directory) : null
     const limite = Date.now() - maxHoras * 60 * 60 * 1000
@@ -332,7 +333,7 @@ export function crearOpenCode({ systemDir, host = null }) {
     const candidatos = leerJobsRecientes(ventana, 100).filter((j) =>
       ['running', 'accepted', 'input_required'].includes(j.status) &&
       (j.updatedAt || 0) >= limite &&
-      (todo || (objetivo && normalizar(j.directory) === objetivo)))
+      (jobId ? j.jobId === jobId : (todo || (objetivo && normalizar(j.directory) === objetivo))))
     const resultados = []
     for (const j of candidatos) {
       if (dryRun) {

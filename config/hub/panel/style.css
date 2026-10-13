@@ -123,6 +123,8 @@ td { padding: 5px 8px; border-bottom: 1px solid rgba(38, 46, 56, .5); }
 .boton:hover { border-color: var(--acento); }
 .boton.mini { padding: 2px 9px; font-size: 11px; border-radius: 6px; margin-right: 4px; }
 .boton.activo { border-color: var(--acento); color: var(--acento); }
+.boton.peligro { color: var(--rojo); border-color: rgba(248, 113, 113, .5); background: rgba(248, 113, 113, .08); }
+.boton.peligro:hover { border-color: var(--rojo); background: rgba(248, 113, 113, .16); }
 a.tenue { color: var(--acento); text-decoration: none; }
 a.tenue:hover { text-decoration: underline; }
 code { background: var(--tarjeta2); border: 1px solid var(--borde); border-radius: 4px; padding: 0 4px; }
@@ -179,14 +181,8 @@ code { background: var(--tarjeta2); border: 1px solid var(--borde); border-radiu
 .pers-nombre { font-size: 12px; font-weight: 600; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .puesto-pie .chip { font-size: 10px; padding: 0 7px; }
 
-/* esfuerzo del agente: en la figura, a la izquierda del circulito verde de actividad */
-.esf-pill {
-  position: absolute; right: 19px; top: 4px; font-size: 10.5px; line-height: 1;
-  padding: 4px 7px; border-radius: 999px; color: var(--ambar); white-space: nowrap;
-  background: rgba(251, 191, 36, .2); border: 1px solid rgba(251, 191, 36, .6);
-  font-weight: 600; letter-spacing: .02em; pointer-events: none; z-index: 2;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
-}
+/* esfuerzo del agente: chip junto al modelo, debajo de la figura */
+.chip.esfuerzo { color: var(--ambar); border-color: rgba(251, 191, 36, .5); background: rgba(251, 191, 36, .08); }
 
 /* mesa y monitor */
 .mesa {
@@ -356,6 +352,7 @@ body.modo-demo .sala { border-top-style: dashed; }
 .vivo-estado.mal {
   color: var(--ambar); background: rgba(251, 191, 36, .08); border-color: rgba(251, 191, 36, .35);
 }
+.vivo-nota { font-size: 11.5px; margin: 0 0 10px; line-height: 1.4; }
 .vivo-pensando {
   font-size: 12px; color: var(--texto); background: var(--tarjeta2);
   border: 1px solid var(--borde); border-left: 3px solid var(--acento);

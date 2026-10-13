@@ -93,6 +93,9 @@ try {
       agente: datos.agent_type || datos.agent || datos.subagent_type || null,
       tarea: (datos.prompt || datos.task || datos.description || '').slice(0, 200) || null,
       modelo: modelo ? modelo.slice(0, 80) : null,
+      // Ruta del transcript de la sesión: la usa el hub para la vista viva (solo
+      // actividad: herramientas, textos y subtareas; el pensamiento no es legible).
+      transcript: datos.transcript_path || datos.transcriptPath || null,
     }
     try {
       await fetch(`${HUB}/api/latido`, {

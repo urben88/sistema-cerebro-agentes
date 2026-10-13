@@ -13,6 +13,9 @@ Extiende la spec 04 (modelo real, errores legibles y detalle con refresco): aqu�
 5. **R5 · Panel**: bloque «vista viva» en el detalle — estado del colector (última lectura y avisos), **Pensando ahora** (último razonamiento completo), **Siguientes pasos** (lista con estados ○/⏳/✓) y **Actividad** (cronología con razonamiento y textos desplegables, herramientas con estado, parches y pasos). Sin parpadeo: solo se repinta al cambiar algo y conserva el scroll; la línea de estado se refresca sola.
 6. **R6 · Esfuerzo**: modelo y esfuerzo se muestran como `modelo · variant` en tarjeta y detalle (spec 04).
 7. **R7 · Fiabilidad**: si el servidor V1 no responde, el detalle enseña la última copia y el aviso del colector, sin romper el panel; sin disco, el colector sigue en memoria.
+8. **R8 · Control desde la web**: botones de emergencia en «La oficina» (⛔ parar **todo**, por **sala** y por **trabajo** en su detalle) sobre `POST /api/trabajos/cancelar`, que acepta `todo`, `directory` o `jobId`.
+9. **R9 · Consumo real por oficina**: la barra de estado empuja `POST /api/claude/estado` (contexto, ventanas 5 h/7 d, coste y reinicios, con TTL de 2 min); cada sala muestra chips con esos datos reales y con el **gasto DeepSeek** acumulado de sus trabajos; el detalle de un agente de Claude los lista.
+10. **R10 · Vista viva de Claude**: actividad leída del transcript de la sesión (herramientas, archivos, textos, subtareas y resultados; se ignoran los subagentes dentro del fichero); el pensamiento interno no es legible y el panel lo explica. La ruta del transcript viaja en el latido.
 
 ## Fuera de alcance
 - La conversación completa cruda en el panel (se ofrecen extractos desplegables).
@@ -23,7 +26,9 @@ Extiende la spec 04 (modelo real, errores legibles y detalle con refresco): aqu�
 - CA2: un trabajo terminado conserva su actividad (snapshot) tras reiniciar el hub.
 - CA3: `/api/trabajos/:jobId` de un trabajo antiguo devuelve eventos sin esperar al ciclo del colector.
 - CA4: con el servidor V1 caído, el detalle muestra la última copia y el aviso.
-- CA5: `verificar` sigue en verde y comprueba `/api/vivo`.
+- CA5: `verificar` sigue en verde y comprueba `/api/vivo` y `/api/claude/estado`.
+- CA6: los botones de parada cancelan de verdad (seco y real, probado con un trabajo simulado) y solo el objetivo pedido.
+- CA7: en modo demo se ven los chips de contexto/ventanas/coste y la vista viva de un Claude (con su nota de honestidad).
 
 ## Probado
 - `sesionMensajes` con una sesión real: 68 mensajes, 48 razonamientos, 80 herramientas, 30 parches.

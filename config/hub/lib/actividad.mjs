@@ -183,6 +183,7 @@ export function crearActividad({
         origen: 'opencode-job',
         jobId: j.jobId || null,
         sesion: j.sessionId || null,
+        coste: typeof j.cost === 'number' ? j.cost : null,
         evento: null,
         // Compatibilidad: `error` sigue siendo el texto crudo; `errorInfo` añade la versión legible (R5).
         error: j.error || null,

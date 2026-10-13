@@ -160,6 +160,7 @@ function registrarLatido(b) {
     agente: b.agente || previo?.agente || 'cerebro',
     tarea: b.tarea || null,
     modelo: b.modelo || previo?.modelo || null,
+    transcript: b.transcript || previo?.transcript || null,
     ts: ahora,
     desde: previo && ahora - previo.ts < LATIDO_TTL ? previo.desde : ahora,
   })
@@ -173,6 +174,44 @@ function latidosActivos() {
     activos.push(l)
   }
   return activos
+}
+
+// ------------------------------------------------- estado real de Claude (contexto y ventanas)
+// Lo empuja la barra de estado de Claude Code (estado-linea.mjs) con los datos que
+// Claude da en vivo: contexto usado, ventanas de 5 h / 7 d y coste. Caduca a los 2 min.
+
+const ESTADO_CLAUDE_TTL = 2 * 60 * 1000
+const estadosClaude = new Map()
+
+const numONulo = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+
+function registrarEstadoClaude(b) {
+  const clave = String(b.sesion || 'anon')
+  estadosClaude.set(clave, {
+    cwd: b.cwd || null,
+    sesion: b.sesion || null,
+    nombre: b.nombre || null,
+    modelo: b.modelo || null,
+    contextoPct: numONulo(b.contextoPct),
+    cincoPct: numONulo(b.cincoPct),
+    sietePct: numONulo(b.sietePct),
+    coste: numONulo(b.coste),
+    cincoReset: b.cincoReset || null,
+    sieteReset: b.sieteReset || null,
+    ts: Date.now(),
+  })
+}
+
+function estadosClaudeActivos(cwd = null) {
+  const ahora = Date.now()
+  const norm = (r) => String(r || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  const out = []
+  for (const [clave, v] of estadosClaude) {
+    if (ahora - v.ts >= ESTADO_CLAUDE_TTL) { estadosClaude.delete(clave); continue }
+    if (cwd && norm(v.cwd) !== norm(cwd)) continue
+    out.push(v)
+  }
+  return out
 }
 
 // Cache corto de sesiones de OpenCode: la actividad puede pedirse cada 2 s (SSE) y no
@@ -208,7 +247,7 @@ function difundirSSE(evento, datos) {
     try { c.write(texto) } catch { /* conexión muerta: se limpia sola al cerrar */ }
   }
 }
-const vivo = crearVivo({ oc, dirDatos: DATA_DIR, emitir: (ev) => difundirSSE('trabajo', ev), intervaloMs: 4000 })
+const vivo = crearVivo({ oc, dirDatos: DATA_DIR, emitir: (ev) => difundirSSE('trabajo', ev), latidos: () => latidosActivos(), intervaloMs: 4000 })
 vivo.arrancar()
 
 // ----------------------------------------------------------------- gasto
@@ -394,9 +433,16 @@ const servidor = http.createServer(async (req, res) => {
       return enviarJson(res, d, d.ok ? 200 : 404)
     }
     if (ruta === '/api/vivo') return enviarJson(res, { ok: true, ...vivo.estado() })
+    if (ruta === '/api/vivo/agente') {
+      // Vista viva de una sesión de Claude (actividad; su pensamiento no es legible).
+      const sesion = u.searchParams.get('sesion') || ''
+      if (!sesion) return enviarJson(res, { ok: false, error: 'falta sesion' }, 400)
+      try { vivo.recolectarClaude(sesion) } catch { /* nada */ }
+      return enviarJson(res, { ok: true, vivo: vivo.detalleAgente({ sesion }) })
+    }
     if (ruta === '/api/trabajos/cancelar' && req.method === 'POST') {
       const b = await cuerpoJson(req)
-      const r = await oc.cancelarTrabajos({ directory: b.directory || null, todo: b.todo === true, dryRun: b.dryRun === true })
+      const r = await oc.cancelarTrabajos({ directory: b.directory || null, todo: b.todo === true, dryRun: b.dryRun === true, jobId: b.jobId || null })
       return enviarJson(res, r)
     }
     if (ruta === '/api/vigilante/revisar' && req.method === 'POST') {
@@ -418,6 +464,14 @@ const servidor = http.createServer(async (req, res) => {
       if (!b.cwd) return enviarJson(res, { ok: false, error: 'falta cwd' }, 400)
       registrarLatido(b)
       return enviarJson(res, { ok: true })
+    }
+    if (ruta === '/api/claude/estado' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      registrarEstadoClaude(b)
+      return enviarJson(res, { ok: true })
+    }
+    if (ruta === '/api/claude/estado' && req.method === 'GET') {
+      return enviarJson(res, { ok: true, estados: estadosClaudeActivos(u.searchParams.get('cwd')) })
     }
     if (ruta === '/api/eventos') {
       // SSE: emite `actividad` solo cuando cambia el estado de algún personaje (cada 2 s).
