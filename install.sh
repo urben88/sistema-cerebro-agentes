@@ -180,6 +180,11 @@ backup_item "$SYSTEM_DIR/mcp/triaje-mcp.mjs"
 cp -f "$CONFIG_ROOT/mcp/triaje-mcp.mjs" "$SYSTEM_DIR/mcp/triaje-mcp.mjs"
 ok 'MCP de triaje instalado (mcp/triaje-mcp.mjs)'
 
+backup_item "$SYSTEM_DIR/mods"
+rm -rf "$SYSTEM_DIR/mods"
+cp -R "$CONFIG_ROOT/mods" "$SYSTEM_DIR/mods"
+ok "Mods instalados: $SYSTEM_DIR/mods"
+
 # ---------------------------------------------------------------- 4. Agente cerebro (con el MCP dentro)
 step 'Agente cerebro en Claude Code (con el MCP dentro)'
 

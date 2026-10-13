@@ -93,7 +93,7 @@ done
 if [ -f "$SYSTEM_DIR/hub.sh" ]; then
   bash "$SYSTEM_DIR/hub.sh" --stop >/dev/null 2>&1 || true
 fi
-for f in hub.ps1 hub.sh hub hooks mcp; do
+for f in hub.ps1 hub.sh hub hooks mcp mods; do
   p="$SYSTEM_DIR/$f"
   if [ -e "$p" ]; then backup_item "$p"; rm -rf "$p"; ok "Eliminado: $p"; fi
 done
@@ -129,6 +129,13 @@ if [ -f "$SETTINGS" ]; then
       if (!Object.keys(s.hooks).length) delete s.hooks;
     }
     if (s.statusLine && typeof s.statusLine.command === "string" && s.statusLine.command.includes("estado-linea.mjs")) delete s.statusLine;
+    if (s.env && typeof s.env.CLAUDE_CODE_PLUGIN_DIRS === "string") {
+      const pt = require("path");
+      const ps = s.env.CLAUDE_CODE_PLUGIN_DIRS.split(pt.delimiter).filter(x => x && !x.toLowerCase().includes("mesa-de-trabajo"));
+      if (ps.length) s.env.CLAUDE_CODE_PLUGIN_DIRS = ps.join(pt.delimiter);
+      else delete s.env.CLAUDE_CODE_PLUGIN_DIRS;
+      if (s.env && !Object.keys(s.env).length) delete s.env;
+    }
     fs.writeFileSync(p, JSON.stringify(s, null, 2) + "\n");
   ' "$SETTINGS" || warn 'No se pudo limpiar settings.json'
   ok 'Hooks y barra de estado del sistema retirados de settings.json'

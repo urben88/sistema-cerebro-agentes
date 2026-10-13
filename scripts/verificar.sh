@@ -180,6 +180,7 @@ if [ -f "$TRIAJE" ]; then
 else
   test_item 1 'MCP de triaje no instalado' 'Ejecuta install.sh'
 fi
+[ -f "$HOME/.sistema-cerebro-agentes/mods/mesa-de-trabajo/hooks/register.js" ] && test_item 0 'Mod «mesa de trabajo» instalado' || test_item 1 'Mod «mesa de trabajo» no instalado' 'Ejecuta install.sh'
 ESTADO_LINEA="$HOME/.sistema-cerebro-agentes/hub/estado-linea.mjs"
 if [ -f "$ESTADO_LINEA" ]; then
   test_item 0 'Barra de estado instalada (hub/estado-linea.mjs)'
@@ -214,6 +215,11 @@ if grep -q 'cerrar-trabajos.mjs' "$HOME/.claude/settings.json" 2>/dev/null; then
   test_item 0 'Apagado de trabajos registrado al cerrar sesion'
 else
   test_item 1 'Apagado de trabajos no registrado' 'Ejecuta install.sh'
+fi
+if grep -q 'mesa-de-trabajo' "$HOME/.claude/settings.json" 2>/dev/null; then
+  test_item 0 'Mod cargado en settings (CLAUDE_CODE_PLUGIN_DIRS)'
+else
+  test_item 1 'Mod no cargado en settings' 'Ejecuta install.sh'
 fi
 
 if [ "$SMOKE" -eq 1 ]; then

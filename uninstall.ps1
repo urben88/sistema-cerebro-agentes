@@ -111,7 +111,7 @@ foreach ($f in @('subdirector.md', 'explorador.md', 'redactor.md', 'analista.md'
 # 3d. Hub, hooks y MCP de triaje
 $hubLauncher = Join-Path $sysDir 'hub.ps1'
 if (Test-Path -LiteralPath $hubLauncher) { & powershell -NoProfile -ExecutionPolicy Bypass -File $hubLauncher -Stop 2>$null | Out-Null }
-foreach ($f in @('hub.ps1', 'hub.sh', 'hub', 'hooks', 'mcp')) {
+foreach ($f in @('hub.ps1', 'hub.sh', 'hub', 'hooks', 'mcp', 'mods')) {
   $p = Join-Path $sysDir $f
   if (Test-Path -LiteralPath $p) { Backup-Item $p; Remove-Item -LiteralPath $p -Recurse -Force; Write-Ok "Eliminado: $p" }
 }
@@ -133,7 +133,7 @@ if (Test-Path -LiteralPath $p) { Backup-Item $p; Remove-Item -LiteralPath $p -Re
 $settingsPath = Join-Path $UserHome '.claude\settings.json'
 if (Test-Path -LiteralPath $settingsPath) {
   Backup-Item $settingsPath
-  $js = 'const fs=require("fs");const p=process.argv[2];let s={};try{s=JSON.parse(fs.readFileSync(p,"utf8"))}catch{};if(s.hooks){for(const ev of Object.keys(s.hooks)){const arr=s.hooks[ev];if(Array.isArray(arr)){s.hooks[ev]=arr.filter(g=>!(g&&Array.isArray(g.hooks)&&g.hooks.some(h=>String(h.command||"").includes("sistema-cerebro-agentes"))));if(!s.hooks[ev].length)delete s.hooks[ev]}}if(!Object.keys(s.hooks).length)delete s.hooks}if(s.statusLine&&typeof s.statusLine.command==="string"&&s.statusLine.command.includes("estado-linea.mjs"))delete s.statusLine;fs.writeFileSync(p,JSON.stringify(s,null,2)+"\n")'
+  $js = 'const fs=require("fs");const p=process.argv[2];let s={};try{s=JSON.parse(fs.readFileSync(p,"utf8"))}catch{};if(s.hooks){for(const ev of Object.keys(s.hooks)){const arr=s.hooks[ev];if(Array.isArray(arr)){s.hooks[ev]=arr.filter(g=>!(g&&Array.isArray(g.hooks)&&g.hooks.some(h=>String(h.command||"").includes("sistema-cerebro-agentes"))));if(!s.hooks[ev].length)delete s.hooks[ev]}}if(!Object.keys(s.hooks).length)delete s.hooks}if(s.statusLine&&typeof s.statusLine.command==="string"&&s.statusLine.command.includes("estado-linea.mjs"))delete s.statusLine;if(s.env&&typeof s.env.CLAUDE_CODE_PLUGIN_DIRS==="string"){const path=require("path");const ps=s.env.CLAUDE_CODE_PLUGIN_DIRS.split(path.delimiter).filter(x=>x&&!x.toLowerCase().includes("mesa-de-trabajo"));if(ps.length)s.env.CLAUDE_CODE_PLUGIN_DIRS=ps.join(path.delimiter);else delete s.env.CLAUDE_CODE_PLUGIN_DIRS;if(s.env&&!Object.keys(s.env).length)delete s.env}fs.writeFileSync(p,JSON.stringify(s,null,2)+"\n")'
   $tmp = Join-Path $env:TEMP 'quitar-hooks-sistema.cjs'
   [System.IO.File]::WriteAllText($tmp, $js, (New-Object System.Text.UTF8Encoding($false)))
   Invoke-Cli 'node' @($tmp, $settingsPath) | Out-Null

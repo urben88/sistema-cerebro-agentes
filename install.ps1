@@ -275,6 +275,16 @@ Backup-Item (Join-Path $mcpDst 'triaje-mcp.mjs')
 Copy-Item -LiteralPath (Join-Path $ConfigRoot 'mcp\triaje-mcp.mjs') -Destination (Join-Path $mcpDst 'triaje-mcp.mjs') -Force
 Write-Ok 'MCP de triaje instalado (mcp/triaje-mcp.mjs)'
 
+# Mods de Claude Code (mesa de trabajo): se cargan vía CLAUDE_CODE_PLUGIN_DIRS (settings-merge).
+$modsSrc = Join-Path $ConfigRoot 'mods'
+$modsDst = Join-Path $SystemDir 'mods'
+if (Test-Path -LiteralPath $modsSrc) {
+  Backup-Item $modsDst
+  if (Test-Path -LiteralPath $modsDst) { Remove-Item -LiteralPath $modsDst -Recurse -Force }
+  Copy-Item -LiteralPath $modsSrc -Destination $modsDst -Recurse -Force
+  Write-Ok "Mods instalados: $modsDst"
+}
+
 # ---------------------------------------------------------------- 4. Agente cerebro (con el MCP dentro)
 Write-Step 'Agente cerebro en Claude Code (con el MCP dentro)'
 

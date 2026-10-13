@@ -1,0 +1,6 @@
+{
+  "name": "mesa-de-trabajo",
+  "version": "0.3.0",
+  "description": "Mesa de trabajo del sistema Cerebro: banda con los trabajos de OpenCode y subagentes en vivo, comandos /trabajos, /errores y /parar-todo, y guardián de modelos de subagentes",
+  "author": { "name": "sistema-cerebro-agentes" }
+}

@@ -97,6 +97,25 @@ if (fs.existsSync(estadoLinea)) {
   }
 } else faltan.push('estado-linea.mjs')
 
+// Mod «mesa de trabajo»: Claude Code lo carga en cada sesión vía
+// CLAUDE_CODE_PLUGIN_DIRS (se conserva lo que el usuario tenga ahí).
+{
+  const dirMod = path.join(path.dirname(hooksDir), 'mods', 'mesa-de-trabajo')
+  s.env = (s.env && typeof s.env === 'object') ? s.env : {}
+  const actual = typeof s.env.CLAUDE_CODE_PLUGIN_DIRS === 'string' ? s.env.CLAUDE_CODE_PLUGIN_DIRS : ''
+  const partes = actual.split(path.delimiter).map((p) => p.trim()).filter(Boolean)
+  const otros = partes.filter((p) => p.toLowerCase() !== dirMod.toLowerCase())
+  if (fs.existsSync(dirMod)) {
+    otros.push(dirMod)
+    s.env.CLAUDE_CODE_PLUGIN_DIRS = otros.join(path.delimiter)
+  } else {
+    if (otros.length) s.env.CLAUDE_CODE_PLUGIN_DIRS = otros.join(path.delimiter)
+    else delete s.env.CLAUDE_CODE_PLUGIN_DIRS
+    if (!Object.keys(s.env).length) delete s.env
+    faltan.push('mods/mesa-de-trabajo')
+  }
+}
+
 fs.mkdirSync(path.dirname(ruta), { recursive: true })
 fs.writeFileSync(ruta, JSON.stringify(s, null, 2) + '\n')
 console.log('settings.json actualizado: esfuerzos medium (si faltaban) y hooks de contexto.')

@@ -1,0 +1,4 @@
+{
+  "description": "El módulo de hooks de la mesa de trabajo",
+  "modules": ["./register.js"]
+}

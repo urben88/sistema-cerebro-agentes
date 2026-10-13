@@ -167,6 +167,7 @@ if (Test-Path -LiteralPath $hookLatido) {
   Test-Item (($hookCode -eq 0) -and ($sw.Elapsed.TotalSeconds -lt 2)) "Hook latido no bloquea con el hub caído ($seg s)" 'Revisa config/hooks/latido.mjs'
 }
 Test-Item (Test-Path -LiteralPath (Join-Path $sysDir 'mcp\triaje-mcp.mjs')) 'MCP de triaje instalado' 'Ejecuta install.ps1'
+Test-Item (Test-Path -LiteralPath (Join-Path $sysDir 'mods\mesa-de-trabajo\hooks\register.js')) 'Mod «mesa de trabajo» instalado' 'Ejecuta install.ps1'
 $triajeTxt = ''
 $triajePath = Join-Path $sysDir 'mcp\triaje-mcp.mjs'
 if (Test-Path -LiteralPath $triajePath) { $triajeTxt = [System.IO.File]::ReadAllText($triajePath) }
@@ -193,6 +194,7 @@ Test-Item ($setTxt -match 'session-start\.mjs') 'Hooks registrados en settings.j
 Test-Item ($setTxt -match 'claude-haiku-5-5') 'modelSettings de Haiku 5.5 configurado' 'Ejecuta install.ps1'
 Test-Item ($setTxt -match 'estado-linea\.mjs') 'Barra de estado registrada en settings.json' 'Ejecuta install.ps1 (o quita tu statusLine propia)'
 Test-Item ($setTxt -match 'cerrar-trabajos\.mjs') 'Apagado de trabajos registrado al cerrar sesion' 'Ejecuta install.ps1'
+Test-Item ($setTxt -match 'mesa-de-trabajo') 'Mod cargado en settings (CLAUDE_CODE_PLUGIN_DIRS)' 'Ejecuta install.ps1'
 $autoTarea = $false
 try { & schtasks /Query /TN 'Cerebro Hub' *> $null; $autoTarea = ($LASTEXITCODE -eq 0) } catch { $autoTarea = $false }
 $autoInicio = Test-Path -LiteralPath (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\cerebro-hub.cmd')
