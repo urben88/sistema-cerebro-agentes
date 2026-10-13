@@ -86,7 +86,8 @@
     </section>
 
     <section class="tarjeta">
-      <h2>Agentes configurados</h2>
+      <h2 class="con-accion">Bots · agentes de OpenCode <button class="boton" id="btnNuevoBot">➕ Nuevo bot</button></h2>
+      <p class="nota">Cada bot puede fijar su modelo (o heredarlo). Al guardar se escribe en el repositorio y en OpenCode, listo para que el Cerebro lo use.</p>
       <div id="listaAgentes" class="lista-agentes"></div>
     </section>
 
@@ -107,6 +108,41 @@
         <button class="boton" id="modalCerrar">Cerrar ✕</button>
       </div>
       <pre class="modal-cuerpo" id="modalCuerpo">—</pre>
+    </div>
+  </div>
+
+  <div id="modalBot" class="modal oculto">
+    <div class="modal-caja">
+      <div class="modal-cabecera">
+        <div>
+          <div class="modal-titulo" id="botTitulo">Nuevo bot</div>
+          <div class="modal-ruta">Agente de OpenCode · al guardar queda en el repositorio y desplegado al momento</div>
+        </div>
+        <button class="boton" id="botCerrar">Cerrar ✕</button>
+      </div>
+      <div class="formulario">
+        <label>Nombre <input id="botNombre" type="text" placeholder="p. ej. frontend" autocomplete="off" /></label>
+        <label>Descripción <span class="nota">(el Cerebro la usa para saber cuándo usarlo)</span>
+          <input id="botDescripcion" type="text" autocomplete="off" /></label>
+        <label>Modo
+          <select id="botModo">
+            <option value="all">all — como principal o subagente</option>
+            <option value="primary">primary — solo sesiones principales</option>
+            <option value="subagent">subagent — solo tareas delegadas</option>
+          </select>
+        </label>
+        <label>Modelo
+          <select id="botModelo"><option value="">— heredar (sin modelo fijo) —</option></select>
+        </label>
+        <label>Prompt <span class="nota">(su personalidad e instrucciones)</span>
+          <textarea id="botPrompt" rows="10" spellcheck="false"></textarea></label>
+        <div id="botErrores" class="errores oculto"></div>
+        <div class="fila-botones">
+          <button class="boton primario" id="botGuardar">💾 Guardar</button>
+          <button class="boton" id="botEliminar">🗑️ Eliminar</button>
+          <button class="boton" id="botCancelar">Cancelar</button>
+        </div>
+      </div>
     </div>
   </div>
 

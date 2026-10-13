@@ -37,6 +37,18 @@ Se abre el navegador en `http://127.0.0.1:4598` (o el primer puerto libre desde 
 
 Se refresca cada 2,5 s.
 
+## Gestión de bots (agentes de OpenCode)
+
+El panel permite crear y editar tus propios bots sin tocar ficheros a mano:
+
+- **➕ Nuevo bot** → nombre, descripción, **modo** (`primary` / `subagent` / `all`), **modelo** (el que quieras del catálogo completo, agrupado por proveedor — o «heredar» para que use el del sistema) y el **prompt** (su personalidad e instrucciones).
+- **✏️ Editar** en cualquier tarjeta de bot → misma ficha, con lectura del prompt actual.
+- **🗑️ Eliminar** → pide confirmación y guarda copia de seguridad en `~/.sistema-cerebro-agentes/backups/agentes-<fecha>/`.
+- Al guardar, el bot se escribe **en el repositorio** (`config/opencode/agents/<nombre>.md`) **y en OpenCode** (`~/.config/opencode/agents/`), y queda disponible para el Cerebro al momento.
+- Validaciones incluidas: nombre seguro (no se permiten nombres reservados de JavaScript como `constructor`, que rompen el servidor de OpenCode).
+
+El Cerebro usa el bot que le pidas al delegar (por defecto `implementador`); si tu bot tiene un modelo propio, se respeta.
+
 ## Seguridad
 
 - Escucha **solo en `127.0.0.1`** (nunca expuesto a la red).
@@ -55,9 +67,16 @@ Se refresca cada 2,5 s.
 | `GET /api/sesion/:id` | Últimos mensajes de una sesión |
 | `GET /api/ficheros` | Registro de ficheros de configuración (grupos) |
 | `GET /api/archivo?i=N` | Contenido de un fichero del registro |
+| `GET /api/modelos` | Catálogo de modelos disponibles (agrupables por proveedor) |
+| `POST /api/bot` | Crear/actualizar un bot (`{nombre, descripcion, modo, modelo, prompt}`) |
+| `POST /api/bot/eliminar` | Eliminar un bot (`{nombre}`), con copia de seguridad |
 
 El frontend (`config/web/public/`) es HTML/CSS/JS puro, sin CDNs (funciona sin conexión).
 
 ## Cambiar el puerto base
 
 Edita `BasePort` en `panel.ps1` (o `BASE_PORT` en `panel.sh`). El puerto real se publica en `web-port.txt`.
+
+## Actualización con el repositorio
+
+El panel vive en el repositorio (`config/web`) y se despliega con el instalador. Al ejecutar `scripts/actualizar` (o `install`), además de hacer `git pull` se redespliega el panel y, **si estaba abierto, se reinicia solo** para aplicar la versión nueva. Nada manual.

@@ -177,6 +177,120 @@ function leerJobs(limite = 25) {
   return out.slice(0, limite)
 }
 
+// ---------------------------------------------------------------- bots (agentes de OpenCode)
+
+const NOMBRES_RESERVADOS = new Set(['constructor', 'hasownproperty', 'tostring', 'valueof', '__proto__', 'prototype', 'isprototypeof', 'propertyisenumerable', 'tolocalestring'])
+const MODOS_VALIDOS = new Set(['primary', 'subagent', 'all'])
+const NOMBRE_VALIDO = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/
+
+let modelosCache = { lista: [], ts: 0 }
+function leerModelos() {
+  const ahora = Date.now()
+  if (ahora - modelosCache.ts < 120000) return modelosCache.lista
+  const bin = process.platform === 'win32'
+    ? path.join(SYSTEM_DIR, 'server', 'node_modules', '.bin', 'opencode.cmd')
+    : path.join(SYSTEM_DIR, 'server', 'node_modules', '.bin', 'opencode')
+  let salida = null
+  try { salida = execSync(`"${bin}" models`, { timeout: 20000, stdio: ['ignore', 'pipe', 'ignore'] }).toString() } catch { salida = null }
+  if (!salida) {
+    try { salida = execSync('opencode models', { timeout: 20000, stdio: ['ignore', 'pipe', 'ignore'] }).toString() } catch { salida = null }
+  }
+  const lista = (salida || '')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._:\/-]+$/.test(l))
+  modelosCache = { lista, ts: ahora }
+  return lista
+}
+
+function validarBot(datos) {
+  const errores = []
+  const nombre = String(datos.nombre || '').trim()
+  const descripcion = String(datos.descripcion || '').replace(/[\r\n]+/g, ' ').trim()
+  const modo = String(datos.modo || 'all').trim()
+  const modelo = String(datos.modelo || '').replace(/[\r\n]+/g, '').trim()
+  const prompt = String(datos.prompt || '').trim()
+  if (!NOMBRE_VALIDO.test(nombre)) errores.push('nombre inválido (letras, números, «-» y «_», empezando por letra o número)')
+  if (NOMBRES_RESERVADOS.has(nombre.toLowerCase())) errores.push(`"${nombre}" es un nombre reservado de JavaScript y rompe el servidor de OpenCode`)
+  if (!MODOS_VALIDOS.has(modo)) errores.push('modo inválido (primary, subagent o all)')
+  if (!descripcion) errores.push('la descripción es obligatoria')
+  if (descripcion.length > 300) errores.push('descripción demasiado larga (máx. 300)')
+  if (modelo && !/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._:\/-]+$/.test(modelo)) errores.push('modelo con formato inválido')
+  if (!prompt) errores.push('el prompt es obligatorio')
+  if (prompt.length > 20000) errores.push('prompt demasiado largo (máx. 20.000)')
+  return { errores, nombre, descripcion, modo, modelo, prompt }
+}
+
+function construirMarkdownBot({ descripcion, modo, modelo, prompt }) {
+  const lineas = ['---', `description: ${descripcion}`, `mode: ${modo}`]
+  if (modelo) lineas.push(`model: ${modelo}`)
+  lineas.push('---', '', prompt, '')
+  return lineas.join('\n')
+}
+
+function rutaRepositorioAgente(nombre) {
+  const root = findRepoRoot()
+  return root ? path.join(root, 'config', 'opencode', 'agents', `${nombre}.md`) : null
+}
+
+function rutaInstaladaAgente(nombre) {
+  return path.join(HOME, '.config', 'opencode', 'agents', `${nombre}.md`)
+}
+
+function respaldarAgente(destino) {
+  if (!fs.existsSync(destino)) return null
+  const dir = path.join(SYSTEM_DIR, 'backups', 'agentes-' + new Date().toISOString().replace(/[:.]/g, '-'))
+  fs.mkdirSync(dir, { recursive: true })
+  const copia = path.join(dir, path.basename(destino))
+  fs.copyFileSync(destino, copia)
+  return copia
+}
+
+function guardarBot(datos) {
+  const v = validarBot(datos)
+  if (v.errores.length) return { ok: false, errores: v.errores }
+  const contenido = construirMarkdownBot(v)
+  const rutas = []
+  for (const destino of [rutaRepositorioAgente(v.nombre), rutaInstaladaAgente(v.nombre)]) {
+    if (!destino) continue
+    try {
+      respaldarAgente(destino)
+      fs.mkdirSync(path.dirname(destino), { recursive: true })
+      fs.writeFileSync(destino, contenido, 'utf8')
+      rutas.push(destino)
+    } catch (e) {
+      return { ok: false, errores: [`No se pudo escribir ${destino}: ${e.message}`] }
+    }
+  }
+  return { ok: true, nombre: v.nombre, rutas }
+}
+
+function eliminarBot(nombre) {
+  if (!NOMBRE_VALIDO.test(String(nombre || ''))) return { ok: false, errores: ['nombre inválido'] }
+  const eliminados = []
+  for (const destino of [rutaRepositorioAgente(nombre), rutaInstaladaAgente(nombre)]) {
+    if (!destino) continue
+    if (fs.existsSync(destino)) {
+      respaldarAgente(destino)
+      fs.unlinkSync(destino)
+      eliminados.push(destino)
+    }
+  }
+  return { ok: true, eliminados }
+}
+
+function leerCuerpo(req, limite = 65536) {
+  return new Promise((resolve, reject) => {
+    let datos = ''
+    req.on('data', (c) => {
+      datos += c
+      if (datos.length > limite) { reject(new Error('cuerpo demasiado grande')); req.destroy() }
+    })
+    req.on('end', () => resolve(datos))
+    req.on('error', reject)
+  })
+}
+
 // ---------------------------------------------------------------- ficheros
 
 function construirFicheros() {
@@ -348,6 +462,19 @@ const servidor = http.createServer(async (req, res) => {
   const ruta = u.pathname
   try {
     if (ruta === '/api/ping') return enviarJson(res, { ok: true, panel: 'sistema-cerebro-agentes', hora: Date.now() })
+    if (ruta === '/api/modelos') return enviarJson(res, { ok: true, modelos: leerModelos() })
+    if (ruta === '/api/bot' && req.method === 'POST') {
+      const cuerpo = await leerCuerpo(req)
+      let datos = {}
+      try { datos = JSON.parse(cuerpo || '{}') } catch { return enviarJson(res, { ok: false, errores: ['JSON inválido'] }, 400) }
+      return enviarJson(res, guardarBot(datos))
+    }
+    if (ruta === '/api/bot/eliminar' && req.method === 'POST') {
+      const cuerpo = await leerCuerpo(req)
+      let datos = {}
+      try { datos = JSON.parse(cuerpo || '{}') } catch { return enviarJson(res, { ok: false, errores: ['JSON inválido'] }, 400) }
+      return enviarJson(res, eliminarBot(datos.nombre))
+    }
     if (ruta === '/api/estado') return enviarJson(res, await apiEstado())
     if (ruta === '/api/actividad') return enviarJson(res, await apiActividad())
     if (ruta.startsWith('/api/sesion/')) {

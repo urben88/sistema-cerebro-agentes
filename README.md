@@ -127,7 +127,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ~\.sistema-cerebro-agentes\p
 bash scripts/panel.sh
 ```
 
-Muestra: pipeline visual del sistema con estado en vivo, servidor V1 (puerto/versión), sesiones y trabajos MCP en tiempo real, los agentes con sus características (modo, modelo, descripción, sincronía con el repo) y un **visor de los ficheros de configuración** (agentes, CLAUDE.md, skill, lanzadores, docs…). Parar: `panel.ps1 -Stop`. Detalles en [docs/panel.md](docs/panel.md).
+Muestra: pipeline visual del sistema con estado en vivo, servidor V1 (puerto/versión), sesiones y trabajos MCP en tiempo real, los agentes con sus características (modo, modelo, descripción, sincronía con el repo) y un **editor de bots** (crear, editar, elegir modelo fijo o heredado, eliminar — guarda en el repositorio y lo despliega al momento), más un **visor de los ficheros de configuración** (agentes, CLAUDE.md, skill, lanzadores, docs…). Parar: `panel.ps1 -Stop`. Detalles en [docs/panel.md](docs/panel.md).
 
 ## Agentes de OpenCode
 

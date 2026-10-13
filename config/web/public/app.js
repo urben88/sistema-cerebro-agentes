@@ -125,6 +125,7 @@ function pintarSesiones(act) {
 }
 
 function pintarAgentes(agentes) {
+  agentesCache = agentes
   const cont = $('listaAgentes')
   if (!agentes.length) { cont.innerHTML = '<p class="tenue">No se encontraron agentes en ~/.config/opencode/agents.</p>'; return }
   cont.innerHTML = agentes.map((a, i) => {
@@ -134,7 +135,7 @@ function pintarAgentes(agentes) {
       <div class="agente" data-agente="${i}">
         <div class="agente-cabecera">
           <span class="agente-nombre">${esc(a.nombre)}</span>
-          <span class="tenue">${esc(a.origen)}</span>
+          <span class="tenue">${esc(a.origen)} · ✏️ editar</span>
         </div>
         <div class="agente-meta">
           <span class="badge azul">modo: ${esc(a.modo)}</span>
@@ -145,12 +146,7 @@ function pintarAgentes(agentes) {
       </div>`
   }).join('')
   for (const el of cont.querySelectorAll('.agente')) {
-    el.addEventListener('click', () => {
-      const a = agentes[Number(el.dataset.agente)]
-      const idx = ficherosCache.findIndex((f) => f.ruta === a.ruta)
-      abrirModal(`Agente: ${a.nombre}`, a.ruta, () =>
-        idx >= 0 ? fetchArchivo(idx) : Promise.resolve({ ok: false, error: 'no está en el registro de ficheros' }))
-    })
+    el.addEventListener('click', () => abrirBot(agentes[Number(el.dataset.agente)]))
   }
 }
 
@@ -230,6 +226,136 @@ async function verSesion(id) {
     return { ok: true, contenido: extraerTextoMensajes(r), nota: '(últimos mensajes de la sesión)' }
   })
 }
+
+// ---------------------------------------------------------------- editor de bots
+
+let agentesCache = []
+let modelosCache = null
+let botEditando = null
+
+async function cargarModelos() {
+  if (modelosCache) return modelosCache
+  try {
+    const r = await fetch('/api/modelos').then((x) => x.json())
+    modelosCache = (r.ok && r.modelos) || []
+  } catch { modelosCache = [] }
+  return modelosCache
+}
+
+function cuerpoDeMarkdown(texto) {
+  const lineas = String(texto || '').split(/\r?\n/)
+  let vistos = 0
+  let inicio = -1
+  for (let i = 0; i < lineas.length; i++) {
+    if (lineas[i].trim() === '---') {
+      vistos++
+      if (vistos === 2) { inicio = i + 1; break }
+    }
+  }
+  return (inicio >= 0 ? lineas.slice(inicio) : lineas).join('\n').trim()
+}
+
+async function abrirBot(agente) {
+  const modelos = await cargarModelos()
+  const sel = $('botModelo')
+  const porProveedor = {}
+  for (const m of modelos) {
+    const p = m.split('/')[0]
+    if (!porProveedor[p]) porProveedor[p] = []
+    porProveedor[p].push(m)
+  }
+  let html = '<option value="">— heredar (sin modelo fijo) —</option>'
+  for (const p of Object.keys(porProveedor).sort()) {
+    html += `<optgroup label="${esc(p)}">` +
+      porProveedor[p].map((m) => `<option value="${esc(m)}">${esc(m.split('/').slice(1).join('/'))}</option>`).join('') +
+      '</optgroup>'
+  }
+  sel.innerHTML = html
+
+  botEditando = agente ? agente.nombre : null
+  $('botTitulo').textContent = agente ? `Editar bot: ${agente.nombre}` : 'Nuevo bot'
+  $('botNombre').value = agente ? agente.nombre : ''
+  $('botNombre').disabled = !!agente
+  $('botDescripcion').value = agente ? agente.descripcion : ''
+  $('botModo').value = agente && ['primary', 'subagent', 'all'].includes(agente.modo) ? agente.modo : 'all'
+  sel.value = agente && modelos.includes(agente.modelo) ? agente.modelo : ''
+  $('botPrompt').value = ''
+  $('botEliminar').style.display = agente ? '' : 'none'
+  $('botErrores').classList.add('oculto')
+  $('modalBot').classList.remove('oculto')
+
+  if (agente) {
+    const idx = ficherosCache.findIndex((f) => f.ruta === agente.ruta)
+    if (idx >= 0) {
+      $('botPrompt').value = 'Cargando…'
+      try {
+        const r = await fetchArchivo(idx)
+        $('botPrompt').value = r.ok ? cuerpoDeMarkdown(r.contenido) : ''
+      } catch { $('botPrompt').value = '' }
+    }
+  }
+}
+
+function cerrarBot() {
+  botEditando = null
+  $('modalBot').classList.add('oculto')
+}
+
+async function guardarBot() {
+  const datos = {
+    nombre: $('botNombre').value.trim(),
+    descripcion: $('botDescripcion').value.trim(),
+    modo: $('botModo').value,
+    modelo: $('botModelo').value,
+    prompt: $('botPrompt').value,
+  }
+  const boton = $('botGuardar')
+  boton.disabled = true
+  boton.textContent = '💾 Guardando…'
+  try {
+    const r = await fetch('/api/bot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) }).then((x) => x.json())
+    if (r.ok) {
+      cerrarBot()
+      await refrescar()
+      await cargarFicheros()
+    } else {
+      $('botErrores').textContent = (r.errores || ['Error desconocido']).join(' · ')
+      $('botErrores').classList.remove('oculto')
+    }
+  } catch (e) {
+    $('botErrores').textContent = `Error: ${e}`
+    $('botErrores').classList.remove('oculto')
+  } finally {
+    boton.disabled = false
+    boton.textContent = '💾 Guardar'
+  }
+}
+
+async function eliminarBot() {
+  if (!botEditando) return
+  if (!confirm(`¿Eliminar el bot "${botEditando}"? Se guardará una copia de seguridad.`)) return
+  try {
+    const r = await fetch('/api/bot/eliminar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: botEditando }) }).then((x) => x.json())
+    if (r.ok) {
+      cerrarBot()
+      await refrescar()
+      await cargarFicheros()
+    } else {
+      $('botErrores').textContent = (r.errores || ['Error']).join(' · ')
+      $('botErrores').classList.remove('oculto')
+    }
+  } catch (e) {
+    $('botErrores').textContent = `Error: ${e}`
+    $('botErrores').classList.remove('oculto')
+  }
+}
+
+$('btnNuevoBot').addEventListener('click', () => abrirBot(null))
+$('botCerrar').addEventListener('click', cerrarBot)
+$('botCancelar').addEventListener('click', cerrarBot)
+$('botGuardar').addEventListener('click', guardarBot)
+$('botEliminar').addEventListener('click', eliminarBot)
+$('modalBot').addEventListener('click', (e) => { if (e.target === $('modalBot')) cerrarBot() })
 
 // ---------------------------------------------------------------- ciclo
 

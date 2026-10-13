@@ -225,6 +225,24 @@ $panelCfg = (@{ repoRoot = $RepoRoot } | ConvertTo-Json)
 [System.IO.File]::WriteAllText((Join-Path $SystemDir 'panel-config.json'), $panelCfg + "`n", (New-Object System.Text.UTF8Encoding($false)))
 Write-Ok 'panel-config.json escrito (ruta del repositorio)'
 
+# Si el panel estaba abierto, reiniciarlo para aplicar la version nueva
+$webPort = 0
+$webPortFile = Join-Path $SystemDir 'web-port.txt'
+if (Test-Path -LiteralPath $webPortFile) { [void][int]::TryParse((Get-Content -LiteralPath $webPortFile -Raw).Trim(), [ref]$webPort) }
+$panelActivo = $false
+if ($webPort -gt 0) {
+  try {
+    $pingPanel = Invoke-WebRequest -Uri "http://127.0.0.1:$webPort/api/ping" -UseBasicParsing -TimeoutSec 3
+    $panelActivo = ($pingPanel.Content -match 'sistema-cerebro-agentes')
+  } catch { }
+}
+if ($panelActivo) {
+  & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $SystemDir 'panel.ps1') -Stop | Out-Null
+  Start-Sleep -Seconds 1
+  & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $SystemDir 'panel.ps1') -NoOpen | Out-Null
+  Write-Ok 'Panel web reiniciado con la version nueva'
+}
+
 # ---------------------------------------------------------------- 4. Agente cerebro (con el MCP dentro)
 Write-Step 'Agente cerebro en Claude Code (con el MCP dentro)'
 

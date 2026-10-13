@@ -149,6 +149,14 @@ ok "Instalado: $SYSTEM_DIR/panel.sh"
 node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({ repoRoot: process.argv[2] }, null, 2) + "\n")' "$SYSTEM_DIR/panel-config.json" "$REPO_ROOT"
 ok 'panel-config.json escrito (ruta del repositorio)'
 
+# Si el panel estaba abierto, reiniciarlo para aplicar la versión nueva
+if [ -f "$SYSTEM_DIR/web-port.txt" ] && curl -fsS --max-time 3 "http://127.0.0.1:$(tr -d '[:space:]' < "$SYSTEM_DIR/web-port.txt")/api/ping" 2>/dev/null | grep -q 'sistema-cerebro-agentes'; then
+  bash "$SYSTEM_DIR/panel.sh" --stop >/dev/null 2>&1 || true
+  sleep 1
+  bash "$SYSTEM_DIR/panel.sh" --no-open >/dev/null 2>&1 || true
+  ok 'Panel web reiniciado con la versión nueva'
+fi
+
 # ---------------------------------------------------------------- 4. Agente cerebro (con el MCP dentro)
 step 'Agente cerebro en Claude Code (con el MCP dentro)'
 
