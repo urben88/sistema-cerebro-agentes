@@ -392,7 +392,9 @@ const servidor = http.createServer(async (req, res) => {
         if (cerrado) return
         try {
           const datos = await actividad.calcular()
-          const firma = JSON.stringify(datos.proyectos)
+          // Firma solo con el estado relevante (presencia/estado/tarea y delegaciones), no
+          // con los sellos de tiempo, que el MCP reescribe aunque no pase nada.
+          const firma = JSON.stringify(datos.proyectos.map((p) => [p.slug, p.personajes, p.delegaciones]))
           if (firma !== firmaAnterior) {
             firmaAnterior = firma
             res.write(`event: actividad\ndata: ${JSON.stringify(datos)}\n\n`)

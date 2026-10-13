@@ -159,6 +159,7 @@ export function crearActividad({
         desde: j.createdAt || j.updatedAt || t,
         origen: 'opencode-job',
         jobId: j.jobId || null,
+        sesion: j.sessionId || null,
         error: j.error || null,
       }, j.updatedAt || t)
       if (j.agent) {
@@ -189,6 +190,7 @@ export function crearActividad({
         desde: se.updatedAt,
         origen: 'opencode-sesion',
         jobId: null,
+        sesion: se.id || null,
         error: null,
       }, se.updatedAt)
     }
@@ -212,6 +214,7 @@ export function crearActividad({
         desde: l.desde || l.ts,
         origen: 'claude',
         jobId: null,
+        sesion: l.sesion || null,
         error: null,
       }, l.ts || t)
     }
