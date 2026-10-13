@@ -7,6 +7,8 @@
 3. Pide lo que quieras en lenguaje natural.
 4. El Cerebro investigará, escribirá la especificación en `docs/specs/`, delegará el código a OpenCode y vigilará el trabajo. Al terminar te dará un resumen.
 
+Si la petición es ambigua o grande, **primero te preguntará**: el `planificador` (Haiku) prepara hasta 5 preguntas que cambian el trabajo, con supuestos por defecto, y el Cerebro te las enseña antes de escribir nada. También puedes abrir el planificador cuando quieras (`@planificador …` en Claude; en OpenCode, cámbialo con Tab).
+
 Fuera del agente `cerebro`, Claude funciona con normalidad y **no tiene** las herramientas de OpenCode (no puede delegar por accidente): el MCP vive dentro del agente.
 
 ## Ejemplo completo
@@ -16,8 +18,9 @@ Fuera del agente `cerebro`, Claude funciona con normalidad y **no tiene** las he
 
 **Qué pasa por debajo:**
 
-1. El Cerebro explora el proyecto, decide el diseño y escribe `docs/specs/01-api-tareas.md`.
-2. Lanza el trabajo:
+1. (Solo si hay dudas) El `planificador` (Haiku) saca las preguntas mínimas + supuestos y el Cerebro te las pregunta antes de generar nada.
+2. El Cerebro explora el proyecto, decide el diseño y escribe `docs/specs/01-api-tareas.md`.
+3. Lanza el trabajo:
 
 ```
 opencode_fire({
@@ -28,10 +31,10 @@ opencode_fire({
 })
 ```
 
-3. Vigila con `opencode_wait` hasta que termine.
-4. Revisa con `opencode_review_changes` y, si el cambio es importante, lanza al `revisor` y al `testeador`.
-5. Si hay fallos: `opencode_reply` en la misma sesión («Corrige: …») y vuelve a vigilar.
-6. Te resume el resultado.
+4. Te cuenta el progreso por hitos (`trabajo_estado`) mientras vigila con `opencode_wait`; la barra de estado muestra el job en curso.
+5. Revisa con `opencode_review_changes` y, si el cambio es importante, lanza al `revisor` y al `testeador`.
+6. Si hay fallos: `opencode_reply` en la misma sesión («Corrige: …») y vuelve a vigilar.
+7. Te resume el resultado (informe final + diffstat + veredicto de la revisión).
 
 ## Consejos
 
@@ -39,7 +42,8 @@ opencode_fire({
 - **Proyectos por carpeta.** Un proyecto = un `directory` absoluto. Abre Claude Code en la carpeta correcta.
 - **Trabajos largos:** puedes seguir hablando con el Cerebro mientras OpenCode trabaja; el `jobId` mantiene la referencia.
 - **Paralelizar:** para dos tareas independientes del mismo repo, mejor una después de otra o en worktrees/ramas separadas (dos sesiones que tocan los mismos archivos se pisan).
-- **Costes:** Claude (suscripción) piensa; OpenCode gasta tokens baratos. Si quieres abaratar más, el `constructor` ya delega los pasos mecánicos a tu modelo local gratis (`chat-local`).
+- **Pregunta antes de generar.** Si algo no está claro, el planificador te sacará las preguntas que de verdad cambian el trabajo; respóndele o deja que tire con los supuestos que te proponga (te los dice antes).
+- **Costes.** Claude (suscripción) piensa; OpenCode gasta tokens baratos. Los subagentes baratos de Claude son **Haiku** (`planificador`, `explorador`, `redactor`, `analista`, `subdirector`); solo `arquitecto` usa Sonnet a propósito. `local` (Ollama) es gratis y solo se usa si lo pides.
 - **Ver estado sin Claude:** `scripts/verificar.ps1` / `verificar.sh`.
 
 ## Cambiar el modelo de un agente
@@ -74,3 +78,7 @@ Modelos relevantes (a fecha de v0.1.0):
 2. `git add`, `commit`, `push`.
 3. Despliega en cada máquina (`scripts/actualizar`).
 4. Documenta el cambio en `CHANGELOG.md` y, si hace falta, en `docs/uso-diario.md`.
+
+### Agentes de un proyecto concreto
+
+Si el agente es solo para un repo, **no lo pongas en el sistema**: créalo dentro del proyecto en `.opencode/agents/` (y `.claude/agents/` para Claude Code), commitéalo con el código y quedará disponible solo ahí. Los roles por defecto siguen siendo globales y están siempre disponibles. Detalles y ejemplos: [agentes-por-proyecto.md](agentes-por-proyecto.md).

@@ -194,7 +194,7 @@ for f in cerebro.md subdirector.md; do
   node -e 'const fs=require("fs");const [src,dst,cmd,args,mcp]=process.argv.slice(1);let t=fs.readFileSync(src,"utf8");t=t.replace("__COMANDO__",cmd).replace("__ARGUMENTOS_JSON__",args).replace("__TRIAJE_MCP__",mcp);fs.writeFileSync(dst,t)' "$CONFIG_ROOT/claude/agents/$f" "$dst" "bash" "$ARGS_JSON" "$TRIAJE_MCP"
   ok "Agente instalado: $dst"
 done
-for f in explorador.md redactor.md analista.md arquitecto.md adaptador-mcps.md; do
+for f in explorador.md redactor.md analista.md arquitecto.md adaptador-mcps.md planificador.md; do
   backup_item "$AGENT_DIR/$f"
   cp -f "$CONFIG_ROOT/claude/agents/$f" "$AGENT_DIR/$f"
   ok "Subagente instalado: $AGENT_DIR/$f"
@@ -310,7 +310,10 @@ if command -v docker >/dev/null 2>&1; then
   backup_item "$SYSTEM_DIR/docker"
   rm -rf "$SYSTEM_DIR/docker"
   cp -R "$REPO_ROOT/docker" "$SYSTEM_DIR/docker"
-  sed -i.bak 's|\.\./config/hub|../hub|' "$SYSTEM_DIR/docker/docker-compose.yml" && rm -f "$SYSTEM_DIR/docker/docker-compose.yml.bak"
+  # La carpeta de trabajos del MCP vive fuera del hub: se monta para que el panel
+  # y el vigilante vean los trabajos tambien cuando el hub va en Docker.
+  TAREAS_MCP="${XDG_STATE_HOME:-$HOME/.local/state}/opencode-mcp/tasks"
+  sed -i.bak -e 's|\.\./config/hub|../hub|' -e 's|# __TAREAS_MCP_ENV__|- OPENCODE_MCP_TASKS=/opencode-mcp/tasks|' -e "s|# __TAREAS_MCP_VOL__|- $TAREAS_MCP:/opencode-mcp/tasks:ro|" "$SYSTEM_DIR/docker/docker-compose.yml" && rm -f "$SYSTEM_DIR/docker/docker-compose.yml.bak"
   ok "Stack Docker instalado: $SYSTEM_DIR/docker"
   if docker compose -f "$SYSTEM_DIR/docker/docker-compose.yml" up -d --build >/dev/null 2>&1; then
     ok 'Hub + Laya en marcha (contenedores cerebro-hub y cerebro-laya)'

@@ -3,6 +3,31 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado semántico (MAJOR.MINOR.PATCH).
 
+## [0.3.0] - 2026-10-13
+
+### Añadido
+
+- **Planificador previo** (`config/claude/agents/planificador.md` y `config/opencode/agents/planificador.md`): agente barato (Haiku · medium / DeepSeek · high) que convierte una petición ambigua en hasta 5 preguntas que cambian el trabajo + supuestos por defecto + plan + criterios de aceptación. `cerebro`/`cerebro-oc` lo lanzan antes de la spec y preguntan al usuario; también se puede abrir como agente principal (entrevista que termina en spec).
+- **Visibilidad de los trabajos dentro de Claude**:
+  - herramienta **`trabajo_estado`** en el MCP `triaje` (lista de trabajos y detalle de un `jobId`: estado, duración, coste, tokens, modelo, último paso, herramientas y pregunta pendiente), leyendo los `job_*.json` del MCP sin volcar conversaciones;
+  - protocolo de **hitos en el chat** para `cerebro` (tarjeta de lanzamiento, actualización ~1 min, cierre con informe + diffstat + veredicto);
+  - **barra de estado** (`config/hub/estado-linea.mjs`): modelo, contexto y trabajo de OpenCode en curso (o cierre reciente) por proyecto. `settings-merge` la registra solo si no hay una `statusLine` propia; el desinstalador la retira.
+- **Agentes por proyecto**: documentados en `docs/agentes-por-proyecto.md` — nativos en `<proyecto>/.claude/agents/` y `<proyecto>/.opencode/agents/`, aditivos a los roles por defecto (globales, siempre presentes) y versionados en git.
+- **Regla de subagentes baratos**: `cerebro` y `CLAUDE.md` exigen `subagent_type` explícito y prohíben `fork`/`general-purpose` (corren en Sonnet); se anuncia el modelo al lanzar. Solo `arquitecto` usa Sonnet a propósito.
+- Spec `docs/specs/02-planificador-y-visibilidad.md`.
+
+### Corregido
+
+- **Hooks fantasma**: `settings-merge.mjs` ya no registra hooks (`latido.mjs`, `aviso-contexto.mjs`…) que no estén desplegados; limpia registros huérfanos y avisa de los que falten. Evita el `MODULE_NOT_FOUND` en cada Stop/UserPromptSubmit.
+- **Actualizaciones del hub en Docker**: `install.ps1` reconstruye siempre las imágenes (las capas sin cambios salen de caché), así los cambios del hub llegan al contenedor; antes solo construía si faltaba la imagen.
+- **Trabajos del MCP visibles en Docker**: el hub monta la carpeta de tareas de `opencode-mcp` (vía `OPENCODE_MCP_TASKS`), así el panel y el vigilante ven los trabajos también en contenedor.
+- Datos sucios de trabajos antiguos (`agent: "Object"`) normalizados en la vista de trabajos.
+
+### Cambiado
+
+- `subdirector` usa `trabajo_estado` para vigilar todos los trabajos con una sola llamada barata.
+- Instaladores, desinstaladores y verificadores cubren los agentes nuevos (`planificador`, `adaptador-mcps` en las listas), la barra de estado y la herramienta `trabajo_estado`.
+
 ## [0.2.0] - 2026-10-13
 
 ### Añadido

@@ -45,11 +45,15 @@ services:
       - OPENCODE_AUTH=/opencode-auth/auth.json
       - OPENCODE_HOST=host.docker.internal
       - LAYA_URL=http://laya:8000
+      # El instalador sustituye esta línea por la carpeta de trabajos del MCP
+      # (o la monta el usuario a mano si usa el compose del repo directamente).
+      # __TAREAS_MCP_ENV__
     volumes:
       - ${USERPROFILE}/.sistema-cerebro-agentes:/sistema
       - ${USERPROFILE}/.config/opencode:/opencode:ro
       - ${USERPROFILE}/.claude:/claude:ro
       - ${USERPROFILE}/.local/share/opencode:/opencode-auth:ro
+      # __TAREAS_MCP_VOL__
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks: [cerebro]

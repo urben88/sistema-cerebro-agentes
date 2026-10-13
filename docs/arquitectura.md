@@ -9,7 +9,8 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
   │
   ├──── PUERTA 1 · con Claude (suscripción que se estira) ──────────────────────────┐
   │     Claude Code → agente `cerebro` (Sonnet · medium; `arquitecto` para lo duro) │
-  │       · subagentes Haiku: explorador · redactor · analista · subdirector        │
+  │       · subagentes Haiku: planificador · explorador · redactor · analista ·     │
+│         subdirector (y arquitecto Sonnet para lo duro)                         │
   │       · MCP `opencode` → código en DeepSeek   · MCP `triaje` → ¿quién y cuánto? │
   │       · hooks → briefing, checkpoints, /clear sin pérdidas                      │
   │                                                                                 │
@@ -25,7 +26,8 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
                 │ (nativo, en el host: trabaja sobre tus carpetas)
                 ▼
         opencode-mcp → servidor OpenCode V1 → agentes DeepSeek por esfuerzo:
-        implementador · debugger · revisor · testeador · explorador-ds · redactor-ds · local
+        planificador · implementador · debugger · revisor · testeador ·
+        explorador-ds · redactor-ds · local
 ```
 
 ## Responsabilidades
@@ -42,8 +44,9 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
 
 | Componente | Dónde vive | Lo despliega |
 |---|---|---|
-| Agentes de OpenCode (8, por esfuerzo) | `~/.config/opencode/agents/` | `install.ps1` / `install.sh` |
-| Agente `cerebro` + 5 subagentes (MCPs inline) | `~/.claude/agents/` | ídem |
+| Agentes de OpenCode (9, por esfuerzo) | `~/.config/opencode/agents/` | `install.ps1` / `install.sh` |
+| Agente `cerebro` + 7 subagentes (MCPs inline) | `~/.claude/agents/` | ídem |
+| Barra de estado de Claude (modelo · contexto · trabajo OpenCode) | `~/.sistema-cerebro-agentes/hub/estado-linea.mjs` + `settings.json` | ídem |
 | Rol Cerebro + skill `delegar-a-opencode` | `~/.claude/CLAUDE.md` (bloque) y `~/.claude/skills/` | ídem |
 | Hooks de contexto + CLI `estado` | `~/.sistema-cerebro-agentes/hooks/` | ídem |
 | Cerebro Hub (app + panel) | `~/.sistema-cerebro-agentes/hub/` (nativo) o contenedor `cerebro-hub` | ídem |
@@ -54,11 +57,12 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
 ## Flujo de una tarea (con Claude)
 
 1. **Briefing** (hook al abrir) → el cerebro ya sabe en qué proyecto está y qué había pendiente.
-2. **Spec** en la estructura del repo; el reconocimiento del proyecto se delega una sola vez.
-3. **Cadena única**: preparación (Haiku o `explorador-ds`) → ejecución (`implementador`/`debugger`) → validación (`testeador`/`revisor`).
-4. **Triaje**: si hay duda de a quién mandar algo, Laya decide (con reglas de respaldo); queda registrado.
-5. **Vigilancia**: el hub avisa de atascos; el `subdirector` (Haiku) puede revisar extractos y cancelar/redirigir.
-6. **Cierre**: veredicto del `revisor` contra la spec, resumen al usuario y `ESTADO.md` al día; al ~70 % de contexto, `/clear` sin pérdidas.
+2. **Planificación (si la tarea es ambigua o grande)**: el subagente `planificador` saca las preguntas mínimas (máx. 5) + supuestos + plan; el Cerebro te las pregunta antes de generar nada.
+3. **Spec** en la estructura del repo; el reconocimiento del proyecto se delega una sola vez.
+4. **Cadena única**: preparación (Haiku o `explorador-ds`) → ejecución (`implementador`/`debugger`) → validación (`testeador`/`revisor`).
+5. **Triaje**: si hay duda de a quién mandar algo, Laya decide (con reglas de respaldo); queda registrado.
+6. **Vigilancia y visibilidad**: el hub avisa de atascos; el Cerebro te enseña hitos del job con `trabajo_estado` (estado, tiempo, coste, último paso) y la barra de estado de Claude muestra el trabajo en curso; el `subdirector` (Haiku) puede revisar extractos y cancelar/redirigir.
+7. **Cierre**: veredicto del `revisor` contra la spec, resumen al usuario y `ESTADO.md` al día; al ~70 % de contexto, `/clear` sin pérdidas.
 
 ## Ciclo de vida de los servicios
 

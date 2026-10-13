@@ -106,6 +106,21 @@ La memoria del hub **normaliza las rutas** (comparación por cadena, no por reso
 ### D26 — `default_agent` de OpenCode = `cerebro-oc` · 2026-10-13
 Sin Claude, abrir OpenCode debe poner al agente «más listo» (DeepSeek · max) que delega en el resto. `plan`/`build` siguen disponibles e intactos.
 
+### D27 — Planificador previo en las dos capas · 2026-10-13
+Petición del usuario: alguien dedicado a hacer preguntas antes de generar, para no gastar tokens en suposiciones. Nuevo agente `planificador` en Claude (Haiku · medium; sirve de subagente y como agente principal) y en OpenCode (DeepSeek · high, `mode: all`): devuelve hasta 5 preguntas que cambian el trabajo + supuestos por defecto + plan + criterios de aceptación. `cerebro`/`cerebro-oc` lo lanzan antes de la spec cuando la tarea es ambigua y preguntan al usuario; no se planifican tareas triviales ni lo que el repo ya responde.
+
+### D28 — Visibilidad de los trabajos dentro de Claude · 2026-10-13
+El usuario solo veía «una llamada MCP» al delegar. Se añade: herramienta `trabajo_estado` en el MCP `triaje` (lista y detalle de jobs leyendo los `job_*.json` del MCP, sin volcar conversaciones), protocolo de hitos en `cerebro` (tarjeta → actualización ~1 min → cierre con informe + diffstat + veredicto) y una **barra de estado** (`hub/estado-linea.mjs`) con modelo, contexto y trabajo en curso; `settings-merge` la registra solo si el usuario no tiene una propia.
+
+### D29 — Agentes por proyecto (aditivos) · 2026-10-13
+Decisión del usuario: los roles del sistema son los «por defecto» de todos los proyectos; cada repo puede añadir los suyos sin tocar el sistema. Se documenta el mecanismo nativo: `<proyecto>/.claude/agents/` y `<proyecto>/.opencode/agents/`, aditivos, versionados en git, mismo nombre = ajuste local. Guía: `docs/agentes-por-proyecto.md`.
+
+### D30 — Subagentes de Claude: tipo explícito y Haiku por defecto · 2026-10-13
+Detectado en el transcript del usuario: subagentes en Sonnet porque se lanzaron como `general-purpose` (sin `subagent_type`) o `fork`; Claude Code V2.1.296 usa el modelo principal en ambos casos. Desde v0.3.0 `cerebro` y `CLAUDE.md` exigen `subagent_type` explícito y prohíben `fork`/`general-purpose`. Todo el equipo es Haiku salvo `arquitecto` (Sonnet, decisión expresa del usuario: solo arquitectura difícil).
+
+### D31 — Despliegue consistente: hooks y hub al día · 2026-10-13
+Incidencia real: `latido.mjs` estaba registrado en `settings.json` pero no desplegado (`MODULE_NOT_FOUND` en cada Stop) y la imagen Docker del hub no se reconstruía al actualizar (el panel «La oficina» no llegaba al contenedor). `settings-merge.mjs` ahora solo registra hooks/statusLine que existen y limpia registros huérfanos; `install.ps1` reconstruye siempre las imágenes (capa cacheada si no hay cambios), como ya hacía `install.sh`.
+
 ## Notas técnicas útiles
 
 - **Herramientas clave del MCP (perfil essential):** `opencode_setup`, `opencode_context`, `opencode_status`, `opencode_ask`, `opencode_fire`, `opencode_run`, `opencode_reply`, `opencode_check`, `opencode_wait`, `opencode_job_get/list/cancel/input`, `opencode_question_*`, `opencode_permission_*`, `opencode_conversation`, `opencode_review_changes`.

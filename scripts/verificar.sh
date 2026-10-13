@@ -77,7 +77,7 @@ fi
 [ -f "$HOME/.claude/skills/delegar-a-opencode/SKILL.md" ] && test_item 0 'Skill delegar-a-opencode instalada' || test_item 1 'Skill delegar-a-opencode no instalada' 'Ejecuta install.sh'
 
 step 'Agentes de OpenCode'
-for name in implementador.md revisor.md testeador.md; do
+for name in cerebro-oc.md implementador.md debugger.md revisor.md testeador.md explorador-ds.md redactor-ds.md planificador.md local.md; do
   [ -f "$HOME/.config/opencode/agents/$name" ] && test_item 0 "Agente $name" || test_item 1 "Agente $name no encontrado" 'Ejecuta install.sh'
 done
 
@@ -99,6 +99,9 @@ else
   test_item 1 'Agente cerebro no instalado' 'Ejecuta install.sh'
 fi
 [ -x "$HOME/.local/bin/cerebro" ] && test_item 0 'Comando cerebro instalado (~/.local/bin)' || test_item 1 'Comando cerebro no instalado' 'Ejecuta install.sh'
+for f in subdirector.md explorador.md redactor.md analista.md arquitecto.md adaptador-mcps.md planificador.md; do
+  [ -f "$HOME/.claude/agents/$f" ] && test_item 0 "Subagente $f instalado" || test_item 1 "Subagente $f no instalado" 'Ejecuta install.sh'
+done
 MCP_LIST="$(claude mcp list 2>&1 || true)"
 MCP_LINE="$(printf '%s\n' "$MCP_LIST" | grep -E '^[[:space:]]*opencode:' | head -n1 || true)"
 if [ -n "$MCP_LINE" ]; then
@@ -141,6 +144,37 @@ if [ -f "$HOOK_LATIDO" ]; then
   fi
 else
   test_item 1 'Hook latido no instalado' 'Ejecuta install.sh'
+fi
+for f in session-start.mjs pre-compact.mjs session-end.mjs estado.mjs latido.mjs aviso-contexto.mjs hallazgos.mjs; do
+  [ -f "$HOME/.sistema-cerebro-agentes/hooks/$f" ] && test_item 0 "Hook $f instalado" || test_item 1 "Hook $f no instalado" 'Ejecuta install.sh'
+done
+TRIAJE="$HOME/.sistema-cerebro-agentes/mcp/triaje-mcp.mjs"
+if [ -f "$TRIAJE" ]; then
+  test_item 0 'MCP de triaje instalado'
+  if grep -q 'trabajo_estado' "$TRIAJE"; then
+    test_item 0 'MCP de triaje con trabajo_estado (visibilidad)'
+  else
+    test_item 1 'MCP de triaje sin trabajo_estado' 'Ejecuta install.sh'
+  fi
+else
+  test_item 1 'MCP de triaje no instalado' 'Ejecuta install.sh'
+fi
+ESTADO_LINEA="$HOME/.sistema-cerebro-agentes/hub/estado-linea.mjs"
+if [ -f "$ESTADO_LINEA" ]; then
+  test_item 0 'Barra de estado instalada (hub/estado-linea.mjs)'
+  SALIDA_ES="$(printf '%s' "{\"workspace\":{\"current_dir\":\"$REPO_ROOT\"},\"model\":{\"display_name\":\"Test\"},\"context_window\":{\"used_percentage\":42}}" | node "$ESTADO_LINEA" 2>/dev/null || true)"
+  if printf '%s' "$SALIDA_ES" | grep -q 'Test'; then
+    test_item 0 'La barra de estado responde'
+  else
+    test_item 1 'La barra de estado no responde' 'Revisa config/hub/estado-linea.mjs'
+  fi
+else
+  test_item 1 'Barra de estado no instalada' 'Ejecuta install.sh'
+fi
+if grep -q 'estado-linea.mjs' "$HOME/.claude/settings.json" 2>/dev/null; then
+  test_item 0 'Barra de estado registrada en settings.json'
+else
+  test_item 1 'Barra de estado no registrada' 'Ejecuta install.sh (o quita tu statusLine propia)'
 fi
 
 if [ "$SMOKE" -eq 1 ]; then

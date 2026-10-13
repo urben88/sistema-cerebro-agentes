@@ -83,7 +83,7 @@ Test-Item $skillOk 'Skill delegar-a-opencode instalada' 'Ejecuta install.ps1'
 
 Write-Step 'Agentes de OpenCode'
 $agentsDst = Join-Path $UserHome '.config\opencode\agents'
-foreach ($name in @('cerebro-oc.md', 'implementador.md', 'debugger.md', 'revisor.md', 'testeador.md', 'explorador-ds.md', 'redactor-ds.md', 'local.md')) {
+foreach ($name in @('cerebro-oc.md', 'implementador.md', 'debugger.md', 'revisor.md', 'testeador.md', 'explorador-ds.md', 'redactor-ds.md', 'planificador.md', 'local.md')) {
   Test-Item (Test-Path -LiteralPath (Join-Path $agentsDst $name)) "Agente $name" 'Ejecuta install.ps1'
 }
 
@@ -124,7 +124,7 @@ if ($hubOk) {
   } catch { $latOk = $false }
   Test-Item $latOk 'POST /api/latido acepta un latido' 'Revisa hub.mjs (R3 de la spec del panel)'
 }
-foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'estado.mjs', 'latido.mjs')) {
+foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'estado.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'hallazgos.mjs')) {
   Test-Item (Test-Path -LiteralPath (Join-Path $sysDir "hooks\$f")) "Hook $f instalado" 'Ejecuta install.ps1'
 }
 $hookLatido = Join-Path $sysDir 'hooks\latido.mjs'
@@ -142,17 +142,30 @@ if (Test-Path -LiteralPath $hookLatido) {
   Test-Item (($hookCode -eq 0) -and ($sw.Elapsed.TotalSeconds -lt 2)) "Hook latido no bloquea con el hub caído ($seg s)" 'Revisa config/hooks/latido.mjs'
 }
 Test-Item (Test-Path -LiteralPath (Join-Path $sysDir 'mcp\triaje-mcp.mjs')) 'MCP de triaje instalado' 'Ejecuta install.ps1'
+$triajeTxt = ''
+$triajePath = Join-Path $sysDir 'mcp\triaje-mcp.mjs'
+if (Test-Path -LiteralPath $triajePath) { $triajeTxt = [System.IO.File]::ReadAllText($triajePath) }
+Test-Item ($triajeTxt.Contains('trabajo_estado')) 'MCP de triaje con trabajo_estado (visibilidad)' 'Ejecuta install.ps1'
+$estadoLinea = Join-Path $sysDir 'hub\estado-linea.mjs'
+Test-Item (Test-Path -LiteralPath $estadoLinea) 'Barra de estado instalada (hub/estado-linea.mjs)' 'Ejecuta install.ps1'
+if (Test-Path -LiteralPath $estadoLinea) {
+  $entrada = '{"workspace":{"current_dir":"' + ($RepoRoot.Replace('\', '\\')) + '"},"model":{"display_name":"Test"},"context_window":{"used_percentage":42}}'
+  $salidaEstado = ''
+  try { $salidaEstado = ($entrada | & node $estadoLinea 2>$null | Out-String) } catch { $salidaEstado = '' }
+  Test-Item ($salidaEstado.Contains('Test')) 'La barra de estado responde' 'Revisa config/hub/estado-linea.mjs'
+}
 $settingsPath = Join-Path $UserHome '.claude\settings.json'
 $setTxt = if (Test-Path -LiteralPath $settingsPath) { [System.IO.File]::ReadAllText($settingsPath) } else { '' }
 Test-Item ($setTxt -match 'session-start\.mjs') 'Hooks registrados en settings.json' 'Ejecuta install.ps1'
 Test-Item ($setTxt -match 'claude-haiku-5-5') 'modelSettings de Haiku 5.5 configurado' 'Ejecuta install.ps1'
+Test-Item ($setTxt -match 'estado-linea\.mjs') 'Barra de estado registrada en settings.json' 'Ejecuta install.ps1 (o quita tu statusLine propia)'
 $autoTarea = $false
 try { & schtasks /Query /TN 'Cerebro Hub' *> $null; $autoTarea = ($LASTEXITCODE -eq 0) } catch { $autoTarea = $false }
 $autoInicio = Test-Path -LiteralPath (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\cerebro-hub.cmd')
 Test-Item ($autoTarea -or $autoInicio) 'Autoarranque del hub configurado (tarea o carpeta de Inicio)' 'Ejecuta install.ps1'
 
 Write-Step 'Agente cerebro en Claude Code'
-foreach ($f in @('cerebro.md', 'subdirector.md', 'explorador.md', 'redactor.md', 'analista.md', 'arquitecto.md')) {
+foreach ($f in @('cerebro.md', 'subdirector.md', 'explorador.md', 'redactor.md', 'analista.md', 'arquitecto.md', 'adaptador-mcps.md', 'planificador.md')) {
   Test-Item (Test-Path -LiteralPath (Join-Path $UserHome ".claude\agents\$f")) "Subagente $f instalado" 'Ejecuta install.ps1'
 }
 $agentDst = Join-Path $UserHome '.claude\agents\cerebro.md'

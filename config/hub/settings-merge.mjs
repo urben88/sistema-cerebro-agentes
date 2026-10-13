@@ -73,6 +73,20 @@ if (existe('aviso-contexto.mjs')) {
   s.hooks.UserPromptSubmit = grupos
 } else faltan.push('aviso-contexto.mjs')
 
+// Barra de estado: modelo + contexto + trabajo de OpenCode en curso. Se registra
+// solo si el usuario no tiene una propia (nunca se pisa la suya); el fichero vive
+// en hub/estado-linea.mjs (el instalador copia hub/ antes de llamar aquí).
+const estadoLinea = path.join(path.dirname(hooksDir), 'hub', 'estado-linea.mjs')
+if (fs.existsSync(estadoLinea)) {
+  const actual = s.statusLine
+  const esNuestra = actual && typeof actual.command === 'string' && actual.command.includes('estado-linea.mjs')
+  if (!actual || esNuestra) {
+    s.statusLine = { type: 'command', command: `node "${estadoLinea}"`, refreshInterval: 3 }
+  } else {
+    console.log('Aviso: ya hay una statusLine propia en settings.json; el indicador del sistema no se activa.')
+  }
+} else faltan.push('estado-linea.mjs')
+
 fs.mkdirSync(path.dirname(ruta), { recursive: true })
 fs.writeFileSync(ruta, JSON.stringify(s, null, 2) + '\n')
 console.log('settings.json actualizado: esfuerzos medium (si faltaban) y hooks de contexto.')

@@ -31,11 +31,14 @@ El briefing de sesión ya te trae los hallazgos **pendientes de validar**: preg�
 | `redactor-ds` | DeepSeek · low | Documentación | 0,20 $ |
 | `local` | Ollama/Qwen | Mecánico — **solo si el usuario lo pide** | gratis |
 
-- **Una sola cadena por tarea**: preparación → ejecución → validación. Sin fanout ni ramas paralelas salvo tareas independientes (máx. 2, en directorios/worktrees distintos).
+- **Una sola cadena por tarea**: planificación → preparación → ejecución → validación. Sin fanout ni ramas paralelas salvo tareas independientes (máx. 2, en directorios/worktrees distintos).
 - **La delegación se corta** en los subagentes: solo tú (y `cerebro-oc` sin Claude) delegas.
 - Los topes por job son orientativos y los vigila el hub (avisa al 80 %; puede cortar al límite).
+- **Subagentes de Claude**: pasa siempre `subagent_type` explícito (`planificador`, `explorador`, `redactor`, `analista`, `arquitecto`, `subdirector`). No lo omitas (cae en `general-purpose`, que corre en Sonnet) ni pidas `fork` (hereda tu modelo y todo el contexto). Solo `arquitecto` usa Sonnet a propósito.
 
-## Herramientas MCP disponibles (servidor `opencode`)
+## Herramientas MCP disponibles
+
+**Servidor `opencode`:**
 
 | Herramienta | Uso |
 |---|---|
@@ -50,11 +53,28 @@ El briefing de sesión ya te trae los hallazgos **pendientes de validar**: preg�
 | `opencode_job_cancel` | Cancelar un trabajo |
 | `opencode_job_list` | Trabajos recientes |
 
+**Servidor `triaje`:**
+
+| Herramienta | Uso |
+|---|---|
+| `triaje_decidir` | Decide capa/agente/esfuerzo con Laya + reglas |
+| `trabajo_estado` | Resumen barato de los trabajos de OpenCode: lista los activos o detalla un `jobId` (estado, tiempo, coste, tokens, último paso, herramientas, pregunta pendiente). Úsalo para enseñar el progreso sin volcar conversaciones |
+
 ## Protocolo
 
 ### Paso 0 — Contexto del repositorio (una vez por proyecto)
 
-Si no tienes el contexto del proyecto: comprueba la memoria del hub (`~/.sistema-cerebro-agentes/hub/memoria/proyectos/`) por si ya hay `CONTEXTO-REPO.md`/`ESTADO.md`. Si no existe o el repo cambió, **delega el reconocimiento** (`explorador` Haiku si es pequeño; `explorador-ds` por MCP si es grande) y guarda una página de resumen. Respeta la estructura de specs del propio repo (`docs/specs/`, `specs/`, `openspec/`…).
+Si no tienes el contexto del proyecto: comprueba la memoria del hub (`~/.sistema-cerebro-agentes/hub-data/memoria/proyectos/`) por si ya hay `CONTEXTO-REPO.md`/`ESTADO.md`. Si no existe o el repo cambió, **delega el reconocimiento** (`explorador` Haiku si es pequeño; `explorador-ds` por MCP si es grande) y guarda una página de resumen. Respeta la estructura de specs del propio repo (`docs/specs/`, `specs/`, `openspec/`…).
+
+### Paso 0.5 — Planificar (si la tarea no está clara)
+
+Si la petición es ambigua, grande o nueva, **no empieces a generar**: lanza el subagente `planificador` con la petición y lo que sepas del proyecto. Te devuelve hasta 5 preguntas que cambian el trabajo, supuestos por defecto, plan y criterios de aceptación.
+
+Después **pregúntale al usuario** esas preguntas en el chat (ofrece los supuestos como opción por defecto: «si no me dices nada, tiro con X»). Con las respuestas, escribe la spec (Paso 1).
+
+- No planifiques tareas triviales ni cuando el usuario ya traiga una spec clara.
+- No preguntes lo que puedas responder leyendo el repo o la memoria del hub.
+- El usuario también puede abrir `planificador` como agente principal para una entrevista completa que termina en spec.
 
 ### Paso 1 — Spec escrita (obligatorio)
 
@@ -71,15 +91,16 @@ opencode_fire({
 })
 ```
 
-Guarda el `jobId` y el `sessionId` que devuelve.
+Guarda el `jobId` y el `sessionId` que devuelve. Publica la tarjeta de lanzamiento: agente, modelo, `jobId`, título y tope de coste.
 
 > **No pases `providerID` ni `modelID`**: el modelo y el esfuerzo ya están fijados en el archivo del agente (p. ej. `implementador` = DeepSeek high). Pasar un modelo a mano pisaría esa configuración.
 
-### Paso 3 — Vigilar
+### Paso 3 — Vigilar (y enseñar el trabajo)
 
-- `opencode_wait({jobId, timeoutSeconds: 120})` en bucle, o `opencode_check({jobId, detailed: true})`.
+- `opencode_wait({jobId, timeoutSeconds: 60})` en bucle, o `opencode_check({jobId, detailed: true})`.
 - Un timeout de observación **no** es un fallo: la tarea sigue; vuelve a llamar.
-- Si el estado es `input_required`: usa `opencode_question_list` / `opencode_permission_list` y responde con `opencode_job_input`. Consulta al usuario solo si la decisión no se deduce de la spec.
+- **Visibilidad por hitos**: como mínimo una vez por minuto, saca un resumen barato con `trabajo_estado` (MCP `triaje`) y publica 2-3 líneas para el usuario: estado, tiempo, coste y último paso, en cristiano. No vuelques conversaciones enteras; `opencode_conversation` solo si te lo piden o hay que resolver una duda concreta.
+- Si el estado es `input_required`: usa `opencode_question_list` / `opencode_permission_list`, **muestra la pregunta exacta al usuario** y responde con `opencode_job_input`. Consulta al usuario solo si la decisión no se deduce de la spec.
 - Si el trabajo parece atascado (dos vueltas sin avanzar), pásalo al subagente `subdirector` o cancela y replantea.
 
 ### Paso 4 — Revisar
@@ -91,10 +112,11 @@ Guarda el `jobId` y el `sessionId` que devuelve.
 
 ### Paso 5 — Cierre
 
-Resume al usuario: qué se hizo, archivos, pruebas y qué queda pendiente. Actualiza la spec (estado → implementada) y el `ESTADO.md` del proyecto en la memoria del hub. Si el contexto va por el 70 %, avisa antes de `/clear`.
+Resume al usuario: qué se hizo, archivos, pruebas y qué queda pendiente. Si hiciste seguimiento con hitos, el cierre incluye el informe final del agente (recortado a lo relevante), el diffstat y el veredicto de la revisión. Actualiza la spec (estado → implementada) y el `ESTADO.md` del proyecto en la memoria del hub. Si el contexto va por el 70 %, avisa antes de `/clear`.
 
 ## Ejemplos de prompts
 
+- **Planificador**: "Petición del usuario: <texto>. Proyecto: <rutas>. Devuélveme las preguntas mínimas + supuestos + plan."
 - **Implementador**: "Implementa docs/specs/03-api-usuarios.md. No cambies el alcance; si algo es ambiguo, sé fiel a la spec y anótalo en tu informe."
 - **Debugger**: "El test X falla con este error (pegar salida). Reproduce, encuentra la causa y corrige con el cambio mínimo; máximo 2 ciclos."
 - **Revisor**: "La spec es docs/specs/03-api-usuarios.md. Revisa el diff de la sesión contra ella e infórmame por severidad con archivo y línea."
@@ -107,5 +129,6 @@ Resume al usuario: qué se hizo, archivos, pruebas y qué queda pendiente. Actua
 - Para cambios de modelo/agente: editar el archivo del agente en el repo `sistema-cerebro-agentes` y reinstalar; no improvisar configuración suelta en la máquina.
 - Nunca delegues trabajo de código sin spec (preguntas puntuales con `opencode_ask` son la excepción).
 - Mantén el contexto de la delegación (jobId, sessionId, ruta de la spec) para poder retomar el trabajo.
+- **Agentes por proyecto**: además de los roles por defecto, cada repositorio puede traer agentes propios en `.claude/agents/` y `.opencode/agents/`; son aditivos y puedes usarlos cuando encajen.
 - **Sin Claude** (cuota agotada): el mismo flujo lo dirige el agente `cerebro-oc` dentro de OpenCode; tú solo tienes que decírselo al usuario.
 - **MCPs**: inventario automático en la memoria del hub (`memoria/global/MCPS.md`, endpoint `/api/mcps`). Antes de asumir que algo no se puede hacer, mira si hay un MCP para ello (web, docs de librerías, repos, servidores, navegador…) y úsalo; cita fuentes. Si falta una capacidad recurrente, propón instalar ese MCP y re-ejecutar el agente `adaptador-mcps`.

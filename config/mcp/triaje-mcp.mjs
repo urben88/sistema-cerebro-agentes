@@ -1,17 +1,24 @@
 #!/usr/bin/env node
 /**
- * MCP de triaje — expone la decisión local del Cerebro Hub (Laya + reglas) como
- * herramienta MCP para Claude Code y OpenCode. Sin dependencias.
+ * MCP de triaje — expone dos cosas del ecosistema Cerebro como herramientas MCP
+ * para Claude Code (y OpenCode): la decisión local del hub (Laya + reglas) y el
+ * estado de los trabajos lanzados por el puente opencode-mcp. Sin dependencias.
  *
- * Herramienta: triaje_decidir { tarea, contexto? }
- *   → devuelve { capa, agente, esfuerzo, escalar, riesgo, confianza, fuente, motivo }
+ * Herramientas:
+ *   · triaje_decidir { tarea, contexto? } → { capa, agente, esfuerzo, ... }
+ *   · trabajo_estado { jobId? } → lista de trabajos activos/recientes o detalle
+ *     de uno (estado, tiempo, coste, tokens, último paso, herramientas y
+ *     pregunta pendiente). Para enseñar el progreso sin volcar conversaciones.
  *
  * Variables: HUB_URL (por defecto http://127.0.0.1:4597)
  */
 import readline from 'node:readline'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
-const VERSION = '0.2.0'
+const VERSION = '0.3.0'
+const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const TOOLS = [
   {
@@ -26,9 +33,88 @@ const TOOLS = [
       required: ['tarea'],
     },
   },
+  {
+    name: 'trabajo_estado',
+    description: 'Estado de los trabajos de OpenCode lanzados por el puente MCP: sin argumentos lista los activos y los recientes; con jobId devuelve el detalle (estado, duración, coste, tokens, último paso, últimas herramientas y preguntas pendientes). Úsalo para enseñar el progreso al usuario sin volcar la conversación completa ni gastar contexto.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        jobId: { type: 'string', description: 'ID del trabajo (job_…). Si se omite, se listan los trabajos.' },
+      },
+      required: [],
+    },
+  },
 ]
 
 function send(obj) { process.stdout.write(JSON.stringify(obj) + '\n') }
+
+let ocCache = null
+async function cargarOpenCode() {
+  if (ocCache) return ocCache
+  const mod = await import(new URL('../hub/lib/opencode.mjs', import.meta.url).href)
+  ocCache = mod.crearOpenCode({ systemDir: RAIZ })
+  return ocCache
+}
+
+const MIN = 60 * 1000
+const ESTADOS = { running: 'en marcha', accepted: 'aceptado (arrancando)', input_required: 'ESPERA RESPUESTA', completed: 'terminado', failed: 'FALLIDO', cancelled: 'cancelado', unknown: 'desconocido' }
+const estado = (s) => ESTADOS[s] || s || '?'
+const dinero = (c) => (typeof c === 'number' ? `$${c.toFixed(2)}` : '—')
+const miles = (n) => (typeof n === 'number' ? (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)) : '—')
+
+function hace(ts) {
+  if (!ts) return 'sin fecha'
+  const m = Math.max(0, Math.round((Date.now() - ts) / MIN))
+  if (m < 1) return 'hace un momento'
+  if (m < 60) return `hace ${m}m`
+  return `hace ${Math.floor(m / 60)}h ${m % 60}m`
+}
+
+function duracion(desde, hasta) {
+  const m = Math.max(0, Math.round(((hasta || Date.now()) - (desde || Date.now())) / MIN))
+  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`
+}
+
+function formatearLista(lista) {
+  const esActivo = (j) => ['running', 'accepted', 'input_required'].includes(j.status)
+  const esReciente = (j) => Date.now() - (j.updatedAt || 0) < 60 * MIN
+  const enCurso = lista.filter((j) => esActivo(j) && esReciente(j))
+  const parados = lista.filter((j) => esActivo(j) && !esReciente(j)).slice(0, 5)
+  const cerrados = lista.filter((j) => !esActivo(j)).slice(0, 5)
+  const fila = (j) => `- ${j.jobId} · ${j.agent || '?'} · ${estado(j.status)} · ${duracion(j.createdAt, j.updatedAt)} · ${dinero(j.cost)} · ${j.title || '(sin título)'} · ${hace(j.updatedAt)}`
+  const partes = []
+  if (enCurso.length) {
+    partes.push(`Trabajos de OpenCode (${enCurso.length} en curso):`)
+    for (const j of enCurso) partes.push(fila(j))
+  }
+  if (parados.length) {
+    partes.push('Sin actividad (posibles restos; última actividad > 1h):')
+    for (const j of parados) partes.push(fila(j))
+  }
+  if (cerrados.length) {
+    partes.push('Recientes:')
+    for (const j of cerrados) partes.push(fila(j))
+  }
+  if (!partes.length) return 'No hay trabajos de OpenCode recientes.'
+  partes.push('Detalle de uno: trabajo_estado { jobId: "job_…" }')
+  return partes.join('\n')
+}
+
+function formatearDetalle(j) {
+  const L = [`Trabajo ${j.jobId} · ${j.agent || '?'} · ${estado(j.status)}`]
+  if (j.title) L.push(`Título: ${j.title}`)
+  if (j.directory) L.push(`Directorio: ${j.directory}`)
+  L.push(`Duración: ${duracion(j.createdAt, j.updatedAt)} · última actividad ${hace(j.updatedAt)}`)
+  const tok = j.tokens ? `in ${miles(j.tokens.input)} / out ${miles(j.tokens.output)} / raz ${miles(j.tokens.reasoning)}` : null
+  L.push(`Modelo: ${j.modelo || '?'}${j.variant ? ` (${j.variant})` : ''} · Coste: ${dinero(j.cost)}${tok ? ` · Tokens: ${tok}` : ''}`)
+  if (j.status === 'input_required') L.push('⚠ Hay una pregunta o permiso pendiente: míralo con opencode_question_list / opencode_permission_list y responde con opencode_job_input.')
+  if (j.error) L.push(`Error: ${j.error}`)
+  if (j.herramientas?.length) L.push(`Últimas herramientas: ${j.herramientas.map((h) => h.tool + (h.estado ? ` (${h.estado})` : '')).join(', ')}`)
+  if (j.archivosPatch?.length) L.push(`Archivos del último parche: ${j.archivosPatch.slice(0, 8).join(', ')}`)
+  if (j.ultimoTexto) L.push(`Último paso:\n${j.ultimoTexto.slice(0, 900)}`)
+  L.push('(Un timeout de observación no es un fallo: el trabajo sigue; vuelve a consultar.)')
+  return L.join('\n')
+}
 
 const rl = readline.createInterface({ input: process.stdin })
 rl.on('line', async (line) => {
@@ -53,18 +139,32 @@ rl.on('line', async (line) => {
     const nombre = msg.params?.name
     const args = msg.params?.arguments || {}
     try {
-      if (nombre !== 'triaje_decidir') throw new Error(`herramienta desconocida: ${nombre}`)
-      const r = await fetch(`${HUB}/api/triaje`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tarea: String(args.tarea || ''), contexto: String(args.contexto || '') }),
-        signal: AbortSignal.timeout(20000),
-      })
-      const j = await r.json()
-      const texto = j.ok
-        ? `capa: ${j.capa}\nagente: ${j.agente}\nesfuerzo: ${j.esfuerzo ?? '(el del agente)'}\nescalar: ${j.escalar}\nriesgo: ${j.riesgo}\nconfianza: ${typeof j.confianza === 'number' ? j.confianza.toFixed(2) : j.confianza}\nfuente: ${j.fuente}\nmotivo: ${j.motivo}`
-        : `Error del hub: ${j.error || 'desconocido'}`
-      return send({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: texto }] } })
+      if (nombre === 'triaje_decidir') {
+        const r = await fetch(`${HUB}/api/triaje`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tarea: String(args.tarea || ''), contexto: String(args.contexto || '') }),
+          signal: AbortSignal.timeout(20000),
+        })
+        const j = await r.json()
+        const texto = j.ok
+          ? `capa: ${j.capa}\nagente: ${j.agente}\nesfuerzo: ${j.esfuerzo ?? '(el del agente)'}\nescalar: ${j.escalar}\nriesgo: ${j.riesgo}\nconfianza: ${typeof j.confianza === 'number' ? j.confianza.toFixed(2) : j.confianza}\nfuente: ${j.fuente}\nmotivo: ${j.motivo}`
+          : `Error del hub: ${j.error || 'desconocido'}`
+        return send({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: texto }] } })
+      }
+      if (nombre === 'trabajo_estado') {
+        const oc = await cargarOpenCode()
+        const jobId = args.jobId ? String(args.jobId) : ''
+        let texto
+        if (jobId) {
+          const r = oc.detalleJob(jobId)
+          texto = r.ok ? formatearDetalle(r.job) : `No se pudo leer el trabajo: ${r.error}`
+        } else {
+          texto = formatearLista(oc.leerJobsRecientes(12 * 60 * 60 * 1000, 40))
+        }
+        return send({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: texto }] } })
+      }
+      throw new Error(`herramienta desconocida: ${nombre}`)
     } catch (e) {
       return send({ jsonrpc: '2.0', id: msg.id, result: { isError: true, content: [{ type: 'text', text: `Error: ${String(e?.message || e)}` }] } })
     }

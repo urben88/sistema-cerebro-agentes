@@ -40,6 +40,8 @@ El puente entre capas es **[opencode-mcp](https://github.com/AlaeddineMessari/op
 ## Qué hace por ti sin que te enteres
 
 - **Briefing automático**: al abrir cualquier sesión de Claude en un proyecto con memoria, el hub le inyecta el estado (tarea activa, quién la tiene, siguiente paso, alertas y trabajos en curso). Verificado: Claude responde "¿en qué estamos?" sin que se lo cuentes.
+- **Planifica antes de gastar**: en tareas ambiguas, el subagente `planificador` (Haiku) saca las preguntas mínimas que cambian el trabajo (máx. 5) con supuestos por defecto; el Cerebro te las pregunta antes de escribir la spec o delegar código.
+- **Ves a las manos trabajar**: el Cerebro te cuenta el progreso de cada job de OpenCode (estado, tiempo, coste y último paso) sin volcar conversaciones; la barra de estado de Claude Code muestra el modelo, el contexto y el trabajo en curso.
 - **`/clear` sin miedo**: al ~70 % de contexto, el agente vuelca el estado; al abrir la siguiente sesión, todo está de vuelta. Antes de compactar, un hook guarda un checkpoint solo.
 - **Reparto por esfuerzos**: DeepSeek low/high/max según el trabajo (`testeador` low, `implementador`/`debugger` high, `revisor` max); Claude medium por defecto; el código **no consume tu ventana de Claude**.
 - **Triaje local (Laya)**: decide a quién mandar cada tarea; si duda (confianza < 0,60), mandan las reglas; **cada decisión queda registrada** para afinar Laya con tu uso real.
@@ -83,7 +85,8 @@ bash scripts/verificar.sh --smoke                                          # mac
 
 | Quieres | Haz esto | Qué pasa por detrás |
 |---|---|---|
-| Trabajar con Claude | Abre Claude Code en tu proyecto y escribe `cerebro` (o `@cerebro …`) | Briefing inyectado; reparto automático Sonnet → Haiku → OpenCode; revisión y cierre |
+| Trabajar con Claude | Abre Claude Code en tu proyecto y escribe `cerebro` (o `@cerebro …`) | Briefing inyectado; planificación si hace falta; reparto automático Sonnet → Haiku → OpenCode; revisión y cierre |
+| Planificar algo grande o ambiguo | Pide `planifica …` o abre el `planificador` (Claude: `@planificador …`; OpenCode: cámbialo con Tab) | Entrevista: hasta 5 preguntas que cambian el trabajo + supuestos + plan/spec antes de generar |
 | Sin Claude (cuota agotada) | Abre OpenCode en tu proyecto | Arranca `cerebro-oc` (DeepSeek · max): specs y delegación en el resto |
 | Verlo todo | Abre el panel: `~/.sistema-cerebro-agentes/hub.ps1` (o `hub.sh`) → `http://127.0.0.1:4597` | Organización, memoria, triaje, gasto y ventana |
 | Cambiar algo | Editor de bots del panel antiguo (`panel.ps1`) o edita el repo y `scripts/actualizar` | Todo queda versionado en este repositorio |
@@ -96,6 +99,7 @@ Reglas de oro para que la ventana de Claude dure: **`/clear` al cambiar de tarea
 |---|---|---|---|
 | Dirección | `cerebro` (Claude) | Sonnet · medium | Decide, specs, desbloquea, revisión final |
 | Dirección intensa | `arquitecto` (Claude) | Sonnet · **high** | Arquitectura compleja, migraciones |
+| Planificación | `planificador` (Claude) / `planificador` (OC) | Haiku · medium / DeepSeek · high | Preguntas mínimas (máx. 5) antes de generar en tareas ambiguas |
 | Exploración | `explorador` (Claude) / `explorador-ds` (OC) | Haiku · **low** / DeepSeek · low | Buscar, resumir, extraer contexto |
 | Documentación | `redactor` / `redactor-ds` | Haiku · **low** / DeepSeek · low | README, docs, changelog |
 | Verificación | `analista` (Claude) | Haiku · medium | Requisitos vs realidad, checklists |
@@ -108,6 +112,8 @@ Reglas de oro para que la ventana de Claude dure: **`/clear` al cambiar de tarea
 | Mecánico | `local` (OC) | Ollama/Qwen | Solo si tú lo pides |
 
 Los agentes son **perfiles**: se activan bajo demanda y terminan al devolver su resultado. La delegación **se corta** en los subagentes (nada de cadenas).
+
+Además de estos roles por defecto (globales, disponibles en todos los proyectos), **cada proyecto puede añadir agentes propios** en `.claude/agents/` y `.opencode/agents/`: son aditivos y un mismo nombre solo pisa en ese proyecto. Guía: [docs/agentes-por-proyecto.md](docs/agentes-por-proyecto.md).
 
 ## Docker (hub + Laya)
 

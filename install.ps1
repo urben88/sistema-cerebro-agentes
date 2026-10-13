@@ -294,7 +294,7 @@ foreach ($f in @('cerebro.md', 'subdirector.md')) {
   [System.IO.File]::WriteAllText($dst, $tpl, (New-Object System.Text.UTF8Encoding($false)))
   Write-Ok "Agente instalado: $dst"
 }
-foreach ($f in @('explorador.md', 'redactor.md', 'analista.md', 'arquitecto.md', 'adaptador-mcps.md')) {
+foreach ($f in @('explorador.md', 'redactor.md', 'analista.md', 'arquitecto.md', 'adaptador-mcps.md', 'planificador.md')) {
   $dst = Join-Path $agentDir $f
   Backup-Item $dst
   Copy-Item -LiteralPath (Join-Path $agentSrcDir $f) -Destination $dst -Force
@@ -379,6 +379,11 @@ if (Get-Command docker -ErrorAction SilentlyContinue) {
   # El compose instalado construye desde la copia instalada del hub
   $composePath = Join-Path $dockerDst 'docker-compose.yml'
   $composeTxt = [System.IO.File]::ReadAllText($composePath).Replace('../config/hub', '../hub')
+  # La carpeta de trabajos del MCP vive fuera del hub (LOCALAPPDATA): se monta para
+  # que el panel y el vigilante vean los trabajos tambien cuando el hub va en Docker.
+  $tareasMcpDocker = (Join-Path $env:LOCALAPPDATA 'opencode-mcp\tasks').Replace('\', '/')
+  $composeTxt = $composeTxt.Replace('# __TAREAS_MCP_ENV__', '- OPENCODE_MCP_TASKS=/opencode-mcp/tasks')
+  $composeTxt = $composeTxt.Replace('# __TAREAS_MCP_VOL__', '- ' + $tareasMcpDocker + ':/opencode-mcp/tasks:ro')
   [System.IO.File]::WriteAllText($composePath, $composeTxt, (New-Object System.Text.UTF8Encoding($false)))
   Write-Ok "Stack Docker instalado: $dockerDst"
 
