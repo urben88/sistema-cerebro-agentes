@@ -28,6 +28,8 @@ function leerStdin() {
 
 const norm = (r) => String(r || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 const MIN = 60 * 1000
+const nombreEsfuerzo = (v) => ({ low: 'bajo', medium: 'medio', high: 'alto', max: 'máximo', default: 'def' })[String(v || '').toLowerCase()] || String(v || '')
+const recortar = (t, n) => { const s = String(t || ''); return s.length > n ? `${s.slice(0, n)}…` : s }
 
 function duracion(desde, hasta) {
   const m = Math.max(0, Math.round(((hasta || Date.now()) - (desde || Date.now())) / MIN))
@@ -66,17 +68,26 @@ try {
     }
   } catch { /* sin trabajos legibles: se enseña solo la parte de Claude */ }
 
-  // Subagentes de Claude en marcha (latidos vivos del hub): quién, con qué modelo y cuánto.
+  // Subagentes de Claude en marcha (latidos vivos del hub, solo de este proyecto):
+  // hasta 3 con modelo · esfuerzo y tiempo de cada uno; con terminal ancha, la tarea.
   try {
     const rl = await fetch(`${HUB}/api/latidos`, { signal: AbortSignal.timeout(500) }).then((r) => r.json())
     const subs = (rl.latidos || [])
-      .filter((l) => l.agente && l.agente !== 'cerebro' && l.evento !== 'SubagentStop')
+      .filter((l) => l.agente && l.agente !== 'cerebro' && l.evento !== 'SubagentStop' && norm(l.cwd) === norm(dir))
       // Primero los que tienen modelo conocido (explorador, planificador…), luego el resto.
       .sort((a, b) => Number(!!b.modelo) - Number(!!a.modelo) || (b.ts || 0) - (a.ts || 0))
     if (subs.length) {
-      const p = subs[0]
-      const extra = subs.length > 1 ? ` (+${subs.length - 1})` : ''
-      partes.push(`👥 ${p.agente}${p.modelo ? ` (${p.modelo})` : ''} · ${duracion(p.desde || p.ts, Date.now())}${extra}`)
+      const visibles = subs.slice(0, 3)
+      const trozos = visibles.map((l) => {
+        const etiqueta = [l.modelo, l.esfuerzo ? nombreEsfuerzo(l.esfuerzo) : null].filter(Boolean).join('·')
+        return `${l.agente}${etiqueta ? ` (${etiqueta})` : ''} ${duracion(l.desde || l.ts, Date.now())}`
+      })
+      let seg = `👥 ${trozos.join(' · ')}`
+      if (subs.length > visibles.length) seg += ` (+${subs.length - visibles.length})`
+      const cols = parseInt(process.env.COLUMNS || '0', 10)
+      const conTarea = visibles.find((l) => l.tarea)
+      if (cols >= 115 && conTarea) seg += ` · «${recortar(conTarea.tarea, 52)}»`
+      partes.push(seg)
     }
   } catch { /* hub apagado: sin subagentes */ }
 

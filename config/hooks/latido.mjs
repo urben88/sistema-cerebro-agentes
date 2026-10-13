@@ -68,11 +68,12 @@ function modeloDe(datos, inicio) {
   return modeloDelTranscript(datos.transcript_path || datos.transcriptPath)
 }
 
-/** Modelo declarado en la definición del agente (`model:` del frontmatter), si existe.
- *  Para un subagente (`agent_type`), esto es lo fiable: el transcript lo escribe el hilo
- *  principal y su último mensaje no siempre es el del subagente. */
-function modeloDeDefinicion(tipo, cwd) {
-  if (!tipo) return null
+/** Modelo y esfuerzo declarados en la definición del agente (`model:` y `effort:` del
+ *  frontmatter). Para un subagente (`agent_type`), esto es lo fiable: el transcript lo
+ *  escribe el hilo principal y su último mensaje no siempre es el del subagente. */
+function definicionDeAgente(tipo, cwd) {
+  const salida = { modelo: null, esfuerzo: null }
+  if (!tipo) return salida
   const limpio = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null)
   const rutas = [
     cwd ? path.join(cwd, '.claude', 'agents', `${tipo}.md`) : null,
@@ -83,12 +84,15 @@ function modeloDeDefinicion(tipo, cwd) {
       const t = fs.readFileSync(r, 'utf8')
       const m = t.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/)
       if (!m) continue
-      const linea = m[1].split(/\r?\n/).find((l) => /^model:\s*/i.test(l))
-      const v = linea ? limpio(linea.replace(/^model:\s*/i, '')) : null
-      if (v) return v
+      const lineas = m[1].split(/\r?\n/)
+      const lineaModelo = lineas.find((l) => /^model:\s*/i.test(l))
+      const lineaEsfuerzo = lineas.find((l) => /^effort:\s*/i.test(l))
+      if (lineaModelo) salida.modelo = limpio(lineaModelo.replace(/^model:\s*/i, ''))
+      if (lineaEsfuerzo) salida.esfuerzo = limpio(lineaEsfuerzo.replace(/^effort:\s*/i, ''))
+      if (salida.modelo || salida.esfuerzo) return salida
     } catch { /* sin fichero en esa ruta */ }
   }
-  return null
+  return salida
 }
 
 function leerStdin() {
@@ -112,9 +116,11 @@ try {
   const evento = datos.hook_event_name || process.argv[2] || ''
   if (EVENTOS.has(evento)) {
     const agente = datos.agent_type || datos.agent || datos.subagent_type || null
-    // Para subagentes, el modelo de su definición manda (p. ej. explorador → haiku);
-    // si no hay definición, se deduce del payload o de la cola del transcript.
-    const modelo = modeloDeDefinicion(agente, datos.cwd) || modeloDe(datos, inicio)
+    // Para subagentes, el modelo y el esfuerzo de su definición mandan (p. ej.
+    // explorador → haiku · low); si no hay definición, se deducen del payload o
+    // de la cola del transcript.
+    const definicion = definicionDeAgente(agente, datos.cwd)
+    const modelo = definicion.modelo || modeloDe(datos, inicio)
     const cuerpo = {
       cwd: datos.cwd || process.cwd(),
       sesion: datos.session_id || datos.sessionId || null,
@@ -122,6 +128,7 @@ try {
       agente,
       tarea: (datos.prompt || datos.task || datos.description || '').slice(0, 200) || null,
       modelo: modelo ? modelo.slice(0, 80) : null,
+      esfuerzo: definicion.esfuerzo ? definicion.esfuerzo.slice(0, 20) : null,
       // Ruta del transcript de la sesión: la usa el hub para la vista viva (solo
       // actividad: herramientas, textos y subtareas; el pensamiento no es legible).
       transcript: datos.transcript_path || datos.transcriptPath || null,

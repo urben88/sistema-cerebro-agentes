@@ -240,7 +240,7 @@ export function crearActividad({
         familia: info(agente).familia,
         // R2 · el modelo del latido manda; si no lo trae, cae al del frontmatter.
         modelo: l.modelo || info(agente).modelo,
-        variant: l.variant || info(agente).esfuerzo || null,
+        variant: l.variant || l.esfuerzo || info(agente).esfuerzo || null,
         estado,
         tarea: l.tarea || null,
         desde: l.desde || l.ts,

@@ -181,6 +181,7 @@ function registrarLatido(b) {
     agente: b.agente || previo?.agente || 'cerebro',
     tarea: b.tarea || null,
     modelo: b.modelo || previo?.modelo || null,
+    esfuerzo: b.esfuerzo || previo?.esfuerzo || null,
     transcript: b.transcript || previo?.transcript || null,
     ts: ahora,
     desde: previo && ahora - previo.ts < LATIDO_TTL ? previo.desde : ahora,
