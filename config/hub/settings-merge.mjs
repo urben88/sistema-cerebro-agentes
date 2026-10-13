@@ -41,6 +41,15 @@ for (const evento of eventosLatido) {
   s.hooks[evento] = grupos
 }
 
+// Guardián de contexto: aviso corto (con enfriamiento) cuando el hilo crece demasiado.
+// Se suma a los latidos de UserPromptSubmit sin pisarlos (idempotente).
+{
+  const grupos = Array.isArray(s.hooks.UserPromptSubmit) ? s.hooks.UserPromptSubmit : []
+  const yaEsta = grupos.some((g) => Array.isArray(g?.hooks) && g.hooks.some((h) => typeof h?.command === 'string' && h.command.includes('aviso-contexto.mjs')))
+  if (!yaEsta) grupos.push({ hooks: [{ type: 'command', command: comando('aviso-contexto.mjs') }] })
+  s.hooks.UserPromptSubmit = grupos
+}
+
 fs.mkdirSync(path.dirname(ruta), { recursive: true })
 fs.writeFileSync(ruta, JSON.stringify(s, null, 2) + '\n')
 console.log('settings.json actualizado: esfuerzos medium (si faltaban) y hooks de contexto.')

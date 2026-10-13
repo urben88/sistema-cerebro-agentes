@@ -80,6 +80,7 @@ try {
     '',
     '---',
     'Recuerda: se escribe aquí desde el Cerebro Hub. Mantén una sola cadena de delegación (preparación → ejecución → validación), no lances fanout, y antes de `/clear` actualiza el ESTADO.md del proyecto (CLI: `node estado.mjs --escribir --archivo <fichero>`).',
+    'Esfuerzos: tú (Sonnet) en medium salvo decisión dura (`/effort high` o `arquitecto`); agentes Haiku/DeepSeek ya corren a su nivel — no toques nada. Contexto: hilo corto; si crece, ESTADO.md + `/clear` y se sigue.',
   ].join('\n')
   salir(briefing + cierre)
 } catch {

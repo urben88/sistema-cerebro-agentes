@@ -133,7 +133,7 @@ if (Test-Path -LiteralPath $p) { Backup-Item $p; Remove-Item -LiteralPath $p -Re
 $settingsPath = Join-Path $UserHome '.claude\settings.json'
 if (Test-Path -LiteralPath $settingsPath) {
   Backup-Item $settingsPath
-  $js = 'const fs=require("fs");const p=process.argv[2];let s={};try{s=JSON.parse(fs.readFileSync(p,"utf8"))}catch{};if(s.hooks){for(const ev of ["SessionStart","PreCompact","SessionEnd"]){const arr=s.hooks[ev];if(Array.isArray(arr)){s.hooks[ev]=arr.filter(g=>!(g&&Array.isArray(g.hooks)&&g.hooks.some(h=>String(h.command||"").includes("sistema-cerebro-agentes"))));if(!s.hooks[ev].length)delete s.hooks[ev]}}if(!Object.keys(s.hooks).length)delete s.hooks}fs.writeFileSync(p,JSON.stringify(s,null,2)+"\n")'
+  $js = 'const fs=require("fs");const p=process.argv[2];let s={};try{s=JSON.parse(fs.readFileSync(p,"utf8"))}catch{};if(s.hooks){for(const ev of Object.keys(s.hooks)){const arr=s.hooks[ev];if(Array.isArray(arr)){s.hooks[ev]=arr.filter(g=>!(g&&Array.isArray(g.hooks)&&g.hooks.some(h=>String(h.command||"").includes("sistema-cerebro-agentes"))));if(!s.hooks[ev].length)delete s.hooks[ev]}}if(!Object.keys(s.hooks).length)delete s.hooks}fs.writeFileSync(p,JSON.stringify(s,null,2)+"\n")'
   $tmp = Join-Path $env:TEMP 'quitar-hooks-sistema.cjs'
   [System.IO.File]::WriteAllText($tmp, $js, (New-Object System.Text.UTF8Encoding($false)))
   Invoke-Cli 'node' @($tmp, $settingsPath) | Out-Null
