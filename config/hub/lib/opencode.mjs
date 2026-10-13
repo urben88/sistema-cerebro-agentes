@@ -86,6 +86,75 @@ export function crearOpenCode({ systemDir, host = null }) {
     return { ok: true, sesiones: lista }
   }
 
+  /** Resume la entrada de una herramienta en una línea corta y legible. */
+  function resumirEntrada(input) {
+    if (!input || typeof input !== 'object') return null
+    const claves = ['filePath', 'command', 'pattern', 'query', 'description', 'path', 'url', 'prompt']
+    for (const k of claves) {
+      const v = input[k]
+      if (typeof v === 'string' && v.trim()) return `${k}: ${v.slice(0, 160)}`
+    }
+    const primera = Object.entries(input).find(([, v]) => typeof v === 'string' && v.trim())
+    return primera ? `${primera[0]}: ${String(primera[1]).slice(0, 160)}` : null
+  }
+
+  /**
+   * Mensajes de una sesión V1 normalizados para la vista viva: razonamiento,
+   * textos, herramientas (con estado y entrada resumida) y parches. Sin volcar
+   * nada raro: todo recortado y en campos con nombre.
+   */
+  async function sesionMensajes(sessionId, timeout = 6000) {
+    const r = await get(`/session/${encodeURIComponent(sessionId)}/message`, timeout)
+    if (!r.ok) return { ok: false, error: r.error || `HTTP ${r.status}` }
+    try {
+      const crudos = JSON.parse(r.texto)
+      const mensajes = (Array.isArray(crudos) ? crudos : []).map((m) => {
+        const info = m?.info || m || {}
+        const partes = (m?.parts || []).map((p) => ({
+          id: p?.id || null,
+          tipo: p?.type || '?',
+          texto: typeof p?.text === 'string' ? p.text : null,
+          tool: p?.tool || null,
+          estado: p?.state?.status || null,
+          entrada: resumirEntrada(p?.state?.input),
+          archivos: Array.isArray(p?.files) ? p.files.slice(0, 20) : null,
+        }))
+        return {
+          id: info.id || null,
+          rol: info.role || '?',
+          creado: info.time?.created || null,
+          modelo: info.modelID || null,
+          variant: info.variant || null,
+          agente: info.agent || null,
+          coste: typeof info.cost === 'number' ? info.cost : null,
+          tokens: info.tokens || null,
+          partes,
+        }
+      })
+      return { ok: true, mensajes }
+    } catch { return { ok: false, error: 'respuesta no JSON' } }
+  }
+
+  /** Siguientes pasos (todo list) de una sesión V1. */
+  async function sesionTodo(sessionId, timeout = 5000) {
+    const r = await get(`/session/${encodeURIComponent(sessionId)}/todo`, timeout)
+    if (!r.ok) return { ok: false, error: r.error || `HTTP ${r.status}` }
+    try {
+      const t = JSON.parse(r.texto)
+      const lista = Array.isArray(t) ? t : (Array.isArray(t?.todos) ? t.todos : [])
+      return {
+        ok: true,
+        todos: lista
+          .map((x) => ({
+            contenido: String(x?.content || x?.text || x || '').slice(0, 300),
+            estado: x?.status || null,
+            prioridad: x?.priority || null,
+          }))
+          .filter((x) => x.contenido),
+      }
+    } catch { return { ok: false, error: 'respuesta no JSON' } }
+  }
+
   function leerJobs(limite = 60) {
     const out = []
     const walk = (dir) => {
@@ -106,6 +175,8 @@ export function crearOpenCode({ systemDir, host = null }) {
               createdAt: j.createdAt,
               updatedAt: j.updatedAt,
               title: j.session?.title || null,
+              modelo: j.session?.model?.id || null,
+              variant: j.session?.model?.variant || null,
               error: j.error?.message || null,
             })
           } catch { /* job corrupto */ }
@@ -283,5 +354,5 @@ export function crearOpenCode({ systemDir, host = null }) {
     return { ok: true, revisados: candidatos.length, cancelados: resultados.filter((r) => r.cancelado).length, resultados }
   }
 
-  return { puerto, get, sesiones, sesionesRecientes, leerJobs, leerJobsRecientes, detalleJob, abortarSesion, cancelarTrabajos }
+  return { puerto, get, sesiones, sesionesRecientes, sesionMensajes, sesionTodo, leerJobs, leerJobsRecientes, detalleJob, abortarSesion, cancelarTrabajos }
 }

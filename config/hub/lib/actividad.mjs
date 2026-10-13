@@ -18,6 +18,7 @@
 import crypto from 'node:crypto'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { clasificarError } from './errores.mjs'
 
 // Ventanas de tiempo (R2/R3)
 const VENTANA_SESION_MS = 5 * 60 * 1000
@@ -173,14 +174,19 @@ export function crearActividad({
         id: `job:${j.jobId || j.sessionId || agente}`,
         agente,
         familia: info(agente).familia,
-        modelo: info(agente).modelo,
+        // R1 · el modelo real del job (y su variant) manda sobre el del frontmatter.
+        modelo: j.modelo || info(agente).modelo,
+        variant: j.variant || null,
         estado,
         tarea: j.title || null,
         desde: j.createdAt || j.updatedAt || t,
         origen: 'opencode-job',
         jobId: j.jobId || null,
         sesion: j.sessionId || null,
+        evento: null,
+        // Compatibilidad: `error` sigue siendo el texto crudo; `errorInfo` añade la versión legible (R5).
         error: j.error || null,
+        errorInfo: j.error ? clasificarError(j.error) : null,
       }, j.updatedAt || t)
       if (agente !== 'Agente') {
         const d = `${agente}:${j.jobId || ''}`
@@ -204,14 +210,17 @@ export function crearActividad({
         id: `sesion:${se.id || normalizar(se.directory)}`,
         agente,
         familia: info(agente).familia,
-        modelo: info(agente).modelo,
+        modelo: se.modelo || info(agente).modelo,
+        variant: se.variant || null,
         estado: 'trabajando',
         tarea: se.title || null,
         desde: se.updatedAt,
         origen: 'opencode-sesion',
         jobId: null,
         sesion: se.id || null,
+        evento: null,
         error: null,
+        errorInfo: null,
       }, se.updatedAt)
     }
 
@@ -228,14 +237,18 @@ export function crearActividad({
         id: `latido:${l.sesion || ''}:${agente}`,
         agente,
         familia: info(agente).familia,
-        modelo: info(agente).modelo,
+        // R2 · el modelo del latido manda; si no lo trae, cae al del frontmatter.
+        modelo: l.modelo || info(agente).modelo,
+        variant: l.variant || null,
         estado,
         tarea: l.tarea || null,
         desde: l.desde || l.ts,
         origen: 'claude',
         jobId: null,
         sesion: l.sesion || null,
+        evento: l.evento || null,
         error: null,
+        errorInfo: null,
       }, l.ts || t)
     }
 
@@ -325,6 +338,38 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
     const desconocido = await calcular({ jobs: [job({ agent: 'desconocido', updatedAt: T - min(2) })] })
     const d = desconocido.proyectos[0]?.personajes[0]
     af(!!d && d.agente === 'Agente' && d.familia === 'generica', "'desconocido' → agente «Agente» y familia genérica")
+
+    console.log('R1/R2 · elección de modelo (job > latido > frontmatter)')
+    const orgConModelos = { datos: () => ({ claude: [{ nombre: 'cerebro', modelo: 'sonnet' }], opencode: [{ nombre: 'implementador', modelo: 'deepseek-frontmatter' }] }) }
+    const calcular2 = (over = {}) => crearActividad({
+      leerJobs: () => over.jobs || [],
+      sesiones: () => [],
+      latidos: () => over.latidos || [],
+      organizacion: orgConModelos,
+      ahora: () => T,
+    }).calcular()
+
+    const conJob = await calcular2({ jobs: [job({ modelo: 'deepseek-v3.2', variant: 'high' })] })
+    const pj = conJob.proyectos[0]?.personajes[0]
+    af(pj?.modelo === 'deepseek-v3.2', 'job con modelo → usa el del job')
+    af(pj?.variant === 'high', 'job con variant → lo expone')
+    af(pj?.errorInfo === null, 'job sin error → errorInfo null')
+
+    const jobSinModelo = await calcular2({ jobs: [job()] })
+    af(jobSinModelo.proyectos[0]?.personajes[0]?.modelo === 'deepseek-frontmatter', 'job sin modelo → cae al frontmatter')
+
+    const conLatido = await calcular2({ latidos: [{ cwd: '/tmp/proyecto-a', sesion: 's1', agente: 'cerebro', evento: 'SubagentStart', modelo: 'claude-sonnet-4-5', ts: T - min(1) }] })
+    const pl = conLatido.proyectos[0]?.personajes[0]
+    af(pl?.modelo === 'claude-sonnet-4-5', 'latido con modelo → usa el del latido')
+    af(pl?.evento === 'SubagentStart', 'latido expone el evento (R8)')
+
+    const latidoSinModelo = await calcular2({ latidos: [{ cwd: '/tmp/proyecto-a', sesion: 's1', agente: 'cerebro', evento: 'Stop', ts: T - min(1) }] })
+    af(latidoSinModelo.proyectos[0]?.personajes[0]?.modelo === 'sonnet', 'latido sin modelo → cae al frontmatter')
+
+    const conError = await calcular2({ jobs: [job({ error: 'Timeout esperando al servidor local' })] })
+    const pe = conError.proyectos[0]?.personajes[0]
+    af(pe?.error === 'Timeout esperando al servidor local', 'error crudo se conserva')
+    af(pe?.errorInfo?.tipo === 'timeout', 'errorInfo clasifica el error (R5)')
 
     console.log(fallos === 0 ? '\nPRUEBAS actividad.mjs: TODO OK' : `\nPRUEBAS actividad.mjs: ${fallos} fallo(s)`)
     process.exitCode = fallos === 0 ? 0 : 1

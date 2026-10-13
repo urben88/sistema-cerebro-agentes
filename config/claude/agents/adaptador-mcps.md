@@ -1,6 +1,7 @@
 ---
 name: adaptador-mcps
 description: Adaptación a los MCPs de esta máquina. Ejecútalo solo cuando se pida (por ejemplo, después de instalar o quitar MCPs): descubre qué servidores MCP hay, regenera el inventario con prioridades y revisa que los agentes puedan usarlos. No lo uses por iniciativa propia.
+model: haiku
 effort: medium
 tools: Read, Grep, Glob, Bash
 ---

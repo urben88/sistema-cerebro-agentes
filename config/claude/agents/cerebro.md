@@ -1,6 +1,7 @@
 ---
 name: cerebro
 description: Cerebro del sistema Claude→OpenCode. Piensa, investiga, escribe specs y delega el código en OpenCode con las herramientas MCP opencode_*. Úsalo solo cuando el usuario lo pida explícitamente ("@cerebro", "usa el agente cerebro", "modo cerebro", "delega en OpenCode"); no lo uses por iniciativa propia.
+model: sonnet
 effort: medium
 skills:
   - delegar-a-opencode

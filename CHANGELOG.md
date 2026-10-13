@@ -16,6 +16,9 @@ Versionado semántico (MAJOR.MINOR.PATCH).
 - **Regla de subagentes baratos**: `cerebro` y `CLAUDE.md` exigen `subagent_type` explícito y prohíben `fork`/`general-purpose` (corren en Sonnet); se anuncia el modelo al lanzar. Solo `arquitecto` usa Sonnet a propósito.
 - **Apagado al cerrar la sesión**: hook `cerrar-trabajos.mjs` en `SessionEnd` (cualquier motivo: `prompt_input_exit`, `logout`, `clear`, `other`) que cancela los trabajos de OpenCode del proyecto abortando sus sesiones en el servidor V1 y lo anota en la bitácora — nada sigue consumiendo tokens en segundo plano.
 - **Botón de pánico**: comando `cerebro-parar` (todos / un proyecto / `--seco`), herramienta MCP `parar_trabajos` (pídeselo al Cerebro en el chat) y `POST /api/trabajos/cancelar` (para el panel).
+- **Vista viva en «La oficina»** (spec 05, sobre el detalle de la spec 04): al pinchar en un agente de OpenCode se ve su **razonamiento en directo** («Pensando ahora»), la **actividad** (herramientas, textos, parches y pasos, desplegables), los **siguientes pasos** de su lista y su **esfuerzo** (modelo · variant). El hub lo **recopila solo** (`lib/vivo.mjs`, snapshots en `hub-data/trabajos-vivo/`) y lo difunde por SSE; si el servidor V1 cae, enseña la última copia con aviso.
+- `sesionMensajes`/`sesionTodo` en el cliente del servidor V1; `GET /api/vivo` y bloque `vivo` en `/api/trabajos/:jobId`.
+- **Modelo real, errores legibles y detalle por agente** (spec 04, trabajo conjunto con la sesión paralela): modelo/variant reales en jobs y latidos de Claude, `clasificarError` (`lib/errores.mjs`) con causa y acción sugerida, y panel lateral con modelo, duración, coste, tokens, herramientas y archivos.
 - Spec `docs/specs/02-planificador-y-visibilidad.md`.
 
 ### Corregido

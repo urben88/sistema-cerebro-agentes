@@ -79,6 +79,46 @@ const reducirMovimiento = () => {
   try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { return false }
 }
 
+// R4 · etiqueta honesta: un modelo ausente se declara como «modelo no informado»
+// (nunca «sin modelo»), y el variant se muestra solo si existe.
+const etiquetaModelo = (m) => (m ? String(m) : 'modelo no informado')
+const modeloYVariant = (m, v) => (v ? `${etiquetaModelo(m)} · ${v}` : etiquetaModelo(m))
+
+// R7 · estados de job que siguen «en curso» y merecen refresco del detalle.
+const EN_CURSO = new Set(['trabajando', 'esperando', 'atascado'])
+const EN_CURSO_JOB = new Set(['running', 'accepted', 'input_required'])
+
+// R7 · duración de un tramo ya cerrado (no «hace X»).
+function duracionHumana(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  if (s < 60) return `${s} s`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m} min`
+  const hr = Math.floor(m / 60)
+  if (hr < 24) return `${hr} h ${m % 60} min`
+  return `${Math.floor(hr / 24)} d ${hr % 24} h`
+}
+function recortar(t, n) {
+  const s = String(t || '')
+  return s.length > n ? s.slice(0, n).trimEnd() + '…' : s
+}
+function textoTokens(t) {
+  if (t == null) return null
+  if (typeof t === 'number') return fmt(t)
+  const partes = []
+  if (typeof t.input === 'number') partes.push(`in ${k(t.input)}`)
+  if (typeof t.output === 'number') partes.push(`out ${k(t.output)}`)
+  if (t.cache && typeof t.cache.read === 'number') partes.push(`caché ${k(t.cache.read)}`)
+  return partes.length ? partes.join(' · ') : null
+}
+function simboloEstado(e) {
+  const s = String(e || '').toLowerCase()
+  if (s.includes('error') || s.includes('fail')) return { simbolo: '✗', clase: 'mal' }
+  if (s.includes('run') || s.includes('progress') || s.includes('pending')) return { simbolo: '⏳', clase: 'curso' }
+  if (s === 'completed' || s === 'success' || s === 'ok') return { simbolo: '✓', clase: 'bien' }
+  return { simbolo: '•', clase: 'neutro' }
+}
+
 // ---------------------------------------------------------------- familias y agentes
 
 // A4 · figuras planas: cada familia tiene color y accesorio propios.
@@ -229,7 +269,10 @@ function crearPuesto(personaje, proyecto) {
   puesto.append(h('div', { clase: 'mesa' }, h('div', { clase: 'monitor' })))
   const pie = h('figcaption', { clase: 'puesto-pie' })
   pie.append(h('span', { clase: 'pers-nombre', texto: personaje.agente }))
-  pie.append(h('span', { clase: 'chip modelo', texto: personaje.modelo || 'sin modelo' }))
+  pie.append(h('span', { clase: 'chip modelo', texto: etiquetaModelo(personaje.modelo), title: personaje.modelo || '' }))
+  if (personaje.variant) pie.append(h('span', { clase: 'chip modelo' }, h('b', { texto: personaje.variant })))
+  // R6 · chip de error con el título legible (el crudo queda en el detalle).
+  if (personaje.errorInfo) pie.append(h('span', { clase: 'chip error', texto: personaje.errorInfo.titulo, title: personaje.errorInfo.causa || '' }))
   puesto.append(pie)
   puesto.setAttribute('tabindex', '0')
   puesto.setAttribute('role', 'button')
@@ -406,7 +449,206 @@ function pintarOficina() {
   requestAnimationFrame(dibujarDelegaciones)
 }
 
+// R6 · bloque «Qué falló» con causa, acción y texto crudo plegado.
+function bloqueError(cont, info) {
+  const caja = h('div', { clase: 'bloque-error' })
+  caja.append(h('h3', { clase: 'error-titulo', texto: info.titulo || 'Error' }))
+  if (info.causa) caja.append(h('p', { clase: 'error-causa', texto: info.causa }))
+  if (info.accion) caja.append(h('p', { clase: 'error-accion', texto: `Qué puedes hacer: ${info.accion}` }))
+  if (info.crudo) {
+    const det = h('details', { clase: 'error-crudo' })
+    det.append(h('summary', { texto: 'Texto crudo del error' }))
+    det.append(h('pre', { texto: String(info.crudo) }))
+    caja.append(det)
+  }
+  cont.append(caja)
+}
+
+// R7 · detalle vivo del trabajo (modelo·variant, duración, coste, tokens, último paso,
+// herramientas recientes y archivos tocados).
+function pintarDetalleJob(cont, job) {
+  vaciar(cont)
+  cont.append(h('h3', { texto: 'Detalle del trabajo' }))
+  const fila = (etiqueta, valor) => {
+    if (valor == null || valor === '') return
+    const d = h('div', { clase: 'fila detalle-fila' })
+    d.append(h('span', { clase: 'fila-k', texto: etiqueta }))
+    d.append(h('span', { clase: 'fila-v', texto: String(valor) }))
+    cont.append(d)
+  }
+  fila('Modelo', modeloYVariant(job.modelo, job.variant))
+  fila('Estado', job.status)
+  const fin = EN_CURSO_JOB.has(job.status) ? Date.now() : job.updatedAt
+  fila('Duración', job.createdAt && fin ? duracionHumana(fin - job.createdAt) : null)
+  fila('Coste', typeof job.cost === 'number' ? `${job.cost.toFixed(4)} $` : null)
+  fila('Tokens', textoTokens(job.tokens))
+  fila('Carpeta', job.directory)
+
+  if (job.ultimoTexto) {
+    cont.append(h('h3', { texto: 'Último paso' }))
+    cont.append(h('p', { clase: 'detalle-paso', texto: recortar(job.ultimoTexto, 400) }))
+  }
+  const herramientas = job.herramientas || []
+  if (herramientas.length) {
+    cont.append(h('h3', { texto: `Herramientas recientes (${herramientas.length})` }))
+    const ul = h('ul', { clase: 'lista-herramientas' })
+    for (const t of herramientas) {
+      const s = simboloEstado(t.estado)
+      ul.append(h('li', { clase: 'herramienta' },
+        h('span', { clase: `marca ${s.clase}`, texto: s.simbolo, title: t.estado || 'sin estado' }),
+        h('span', { texto: t.tool + (t.estado ? ` · ${t.estado}` : '') }),
+      ))
+    }
+    cont.append(ul)
+  }
+  const archivos = job.archivosPatch || []
+  if (archivos.length) {
+    cont.append(h('h3', { texto: `Archivos modificados (${archivos.length})` }))
+    const ul = h('ul', { clase: 'lista-archivos' })
+    for (const a of archivos) ul.append(h('li', { clase: 'archivo', texto: String(a) }))
+    cont.append(ul)
+  }
+  if (job.error) bloqueError(cont, { titulo: 'Qué falló', crudo: job.error })
+}
+
+// ------------------------------------------- vista viva (razonamiento, actividad y pasos)
+
+function horaCorta(ts) {
+  try { return new Date(ts).toTimeString().slice(0, 8) } catch { return '' }
+}
+
+// Cada evento recopilado se pinta como una línea; el razonamiento y los textos se
+// pueden desplegar para leerlos enteros (el «pensamiento» va en su propio bloque).
+function lineaVivo(e) {
+  const hora = horaCorta(e.ts)
+  if (e.tipo === 'razonamiento' || e.tipo === 'texto') {
+    const icono = e.tipo === 'razonamiento' ? '💭' : '🗣️'
+    const det = h('details', { clase: 'vivo-evento' })
+    const resumen = h('summary', { clase: 'vivo-resumen' })
+    resumen.append(h('span', { clase: 'vivo-hora', texto: hora }))
+    resumen.append(h('span', { clase: 'vivo-tipo', texto: icono }))
+    resumen.append(h('span', { clase: 'vivo-texto', texto: recortar(e.texto, 140) }))
+    det.append(resumen)
+    det.append(h('pre', { clase: 'vivo-texto-largo', texto: e.texto }))
+    return det
+  }
+  const d = h('div', { clase: 'vivo-evento simple' })
+  d.append(h('span', { clase: 'vivo-hora', texto: hora }))
+  if (e.tipo === 'herramienta') {
+    const s = simboloEstado(e.estado)
+    d.append(h('span', { clase: `marca ${s.clase}`, texto: s.simbolo }))
+    d.append(h('span', { clase: 'vivo-texto', texto: `${e.tool || 'tool'}${e.entrada ? ` · ${recortar(e.entrada, 110)}` : ''}` }))
+  } else if (e.tipo === 'parche') {
+    d.append(h('span', { clase: 'vivo-tipo', texto: '📝' }))
+    d.append(h('span', { clase: 'vivo-texto', texto: `Archivos: ${(e.archivos || []).slice(0, 4).join(', ') || '—'}` }))
+  } else {
+    d.append(h('span', { clase: 'vivo-tipo', texto: '·' }))
+    d.append(h('span', { clase: 'vivo-texto tenue', texto: `paso terminado${e.coste != null ? ` · ${Number(e.coste).toFixed(4)} $` : ''}` }))
+  }
+  return d
+}
+
+// Pinta (o actualiza, sin parpadeo) el bloque vivo del detalle: estado del colector,
+// «pensando ahora», siguientes pasos y actividad. Conserva el scroll del usuario.
+function pintarVivo(caja, vivo, job) {
+  const eventos = vivo && Array.isArray(vivo.eventos) ? vivo.eventos : []
+  const todos = vivo && Array.isArray(vivo.todos) ? vivo.todos : []
+  const col = (vivo && vivo.colector) || {}
+  const ultimoPensamiento = [...eventos].reverse().find((e) => e.tipo === 'razonamiento' && e.texto)
+  const cuando = col.ultimaLectura ? `última lectura ${hace(col.ultimaLectura)}` : 'esperando la primera lectura…'
+  const textoEstado = col.error ? `⚠ ${String(col.error).slice(0, 160)} · ${cuando}` : `● Recopilando en vivo · ${cuando}`
+  const firma = JSON.stringify([eventos.length, eventos[eventos.length - 1]?.id || null, todos, col.error || null])
+  // La línea de estado se refresca siempre (para que se note «en vivo»), pero el
+  // resto solo se repinta si hay cambios: así no se cierran los detalles desplegados.
+  const estadoPrevio = caja.querySelector('.vivo-estado')
+  if (estadoPrevio && caja.dataset.firma) {
+    estadoPrevio.textContent = textoEstado
+    estadoPrevio.classList.toggle('mal', !!col.error)
+  }
+  if (caja.dataset.firma === firma) return
+  const previa = caja.querySelector('.vivo-actividad')
+  const scrollPrevio = previa ? previa.scrollTop : null
+  const pegadoAbajo = !previa || (previa.scrollHeight - previa.scrollTop - previa.clientHeight < 36)
+  caja.dataset.firma = firma
+  vaciar(caja)
+
+  caja.append(h('p', { clase: `vivo-estado${col.error ? ' mal' : ''}`, texto: textoEstado }))
+
+  if (ultimoPensamiento) {
+    caja.append(h('h3', { texto: 'Pensando ahora' }))
+    caja.append(h('pre', { clase: 'vivo-pensando', texto: ultimoPensamiento.texto }))
+  } else if (job && EN_CURSO_JOB.has(job.status)) {
+    caja.append(h('h3', { texto: 'Pensando ahora' }))
+    caja.append(h('p', { clase: 'tenue', texto: 'Todavía sin razonamiento; aparecerá aquí en cuanto llegue.' }))
+  }
+
+  if (todos.length) {
+    caja.append(h('h3', { texto: `Siguientes pasos (${todos.length})` }))
+    const ul = h('ul', { clase: 'vivo-todos' })
+    for (const t of todos) {
+      const s = String(t.estado || '').toLowerCase()
+      const marca = s.includes('complet') ? '✓' : s.includes('progress') ? '⏳' : '○'
+      const clase = s.includes('complet') ? 'hecho' : s.includes('progress') ? 'curso' : ''
+      ul.append(h('li', { clase: `vivo-todo ${clase}` }, h('span', { clase: 'marca', texto: marca }), h('span', { clase: 'vivo-texto', texto: t.contenido })))
+    }
+    caja.append(ul)
+  }
+
+  caja.append(h('h3', { texto: `Actividad (${eventos.length})` }))
+  const activ = h('div', { clase: 'vivo-actividad' })
+  if (!eventos.length) {
+    activ.append(h('p', { clase: 'tenue', texto: job && EN_CURSO_JOB.has(job.status) ? 'Sin actividad todavía: el colector acaba de empezar.' : 'Sin actividad recopilada.' }))
+  } else {
+    for (const e of eventos.slice(-100)) activ.append(lineaVivo(e))
+  }
+  caja.append(activ)
+  if (pegadoAbajo) activ.scrollTop = activ.scrollHeight
+  else if (scrollPrevio != null) activ.scrollTop = scrollPrevio
+}
+
+// Demo de la vista viva: razonamiento, herramientas, parche, paso y siguientes pasos.
+function vivoDemo(jobId) {
+  const ahora = Date.now()
+  const m = (n) => n * 60 * 1000
+  const ev = (o) => ({ id: `demo-${jobId}-${o.n}`, ts: ahora - o.hace, agente: 'demo', ...o })
+  const eventos = [
+    ev({ n: 1, hace: m(5), tipo: 'razonamiento', texto: 'Voy a leer la spec 04 y el estado del panel para decidir por dónde empezar.' }),
+    ev({ n: 2, hace: m(5) + 5000, tipo: 'herramienta', tool: 'read', estado: 'completed', entrada: 'filePath: docs/specs/04-modelo-errores-y-detalle-agentes.md' }),
+    ev({ n: 3, hace: m(4), tipo: 'razonamiento', texto: 'El detalle actual solo refresca el resumen; añadiré un bloque vivo con razonamiento, actividad y siguientes pasos.' }),
+    ev({ n: 4, hace: m(3), tipo: 'herramienta', tool: 'edit', estado: 'completed', entrada: 'filePath: config/hub/panel/app.js' }),
+    ev({ n: 5, hace: m(2), tipo: 'texto', texto: 'He añadido el bloque «Pensando ahora» y la lista de siguientes pasos.' }),
+    ev({ n: 6, hace: m(2) + 3000, tipo: 'parche', archivos: ['config/hub/panel/app.js', 'config/hub/panel/style.css'] }),
+    ev({ n: 7, hace: m(1), tipo: 'herramienta', tool: 'bash', estado: 'running', entrada: 'command: node config/hub/lib/actividad.mjs' }),
+    ev({ n: 8, hace: m(1) + 2000, tipo: 'paso', coste: 0.0123 }),
+  ]
+  const todos = [
+    { contenido: 'Recopilar razonamiento y actividad por trabajo', estado: 'completed' },
+    { contenido: 'Mostrar «pensando ahora» y actividad en vivo', estado: 'in_progress' },
+    { contenido: 'Siguientes pasos desde la lista del agente', estado: 'pending' },
+  ]
+  return { recopilado: true, eventos, todos, colector: { ultimaLectura: ahora - 1500, error: null, activo: true } }
+}
+
+// R9 · datos simulados de detalle para el modo demo (no hay hub que consultar).
+function detalleDemo(jobId) {
+  const ahora = Date.now()
+  const base = {
+    'demo-job-1': { agent: 'cerebro', title: 'Coordinar el tramo B del panel visual', status: 'running', modelo: 'claude-sonnet-4-5', variant: null, cost: 0.004, tokens: { input: 5000, output: 900 }, ultimoTexto: 'Revisando la spec y repartiendo el trabajo entre los agentes.', herramientas: [{ tool: 'task', estado: 'running' }], archivosPatch: [] },
+    'demo-job-2': { agent: 'implementador', title: 'La oficina: salas, mesas y monitores', status: 'running', modelo: 'deepseek-v3.2', variant: 'high', cost: 0.0123, tokens: { input: 18234, output: 4210, cache: { read: 9000 } }, ultimoTexto: 'He creado las salas y los personajes. Ahora ajusto las animaciones por estado y el plegado de salas inactivas.', herramientas: [{ tool: 'read', estado: 'completed' }, { tool: 'edit', estado: 'completed' }, { tool: 'bash', estado: 'running' }], archivosPatch: ['config/hub/panel/app.js', 'config/hub/panel/style.css'] },
+    'demo-job-3': { agent: 'revisor', title: 'Revisar el diff contra la spec', status: 'input_required', modelo: 'deepseek-v3.2', variant: 'max', cost: 0.003, tokens: { input: 7000, output: 1200 }, ultimoTexto: 'Necesito confirmar si el chip de error debe mostrar el título o el tipo.', herramientas: [{ tool: 'read', estado: 'completed' }], archivosPatch: [] },
+    'demo-job-4': { agent: 'testeador', title: 'Pruebas de lógica pura (A2/A3)', status: 'failed', modelo: 'deepseek-flash', variant: 'low', cost: 0.001, tokens: { input: 1200, output: 300 }, ultimoTexto: 'Las pruebas fallan al arrancar el servidor local.', herramientas: [{ tool: 'bash', estado: 'error' }], archivosPatch: [], error: 'Timeout esperando al servidor local' },
+    'demo-job-5': { agent: 'explorador-ds', title: 'Reconocer lib/actividad.mjs', status: 'running', modelo: 'deepseek-flash', variant: 'low', cost: 0.0007, tokens: { input: 3000, output: 500 }, ultimoTexto: 'He leído actividad.mjs y resumido sus fuentes: jobs, sesiones y latidos.', herramientas: [{ tool: 'read', estado: 'completed' }], archivosPatch: [] },
+  }
+  const d = base[jobId] || { agent: 'agente', title: 'Trabajo de demostración', status: 'running', modelo: 'deepseek-v3.2', variant: 'high', cost: 0.0021, tokens: { input: 1000, output: 300 }, ultimoTexto: 'Trabajando en la tarea de demostración.', herramientas: [{ tool: 'read', estado: 'completed' }], archivosPatch: [] }
+  return { ok: true, vivo: vivoDemo(jobId), job: { jobId, sessionId: null, createdAt: ahora - 6 * 60 * 1000, updatedAt: ahora, directory: 'C:/demo/panel-la-oficina', ...d } }
+}
+
+let temporizadorDetalle = null
+let detalleAbierto = null
+function pararDetalle() { if (temporizadorDetalle) { clearInterval(temporizadorDetalle); temporizadorDetalle = null } detalleAbierto = null }
+
 function abrirDetalle(personaje, proyecto) {
+  pararDetalle()
   $('lateralTitulo').textContent = personaje.agente
   const cuerpo = vaciar($('lateralCuerpo'))
   const fila = (etiqueta, valor) => {
@@ -418,18 +660,50 @@ function abrirDetalle(personaje, proyecto) {
   }
   fila('Estado', personaje.estado)
   fila('Familia', metaFam(personaje.familia).nombre)
-  fila('Modelo', personaje.modelo || '(hereda)')
-  fila('Origen', personaje.origen)
+  fila('Modelo', personaje.modelo ? etiquetaModelo(personaje.modelo) : 'modelo no informado · hereda el del hilo principal')
+  fila('Variant', personaje.variant)
+  // R8 · agentes sin job (Claude/latidos): solo lo que se sabe, sin inventar.
+  fila('Origen', personaje.origen === 'claude' ? 'Claude (latido)' : personaje.origen)
+  fila('Evento', personaje.evento)
   fila('Tarea', personaje.tarea || '(sin título)')
   fila('En curso desde', personaje.desde ? `${hace(personaje.desde)} · ${dur(personaje.desde)}` : null)
   fila('jobId', personaje.jobId)
   fila('Sesión', personaje.sesion)
   fila('Proyecto', proyecto.nombre)
   fila('Ruta', proyecto.ruta)
-  if (personaje.error) fila('Error', personaje.error)
+  if (personaje.errorInfo) bloqueError(cuerpo, personaje.errorInfo)
+  else if (personaje.error) fila('Error', personaje.error)
+
   const b = h('button', { clase: 'boton', type: 'button', texto: 'Ver memoria del proyecto' })
   b.addEventListener('click', () => verProyecto(proyecto.ruta))
   cuerpo.append(b)
+
+  if (personaje.jobId) {
+    const seccion = h('div', { clase: 'detalle-job' })
+    const vivoCaja = h('div', { clase: 'detalle-vivo' })
+    cuerpo.append(seccion)
+    cuerpo.append(vivoCaja)
+    const cargar = async () => {
+      let r = null
+      try {
+        r = estado.demo ? detalleDemo(personaje.jobId)
+          : await fetch(`/api/trabajos/${encodeURIComponent(personaje.jobId)}`).then((x) => x.json())
+      } catch { r = null }
+      if (!r || r.ok === false) {
+        if (!seccion.childElementCount) seccion.append(h('p', { clase: 'tenue', texto: (r && r.error) || 'Sin detalle del trabajo.' }))
+        pararDetalle()
+        return
+      }
+      pintarDetalleJob(seccion, r.job)
+      pintarVivo(vivoCaja, r.vivo || null, r.job)
+      if (!EN_CURSO_JOB.has(r.job.status)) pararDetalle()
+    }
+    detalleAbierto = { jobId: personaje.jobId, cargar }
+    cargar()
+    // R7 · refresco cada ~3 s solo si el personaje sigue en curso.
+    if (EN_CURSO.has(personaje.estado)) temporizadorDetalle = setInterval(cargar, 3000)
+  }
+
   $('lateral').classList.remove('oculto')
 }
 
@@ -550,7 +824,7 @@ function pintarReparto(g) {
     cont.append(bloque('Por familia', familias, (f) => metaFam(f.familia).color, (f) => metaFam(f.familia).nombre))
   }
   if (modelos.length) {
-    cont.append(bloque('Por modelo', modelos, () => 'var(--acento)', (m) => m.modelo || 'sin modelo'))
+    cont.append(bloque('Por modelo', modelos, () => 'var(--acento)', (m) => etiquetaModelo(m.modelo)))
   }
 }
 
@@ -608,12 +882,15 @@ function pintarVigilante(v) {
   const alertas = v?.alertas || []
   if (!alertas.length) { cont.append(h('p', { clase: 'tenue', texto: 'Sin alertas: todo en orden.' })); return }
   for (const a of alertas) {
+    const info = a.info || null
     const card = h('div', { clase: 'agente' })
     const cab = h('div')
-    cab.append(h('span', { clase: 'badge ambar', texto: a.tipo }))
+    // R6 · la alerta usa el mismo clasificador: título legible en lugar del tipo crudo.
+    cab.append(h('span', { clase: 'badge ambar', texto: info?.titulo || a.tipo }))
     cab.append(h('span', { clase: 'nombre', texto: a.title || a.jobId || '—' }))
     card.append(cab)
-    card.append(h('div', { clase: 'desc', texto: `${a.directory || ''} · ${a.minutos} min` }))
+    const desc = [info?.causa, `${a.directory || ''} · ${a.minutos} min`.trim(), info?.accion].filter(Boolean).join(' · ')
+    card.append(h('div', { clase: 'desc', texto: desc }))
     cont.append(card)
   }
 }
@@ -827,9 +1104,10 @@ function actividadDemo() {
   const ahora = Date.now()
   const m = (n) => n * 60 * 1000
   const p = (o) => ({
-    id: o.id, agente: o.agente, familia: o.familia, modelo: o.modelo, estado: o.estado,
-    tarea: o.tarea, desde: ahora - o.hace, origen: 'opencode-job', jobId: o.jobId || null,
-    sesion: o.sesion || null, error: o.error || null,
+    id: o.id, agente: o.agente, familia: o.familia, modelo: o.modelo, variant: o.variant || null,
+    estado: o.estado, tarea: o.tarea, desde: ahora - o.hace, origen: o.origen || 'opencode-job',
+    evento: o.evento || null, jobId: o.jobId || null, sesion: o.sesion || null,
+    error: o.error || null, errorInfo: o.errorInfo || null,
   })
   return {
     demo: true,
@@ -839,10 +1117,15 @@ function actividadDemo() {
         ruta: 'C:/demo/panel-la-oficina', nombre: 'panel-la-oficina', slug: 'demo-panel', ultimaActividad: ahora,
         personajes: [
           p({ id: 'demo-1', agente: 'cerebro', familia: 'direccion', modelo: 'claude-sonnet-4-5', estado: 'trabajando', tarea: 'Coordinar el tramo B del panel visual', hace: m(4), jobId: 'demo-job-1' }),
-          p({ id: 'demo-2', agente: 'implementador', familia: 'implementacion', modelo: 'deepseek-v3.2', estado: 'trabajando', tarea: 'La oficina: salas, mesas y monitores', hace: m(6), jobId: 'demo-job-2' }),
-          p({ id: 'demo-3', agente: 'revisor', familia: 'revision', modelo: 'deepseek-v3.2', estado: 'esperando', tarea: 'Revisar el diff contra la spec', hace: m(9), jobId: 'demo-job-3' }),
-          p({ id: 'demo-4', agente: 'testeador', familia: 'pruebas', modelo: 'deepseek-flash', estado: 'atascado', tarea: 'Pruebas de lógica pura (A2/A3)', hace: m(42), jobId: 'demo-job-4', error: 'Timeout esperando al servidor local' }),
-          p({ id: 'demo-5', agente: 'redactor', familia: 'documentacion', modelo: 'claude-haiku-4-5', estado: 'terminado', tarea: 'docs/panel.md actualizado', hace: m(2) }),
+          p({ id: 'demo-2', agente: 'implementador', familia: 'implementacion', modelo: 'deepseek-v3.2', variant: 'high', estado: 'trabajando', tarea: 'La oficina: salas, mesas y monitores', hace: m(6), jobId: 'demo-job-2' }),
+          p({ id: 'demo-3', agente: 'revisor', familia: 'revision', modelo: 'deepseek-v3.2', variant: 'max', estado: 'esperando', tarea: 'Revisar el diff contra la spec', hace: m(9), jobId: 'demo-job-3' }),
+          p({
+            id: 'demo-4', agente: 'testeador', familia: 'pruebas', modelo: 'deepseek-flash', variant: 'low', estado: 'atascado',
+            tarea: 'Pruebas de lógica pura (A2/A3)', hace: m(42), jobId: 'demo-job-4',
+            error: 'Timeout esperando al servidor local',
+            errorInfo: { tipo: 'timeout', titulo: 'Tiempo de espera agotado', causa: 'La operación tardó más de lo permitido y se cortó.', accion: 'Reintenta el trabajo o reduce el alcance de la tarea.', crudo: 'Timeout esperando al servidor local' },
+          }),
+          p({ id: 'demo-5', agente: 'redactor', familia: 'documentacion', modelo: 'claude-haiku-4-5', estado: 'terminado', tarea: 'docs/panel.md actualizado', hace: m(2), origen: 'claude', evento: 'SubagentStop' }),
         ],
         delegaciones: [
           { de: 'cerebro', a: 'implementador', jobId: 'demo-job-2' },
@@ -901,6 +1184,13 @@ function conectarSse() {
     fuente = new EventSource('/api/eventos')
     fuente.addEventListener('open', () => { estado.conexion = 'sse'; pararPoll(); pintarCabecera() })
     fuente.addEventListener('actividad', (e) => { try { aplicarActividad(JSON.parse(e.data)) } catch { /* nada */ } })
+    // Vista viva: si llega actividad del trabajo que está abierto en el lateral, se refresca ya.
+    fuente.addEventListener('trabajo', (e) => {
+      try {
+        const d = JSON.parse(e.data)
+        if (detalleAbierto && d && d.jobId === detalleAbierto.jobId) detalleAbierto.cargar()
+      } catch { /* nada */ }
+    })
     fuente.addEventListener('error', () => {
       pararSse()
       estado.conexion = 'polling'
@@ -966,7 +1256,7 @@ async function refrescarPesado() {
 
 $('cerrar').addEventListener('click', () => $('modal').classList.add('oculto'))
 $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) $('modal').classList.add('oculto') })
-$('lateralCerrar').addEventListener('click', () => $('lateral').classList.add('oculto'))
+$('lateralCerrar').addEventListener('click', () => { pararDetalle(); $('lateral').classList.add('oculto') })
 $('botonTema').addEventListener('click', () => {
   aplicarTema(document.documentElement.dataset.tema === 'claro' ? 'oscuro' : 'claro')
 })

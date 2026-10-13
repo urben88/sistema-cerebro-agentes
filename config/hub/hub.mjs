@@ -25,6 +25,8 @@ import { crearOrganizacion } from './lib/organizacion.mjs'
 import { crearVentana } from './lib/ventana.mjs'
 import { crearTriaje } from './lib/triaje.mjs'
 import { crearActividad } from './lib/actividad.mjs'
+import { clasificarAlerta } from './lib/errores.mjs'
+import { crearVivo } from './lib/vivo.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HOME = os.homedir()
@@ -157,6 +159,7 @@ function registrarLatido(b) {
     evento: b.evento || previo?.evento || 'desconocido',
     agente: b.agente || previo?.agente || 'cerebro',
     tarea: b.tarea || null,
+    modelo: b.modelo || previo?.modelo || null,
     ts: ahora,
     desde: previo && ahora - previo.ts < LATIDO_TTL ? previo.desde : ahora,
   })
@@ -193,6 +196,20 @@ const actividad = crearActividad({
 })
 try { memoria.limpiarTemporales() } catch { /* nada */ }
 setInterval(() => { try { memoria.limpiarTemporales() } catch { /* nada */ } }, config.autolimpiarHoras * 60 * 60 * 1000).unref?.()
+
+// ---------------------------------------------------------------- vista viva
+// Colector automático (razonamiento, actividad y siguientes pasos por trabajo):
+// alimenta el detalle del panel aunque nadie lo pida, y avisa por SSE a quien
+// esté mirando en ese momento.
+const clientesSSE = new Set()
+function difundirSSE(evento, datos) {
+  const texto = `event: ${evento}\ndata: ${JSON.stringify(datos)}\n\n`
+  for (const c of clientesSSE) {
+    try { c.write(texto) } catch { /* conexión muerta: se limpia sola al cerrar */ }
+  }
+}
+const vivo = crearVivo({ oc, dirDatos: DATA_DIR, emitir: (ev) => difundirSSE('trabajo', ev), intervaloMs: 4000 })
+vivo.arrancar()
 
 // ----------------------------------------------------------------- gasto
 
@@ -357,7 +374,26 @@ const servidor = http.createServer(async (req, res) => {
       memoria.agregarBitacora(b.cwd, `Checkpoint (${b.motivo || 'manual'})`, b.nota || '')
       return enviarJson(res, { ok: true, proyecto: r.proyecto, archivo: r.archivo })
     }
-    if (ruta === '/api/vigilante') return enviarJson(res, { ok: true, alertas: vigilante.alertas(), trabajos: oc.leerJobs(40) })
+    if (ruta === '/api/vigilante') {
+      // R6 · las alertas del vigilante se muestran con el mismo clasificador que los errores.
+      const alertas = vigilante.alertas().map((a) => ({ ...a, info: clasificarAlerta(a) }))
+      return enviarJson(res, { ok: true, alertas, trabajos: oc.leerJobs(40) })
+    }
+    if (ruta.startsWith('/api/trabajos/') && req.method === 'GET') {
+      // R7 · detalle vivo de un trabajo (lo usa el panel lateral). Incluye lo que
+      // el colector ha ido recopilando (razonamiento, actividad y siguientes pasos).
+      const jobId = decodeURIComponent(ruta.slice('/api/trabajos/'.length))
+      if (!jobId || jobId === 'cancelar') return enviarJson(res, { ok: false, error: 'falta jobId' }, 400)
+      const d = oc.detalleJob(jobId)
+      if (d.ok) {
+        // Fiable al abrir: si el colector no lo tenía (trabajo antiguo o recién
+        // abierto), se recoge en el momento; si ya está fresco, es barato.
+        try { await vivo.recolectar(jobId) } catch { /* nada */ }
+        d.vivo = vivo.detalle(jobId)
+      }
+      return enviarJson(res, d, d.ok ? 200 : 404)
+    }
+    if (ruta === '/api/vivo') return enviarJson(res, { ok: true, ...vivo.estado() })
     if (ruta === '/api/trabajos/cancelar' && req.method === 'POST') {
       const b = await cuerpoJson(req)
       const r = await oc.cancelarTrabajos({ directory: b.directory || null, todo: b.todo === true, dryRun: b.dryRun === true })
@@ -391,6 +427,7 @@ const servidor = http.createServer(async (req, res) => {
         Connection: 'keep-alive',
       })
       res.write(': conectado\n\n')
+      clientesSSE.add(res)
       let firmaAnterior = null
       let cerrado = false
       const emitir = async () => {
@@ -411,7 +448,7 @@ const servidor = http.createServer(async (req, res) => {
       const timer = setInterval(emitir, 2000)
       timer.unref?.()
       emitir()
-      req.on('close', () => { cerrado = true; clearInterval(timer) })
+      req.on('close', () => { cerrado = true; clearInterval(timer); clientesSSE.delete(res) })
       return
     }
     if (ruta === '/api/gasto/equipo') return enviarJson(res, await gastoEquipo())
