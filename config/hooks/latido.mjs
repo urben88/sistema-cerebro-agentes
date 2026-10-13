@@ -14,6 +14,8 @@
  * `assistant`), leyendo solo el final del archivo y con tope de 1 s.
  */
 import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { reportarError } from './reportar.mjs'
 
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
@@ -66,6 +68,29 @@ function modeloDe(datos, inicio) {
   return modeloDelTranscript(datos.transcript_path || datos.transcriptPath)
 }
 
+/** Modelo declarado en la definición del agente (`model:` del frontmatter), si existe.
+ *  Para un subagente (`agent_type`), esto es lo fiable: el transcript lo escribe el hilo
+ *  principal y su último mensaje no siempre es el del subagente. */
+function modeloDeDefinicion(tipo, cwd) {
+  if (!tipo) return null
+  const limpio = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null)
+  const rutas = [
+    cwd ? path.join(cwd, '.claude', 'agents', `${tipo}.md`) : null,
+    path.join(os.homedir(), '.claude', 'agents', `${tipo}.md`),
+  ].filter(Boolean)
+  for (const r of rutas) {
+    try {
+      const t = fs.readFileSync(r, 'utf8')
+      const m = t.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/)
+      if (!m) continue
+      const linea = m[1].split(/\r?\n/).find((l) => /^model:\s*/i.test(l))
+      const v = linea ? limpio(linea.replace(/^model:\s*/i, '')) : null
+      if (v) return v
+    } catch { /* sin fichero en esa ruta */ }
+  }
+  return null
+}
+
 function leerStdin() {
   return new Promise((res) => {
     let d = ''
@@ -86,12 +111,15 @@ try {
 
   const evento = datos.hook_event_name || process.argv[2] || ''
   if (EVENTOS.has(evento)) {
-    const modelo = modeloDe(datos, inicio)
+    const agente = datos.agent_type || datos.agent || datos.subagent_type || null
+    // Para subagentes, el modelo de su definición manda (p. ej. explorador → haiku);
+    // si no hay definición, se deduce del payload o de la cola del transcript.
+    const modelo = modeloDeDefinicion(agente, datos.cwd) || modeloDe(datos, inicio)
     const cuerpo = {
       cwd: datos.cwd || process.cwd(),
       sesion: datos.session_id || datos.sessionId || null,
       evento,
-      agente: datos.agent_type || datos.agent || datos.subagent_type || null,
+      agente,
       tarea: (datos.prompt || datos.task || datos.description || '').slice(0, 200) || null,
       modelo: modelo ? modelo.slice(0, 80) : null,
       // Ruta del transcript de la sesión: la usa el hub para la vista viva (solo

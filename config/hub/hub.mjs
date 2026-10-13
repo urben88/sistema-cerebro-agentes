@@ -486,6 +486,10 @@ const servidor = http.createServer(async (req, res) => {
       registrarLatido(b)
       return enviarJson(res, { ok: true })
     }
+    if (ruta === '/api/latidos') {
+      // Latidos vivos (Claude y subagentes): los usa la barra de estado y el panel.
+      return enviarJson(res, { ok: true, latidos: latidosActivos() })
+    }
     if (ruta === '/api/claude/estado' && req.method === 'POST') {
       const b = await cuerpoJson(req)
       registrarEstadoClaude(b)

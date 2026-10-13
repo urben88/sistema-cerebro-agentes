@@ -66,6 +66,20 @@ try {
     }
   } catch { /* sin trabajos legibles: se enseña solo la parte de Claude */ }
 
+  // Subagentes de Claude en marcha (latidos vivos del hub): quién, con qué modelo y cuánto.
+  try {
+    const rl = await fetch(`${HUB}/api/latidos`, { signal: AbortSignal.timeout(500) }).then((r) => r.json())
+    const subs = (rl.latidos || [])
+      .filter((l) => l.agente && l.agente !== 'cerebro' && l.evento !== 'SubagentStop')
+      // Primero los que tienen modelo conocido (explorador, planificador…), luego el resto.
+      .sort((a, b) => Number(!!b.modelo) - Number(!!a.modelo) || (b.ts || 0) - (a.ts || 0))
+    if (subs.length) {
+      const p = subs[0]
+      const extra = subs.length > 1 ? ` (+${subs.length - 1})` : ''
+      partes.push(`👥 ${p.agente}${p.modelo ? ` (${p.modelo})` : ''} · ${duracion(p.desde || p.ts, Date.now())}${extra}`)
+    }
+  } catch { /* hub apagado: sin subagentes */ }
+
   // Estado real para el panel: contexto, ventanas de 5 h/7 d y coste que da Claude
   // en vivo. Best effort y corto: si el hub no está, la barra no se bloquea.
   try {

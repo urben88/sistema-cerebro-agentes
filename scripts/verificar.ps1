@@ -141,6 +141,12 @@ if ($hubOk) {
     $logsOk = ($lg.ok -eq $true -and $null -ne $lg.errores)
   } catch { $logsOk = $false }
   Test-Item $logsOk 'GET /api/logs responde (registro de errores)' 'Revisa hub.mjs / lib/errores-log.mjs'
+  $latidosOk = $false
+  try {
+    $lt = Invoke-RestMethod -Uri "http://127.0.0.1:$hubPort/api/latidos" -TimeoutSec 4
+    $latidosOk = ($lt.ok -eq $true)
+  } catch { $latidosOk = $false }
+  Test-Item $latidosOk 'GET /api/latidos responde (subagentes en vivo)' 'Revisa hub.mjs / latido.mjs'
   Test-Item (Test-Path -LiteralPath (Join-Path $sysDir 'hub\errores.mjs')) 'CLI de errores instalada (hub/errores.mjs)' 'Ejecuta install.ps1'
 }
 foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'estado.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'hallazgos.mjs')) {
