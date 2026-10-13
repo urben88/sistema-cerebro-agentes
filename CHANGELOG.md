@@ -14,6 +14,8 @@ Versionado semántico (MAJOR.MINOR.PATCH).
   - **barra de estado** (`config/hub/estado-linea.mjs`): modelo, contexto y trabajo de OpenCode en curso (o cierre reciente) por proyecto. `settings-merge` la registra solo si no hay una `statusLine` propia; el desinstalador la retira.
 - **Agentes por proyecto**: documentados en `docs/agentes-por-proyecto.md` — nativos en `<proyecto>/.claude/agents/` y `<proyecto>/.opencode/agents/`, aditivos a los roles por defecto (globales, siempre presentes) y versionados en git.
 - **Regla de subagentes baratos**: `cerebro` y `CLAUDE.md` exigen `subagent_type` explícito y prohíben `fork`/`general-purpose` (corren en Sonnet); se anuncia el modelo al lanzar. Solo `arquitecto` usa Sonnet a propósito.
+- **Apagado al cerrar la sesión**: hook `cerrar-trabajos.mjs` en `SessionEnd` (cualquier motivo: `prompt_input_exit`, `logout`, `clear`, `other`) que cancela los trabajos de OpenCode del proyecto abortando sus sesiones en el servidor V1 y lo anota en la bitácora — nada sigue consumiendo tokens en segundo plano.
+- **Botón de pánico**: comando `cerebro-parar` (todos / un proyecto / `--seco`), herramienta MCP `parar_trabajos` (pídeselo al Cerebro en el chat) y `POST /api/trabajos/cancelar` (para el panel).
 - Spec `docs/specs/02-planificador-y-visibilidad.md`.
 
 ### Corregido
@@ -22,6 +24,7 @@ Versionado semántico (MAJOR.MINOR.PATCH).
 - **Actualizaciones del hub en Docker**: `install.ps1` reconstruye siempre las imágenes (las capas sin cambios salen de caché), así los cambios del hub llegan al contenedor; antes solo construía si faltaba la imagen.
 - **Trabajos del MCP visibles en Docker**: el hub monta la carpeta de tareas de `opencode-mcp` (vía `OPENCODE_MCP_TASKS`), así el panel y el vigilante ven los trabajos también en contenedor.
 - Datos sucios de trabajos antiguos (`agent: "Object"`) normalizados en la vista de trabajos.
+- El hook de cierre no usa `process.exit()`: en Windows, salir con sockets de `fetch` cerrándose reventaba con una aserción de libuv.
 
 ### Cambiado
 

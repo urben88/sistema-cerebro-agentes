@@ -46,6 +46,20 @@ opencode_fire({
 - **Costes.** Claude (suscripción) piensa; OpenCode gasta tokens baratos. Los subagentes baratos de Claude son **Haiku** (`planificador`, `explorador`, `redactor`, `analista`, `subdirector`); solo `arquitecto` usa Sonnet a propósito. `local` (Ollama) es gratis y solo se usa si lo pides.
 - **Ver estado sin Claude:** `scripts/verificar.ps1` / `verificar.sh`.
 
+## Pararlo todo de golpe
+
+- **Al cerrar el chat** (o hacer `/clear`), el sistema apaga solo los trabajos de OpenCode de ese proyecto: nada sigue gastando tokens en segundo plano. Queda constancia en la bitácora del hub.
+- **Botón de pánico** si algo se quedó colgado (o Claude no pudo avisar al cerrarse):
+
+  ```powershell
+  cerebro-parar            # cancela TODOS los trabajos activos
+  cerebro-parar --seco     # no toca nada: solo dice lo que haría
+  cerebro-parar C:\ruta    # solo los de ese proyecto
+  ```
+
+  También puedes pedírselo al Cerebro en el chat («para todo»): usa la herramienta `parar_trabajos`.
+- Si cierras la ventana a lo bruto (kill/crash), el aviso de cierre no siempre llega: tira de `cerebro-parar`.
+
 ## Ver quién hace qué (modelos, esfuerzo y progreso)
 
 **Subagentes de Claude** (`planificador`, `explorador`, `redactor`, `analista`, `subdirector`; `arquitecto` es el único Sonnet):

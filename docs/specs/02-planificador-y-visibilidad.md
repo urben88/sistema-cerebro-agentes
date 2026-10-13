@@ -20,6 +20,7 @@ Reducir los tokens gastados en suposiciones (preguntar antes de generar) y hacer
 7. **R7 · Subagentes de Claude**: el prompt de `cerebro` y `CLAUDE.md` exigen `subagent_type` explícito y prohíben `fork`/`general-purpose`; se anuncia el modelo (Haiku; Sonnet solo `arquitecto`).
 8. **R8 · Agentes por proyecto**: documentados en `docs/agentes-por-proyecto.md` (nativos en `.claude/agents/` y `.opencode/agents/`, aditivos a los roles por defecto, versionados).
 9. **R9 · Despliegue**: instaladores, desinstaladores y verificadores cubren los agentes nuevos, la barra de estado y `trabajo_estado`; `settings-merge` no registra hooks ni statusLine que no existan (regresión del error `MODULE_NOT_FOUND`).
+10. **R10 · Apagado al cerrar**: `SessionEnd` (cualquier motivo) cancela los trabajos del proyecto (abort en el servidor V1 + marcar como cancelados + bitácora); botón de pánico con `cerebro-parar`, herramienta `parar_trabajos` y `POST /api/trabajos/cancelar`.
 
 ## Fuera de alcance
 - Emitir en streaming cada mensaje del agente OpenCode (se resumen por hitos; el detalle completo queda en su transcript).
@@ -31,3 +32,4 @@ Reducir los tokens gastados en suposiciones (preguntar antes de generar) y hacer
 - CA3: `settings-merge.mjs` es idempotente, registra la statusLine solo si no hay propia y limpia registros de hooks ausentes (probado con HOME temporal).
 - CA4: `scripts/verificar.ps1` sale en verde con los agentes nuevos y la barra registrada.
 - CA5: el instalador despliega `planificador.md` (Claude y OpenCode) y `hub/estado-linea.mjs`.
+- CA6: al cerrar una sesión con un trabajo activo, el hook lo deja en `cancelled` en ~0,5 s y con constancia en la bitácora (probado con jobs reales); `cerebro-parar --seco` lista sin tocar; `parar_trabajos` del MCP cancela; el registro de `SessionEnd` es idempotente (probado con HOME temporal).

@@ -66,6 +66,7 @@ bash install.sh
 | Quiero ver o parar el servidor | — | `servidor.ps1 -Status` / `-Stop`, o `bash servidor.sh --status` / `--stop` |
 | `claude mcp list` dice que opencode no conecta | Node desactualizado o npx sin red la primera vez | Comprueba Node ≥ 22; ejecuta `npx -y opencode-mcp` una vez a mano para forzar la descarga |
 | Un trabajo queda en `input_required` | OpenCode pide un permiso o lanza una pregunta | El Cerebro lo resuelve con `opencode_job_input`; si no, responde tú en el chat de Claude Code |
+| Se quedó algo trabajando en segundo plano y no quiero gastar | Al cerrar Claude normalmente se cancela solo (hook de cierre) | `cerebro-parar` para todos; `cerebro-parar --seco` para verlo antes; o «para todo» en el chat del Cerebro |
 | Las manos fallan con error de proveedor | Proveedor desconectado | `opencode auth login` → DeepSeek (o el que uses) |
 | «requires more credits, or fewer max_tokens» | El modelo va vía OpenRouter y la cuenta no tiene crédito | Recarga tu cuenta de OpenRouter o vuelve a `deepseek/deepseek-flash` |
 | «No model is available» | Proveedor desconectado o modelo mal escrito | Ejecuta `opencode models` y comprueba que aparece `deepseek/deepseek-flash` |

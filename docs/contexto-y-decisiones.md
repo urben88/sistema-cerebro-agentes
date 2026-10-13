@@ -121,6 +121,9 @@ Detectado en el transcript del usuario: subagentes en Sonnet porque se lanzaron 
 ### D31 — Despliegue consistente: hooks y hub al día · 2026-10-13
 Incidencia real: `latido.mjs` estaba registrado en `settings.json` pero no desplegado (`MODULE_NOT_FOUND` en cada Stop) y la imagen Docker del hub no se reconstruía al actualizar (el panel «La oficina» no llegaba al contenedor). `settings-merge.mjs` ahora solo registra hooks/statusLine que existen y limpia registros huérfanos; `install.ps1` reconstruye siempre las imágenes (capa cacheada si no hay cambios), como ya hacía `install.sh`.
 
+### D32 — Apagado al cerrar la sesión y botón de pánico · 2026-10-13
+Petición del usuario: nada debe seguir consumiendo tokens cuando cierra el chat que lanzó los subagentes. `SessionEnd` (todos los motivos: `prompt_input_exit`, `logout`, `clear`, `other`) ejecuta `cerrar-trabajos.mjs`, que cancela los trabajos activos del proyecto abortando sus sesiones en el servidor V1 (`POST /session/{id}/abort`) y los marca como `cancelled`; budget de 8 s (el hook tarda ~0,5 s) y registro en la bitácora. Complementos: comando `cerebro-parar` (todos / un proyecto / `--seco`), herramienta MCP `parar_trabajos` (desde el chat) y `POST /api/trabajos/cancelar` (para el panel). Si el cierre es brusco y el hook no corre, el comando lo cubre. Nota: el hook no usa `process.exit()` (aserción de libuv en Windows al cerrar con fetches pendientes).
+
 ## Notas técnicas útiles
 
 - **Herramientas clave del MCP (perfil essential):** `opencode_setup`, `opencode_context`, `opencode_status`, `opencode_ask`, `opencode_fire`, `opencode_run`, `opencode_reply`, `opencode_check`, `opencode_wait`, `opencode_job_get/list/cancel/input`, `opencode_question_*`, `opencode_permission_*`, `opencode_conversation`, `opencode_review_changes`.
