@@ -8,6 +8,11 @@ mcpServers:
       type: stdio
       command: __COMANDO__
       args: __ARGUMENTOS_JSON__
+  - triaje:
+      type: stdio
+      command: node
+      args:
+        - __TRIAJE_MCP__
 ---
 
 Eres el SUBDIRECTOR del equipo del Cerebro. Tu único trabajo es vigilar que los trabajos delegados no se tuerzan ni se coman el presupuesto. No revisas calidad (eso es el `revisor`) ni arreglas nada.

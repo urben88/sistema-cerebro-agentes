@@ -19,6 +19,10 @@ export function crearMemoria(raiz, { temporalDias = 14, plantillasDir = null } =
   const registroPath = path.join(raiz, 'proyectos.json')
 
   const ahoraISO = () => new Date().toISOString().replace('T', ' ').slice(0, 16)
+  // Normalización de rutas válida en cualquier sistema (Windows nativo o contenedor Linux):
+  // se comparan cadenas, no se resuelven contra el sistema de archivos.
+  const normalizar = (r) => String(r || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  const nombreDe = (r) => String(r || '').split(/[\\/]/).filter(Boolean).pop() || 'proyecto'
   const plantilla = (nombre) => {
     if (!plantillasDir) return ''
     try { return fs.readFileSync(path.join(plantillasDir, nombre), 'utf8') } catch { return '' }
@@ -36,25 +40,25 @@ export function crearMemoria(raiz, { temporalDias = 14, plantillasDir = null } =
   function guardarRegistro(r) { fs.mkdirSync(raiz, { recursive: true }); fs.writeFileSync(registroPath, JSON.stringify(r, null, 2) + '\n') }
 
   function slugDe(ruta) {
-    const base = path.basename(ruta).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'proyecto'
-    const h = crypto.createHash('sha1').update(ruta.toLowerCase()).digest('hex').slice(0, 6)
+    const base = nombreDe(ruta).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'proyecto'
+    const h = crypto.createHash('sha1').update(normalizar(ruta)).digest('hex').slice(0, 6)
     return `${base}-${h}`
   }
 
   function buscarProyecto(cwd) {
-    const ruta = path.resolve(cwd || '.')
+    const n = normalizar(cwd)
     const reg = cargarRegistro()
     for (const [slug, p] of Object.entries(reg)) {
-      if (p.ruta.toLowerCase() === ruta.toLowerCase()) return { slug, ...p }
+      if (normalizar(p.ruta) === n) return { slug, ...p }
     }
     return null
   }
 
   function crearProyecto(cwd) {
-    const ruta = path.resolve(cwd || '.')
+    const ruta = String(cwd || '.').replace(/[\\/]+$/, '')
     const slug = slugDe(ruta)
     const reg = cargarRegistro()
-    if (!reg[slug]) reg[slug] = { ruta, nombre: path.basename(ruta), creado: Date.now(), actualizado: Date.now(), ultimoUso: Date.now() }
+    if (!reg[slug]) reg[slug] = { ruta, nombre: nombreDe(ruta), creado: Date.now(), actualizado: Date.now(), ultimoUso: Date.now() }
     reg[slug].ultimoUso = Date.now()
     guardarRegistro(reg)
     fs.mkdirSync(path.join(dirProyectos, slug, 'checkpoints'), { recursive: true })
@@ -171,7 +175,7 @@ export function crearMemoria(raiz, { temporalDias = 14, plantillasDir = null } =
   function briefing(cwd, { alertas = [], jobs = [] } = {}) {
     const p = buscarProyecto(cwd)
     const lineas = []
-    lineas.push(`# Briefing · ${p ? p.nombre : path.basename(path.resolve(cwd || '.'))}`)
+    lineas.push(`# Briefing · ${p ? p.nombre : nombreDe(cwd)}`)
     lineas.push(`Generado por Cerebro Hub · ${ahoraISO()}${p ? ` · memoria: ${p.slug}` : ' · (proyecto nuevo, aún sin memoria)'}`)
     if (p) {
       const estado = leerEstado(p.slug)
@@ -181,8 +185,8 @@ export function crearMemoria(raiz, { temporalDias = 14, plantillasDir = null } =
       lineas.push('', '## Contexto del repositorio', contexto ? contexto.trim() : '(sin reconocimiento guardado; si el repo es nuevo o cambió, delega el reconocimiento: explorador/explorador-ds y guarda CONTEXTO-REPO.md)')
       if (movimientos.length) lineas.push('', '## Últimos movimientos (bitácora)', ...movimientos)
     }
-    const rutaActual = path.resolve(cwd || '.').toLowerCase().replace(/[\\/]+$/, '')
-    const esDeAqui = (d) => String(d || '').toLowerCase().replace(/[\\/]+$/, '') === rutaActual
+    const rutaActual = normalizar(cwd)
+    const esDeAqui = (d) => normalizar(d) === rutaActual
     const alertasPropias = alertas.filter((a) => esDeAqui(a.directory)).slice(0, 5)
     const alertasOtras = alertas.filter((a) => !esDeAqui(a.directory)).length
     if (alertasPropias.length) {

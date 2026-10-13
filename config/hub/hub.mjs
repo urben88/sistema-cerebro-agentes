@@ -23,6 +23,7 @@ import { crearOpenCode } from './lib/opencode.mjs'
 import { crearVigilante } from './lib/vigilante.mjs'
 import { crearOrganizacion } from './lib/organizacion.mjs'
 import { crearVentana } from './lib/ventana.mjs'
+import { crearTriaje } from './lib/triaje.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HOME = os.homedir()
@@ -32,6 +33,10 @@ const MEMORIA_DIR = process.env.HUB_MEMORIA_DIR || path.join(DATA_DIR, 'memoria'
 const LOGS_DIR = path.join(DATA_DIR, 'logs')
 const PANEL_DIR = path.join(__dirname, 'panel')
 const PLANTILLAS_DIR = path.join(__dirname, 'plantillas')
+const OPENCODE_DIR = process.env.OPENCODE_DIR || path.join(HOME, '.config', 'opencode')
+const CLAUDE_DIR = process.env.CLAUDE_DIR || path.join(HOME, '.claude')
+const AUTH_JSON = process.env.OPENCODE_AUTH || path.join(HOME, '.local', 'share', 'opencode', 'auth.json')
+const OPENCODE_HOST = process.env.OPENCODE_HOST || null
 const MAX_CUERPO = 1024 * 1024
 
 // ----------------------------------------------------------------- config
@@ -59,6 +64,7 @@ const argPort = process.argv.indexOf('--port')
 const puertoArg = argPort >= 0 ? parseInt(process.argv[argPort + 1], 10) || 0 : 0
 const config = cargarConfig()
 const LISTEN_PORT = puertoArg || config.puerto
+const LISTEN_HOST = process.env.HUB_HOST || '127.0.0.1'
 
 fs.mkdirSync(LOGS_DIR, { recursive: true })
 
@@ -66,9 +72,17 @@ fs.mkdirSync(LOGS_DIR, { recursive: true })
 
 const memoria = crearMemoria(MEMORIA_DIR, { temporalDias: config.temporalDias, plantillasDir: PLANTILLAS_DIR })
 memoria.inicializar()
-const oc = crearOpenCode({ systemDir: SYSTEM_DIR })
-const organizacion = crearOrganizacion({ home: HOME })
-const ventana = crearVentana()
+const oc = crearOpenCode({ systemDir: SYSTEM_DIR, host: OPENCODE_HOST })
+const organizacion = crearOrganizacion({ home: HOME, opencodeDir: OPENCODE_DIR, claudeDir: CLAUDE_DIR })
+const ventana = crearVentana({ baseDir: path.join(CLAUDE_DIR, 'projects') })
+
+// Reglas de reparto: las del usuario (en la carpeta de datos) mandan sobre las de serie
+function cargarReglas() {
+  const leer = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return null } }
+  return leer(path.join(DATA_DIR, 'reglas.json')) || leer(path.join(__dirname, 'reglas.json')) || { reglas: [], porDefecto: {} }
+}
+const reglas = cargarReglas()
+const triaje = crearTriaje({ reglas, logDecisiones: path.join(LOGS_DIR, 'decisiones.jsonl') })
 
 function registrarAlerta(a) {
   try { fs.appendFileSync(path.join(LOGS_DIR, 'vigilante.jsonl'), JSON.stringify({ ...a, fecha: new Date().toISOString() }) + '\n') } catch { /* nada */ }
@@ -86,7 +100,7 @@ async function gasto(forzar = false) {
   if (!forzar && cacheGasto.datos && ahora - cacheGasto.ts < 5 * 60 * 1000) return cacheGasto.datos
   const datos = { generado: ahora }
   try {
-    const auth = JSON.parse(fs.readFileSync(path.join(HOME, '.local', 'share', 'opencode', 'auth.json'), 'utf8'))
+    const auth = JSON.parse(fs.readFileSync(AUTH_JSON, 'utf8'))
     const key = auth?.deepseek?.key
     if (key) {
       const r = await fetch('https://api.deepseek.com/user/balance', { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000) })
@@ -150,10 +164,12 @@ const servidor = http.createServer(async (req, res) => {
   try {
     if (ruta === '/api/salud') {
       const v1 = await oc.get('/config', 2500)
+      const laya = await triaje.disponible()
       return enviarJson(res, {
         ok: true, app: 'cerebro-hub', version: '0.2.0', puerto: LISTEN_PORT,
         datos: DATA_DIR, memoria: MEMORIA_DIR,
         servidorV1: oc.puerto() || null, servidorV1Ok: v1.ok,
+        laya,
         alertas: vigilante.alertas().length, hora: Date.now(),
       })
     }
@@ -207,6 +223,22 @@ const servidor = http.createServer(async (req, res) => {
     if (ruta === '/api/organizacion') return enviarJson(res, { ok: true, ...organizacion.datos() })
     if (ruta === '/api/gasto') return enviarJson(res, await gasto())
     if (ruta === '/api/ventana') return enviarJson(res, { ok: true, ...(await ventana.calcular()) })
+    if (ruta === '/api/reglas') return enviarJson(res, { ok: true, reglas })
+    if (ruta === '/api/laya') return enviarJson(res, { ok: true, url: process.env.LAYA_URL || 'http://127.0.0.1:8000', disponible: await triaje.disponible() })
+    if (ruta === '/api/triaje' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (!b.tarea) return enviarJson(res, { ok: false, error: 'falta tarea' }, 400)
+      const d = await triaje.decidir({ tarea: b.tarea, contexto: b.contexto || '' })
+      return enviarJson(res, { ok: true, ...d, presupuestos: reglas.presupuestos || {}, paraleloMax: reglas.paraleloMax ?? 2 })
+    }
+    if (ruta === '/api/decisiones') {
+      let texto = ''
+      try { texto = fs.readFileSync(path.join(LOGS_DIR, 'decisiones.jsonl'), 'utf8') } catch { /* sin log */ }
+      const lineas = texto.trim().split('\n').filter(Boolean).slice(-30).reverse()
+      const decisiones = []
+      for (const l of lineas) { try { decisiones.push(JSON.parse(l)) } catch { /* nada */ } }
+      return enviarJson(res, { ok: true, decisiones })
+    }
     if (ruta === '/favicon.ico') { res.writeHead(204); return res.end() }
 
     const estaticos = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css' }
@@ -225,8 +257,8 @@ const servidor = http.createServer(async (req, res) => {
   }
 })
 
-servidor.listen(LISTEN_PORT, '127.0.0.1', () => {
-  console.log(`Cerebro Hub en http://127.0.0.1:${LISTEN_PORT}`)
+servidor.listen(LISTEN_PORT, LISTEN_HOST, () => {
+  console.log(`Cerebro Hub en http://${LISTEN_HOST}:${LISTEN_PORT}`)
   console.log(`Datos:   ${DATA_DIR}`)
   console.log(`Memoria: ${MEMORIA_DIR}`)
   console.log(`Servidor OpenCode V1: ${oc.puerto() ? `127.0.0.1:${oc.puerto()}` : '(no arrancado)'}`)

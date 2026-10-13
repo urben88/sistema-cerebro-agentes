@@ -97,6 +97,20 @@ function pintarVentana(v) {
   tb.innerHTML = filas.map(([modelo, d]) => `<tr><td>${esc(modelo)}</td><td>${k(d.n5)}</td><td>${k(d.n7)}</td><td class="tenue">${k(d.c7)}</td><td class="tenue">${fmt(d.mensajes)}</td></tr>`).join('')
 }
 
+function pintarTriaje(laya, dec) {
+  $('layaEstado').innerHTML = `
+    <div class="agente"><div><span class="nombre">Laya</span>
+      ${laya.disponible ? '<span class="badge verde">disponible</span>' : '<span class="badge gris">no disponible (triaje por reglas)</span>'}</div>
+      <div class="desc">${esc(laya.url || '')}</div></div>`
+  const lista = (dec.decisiones || []).slice(0, 8)
+  $('decisiones').innerHTML = lista.length
+    ? lista.map((d) => `<div class="agente"><div><span class="badge azul">${esc(d.capa)}</span> <span class="nombre">${esc(d.agente || '?')}</span>
+        ${d.esfuerzo ? `<span class="chip modelo">${esc(String(d.esfuerzo))}</span>` : ''}
+        ${d.confianza != null ? `<span class="tenue">p=${Number(d.confianza).toFixed(2)}</span>` : ''}</div>
+      <div class="desc">${esc((d.tarea || '').slice(0, 100))} · ${esc(d.fuente || '')}</div></div>`).join('')
+    : '<p class="tenue">Sin decisiones registradas todavía.</p>'
+}
+
 async function refrescar() {
   try {
     const [salud, org, proyectos, vig] = await Promise.all([
@@ -127,12 +141,15 @@ async function refrescar() {
 
 async function refrescarPesado() {
   try {
-    const [gasto, ventana] = await Promise.all([
+    const [gasto, ventana, laya, dec] = await Promise.all([
       fetch('/api/gasto').then((r) => r.json()),
       fetch('/api/ventana').then((r) => r.json()),
+      fetch('/api/laya').then((r) => r.json()),
+      fetch('/api/decisiones').then((r) => r.json()),
     ])
     pintarGasto(gasto)
     pintarVentana(ventana)
+    pintarTriaje(laya, dec)
   } catch { /* nada */ }
 }
 

@@ -6,8 +6,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 
-export function crearOpenCode({ systemDir }) {
+export function crearOpenCode({ systemDir, host = null }) {
   const portFile = path.join(systemDir, 'server-port.txt')
+  const baseUrl = (p) => (host ? `http://${host}:${p}` : `http://127.0.0.1:${p}`)
   const tareasMcp = process.platform === 'win32'
     ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'opencode-mcp', 'tasks')
     : path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local', 'state'), 'opencode-mcp', 'tasks')
@@ -26,7 +27,7 @@ export function crearOpenCode({ systemDir }) {
     const p = puerto()
     if (!p) return { ok: false, error: 'servidor V1 no arrancado (falta server-port.txt)' }
     try {
-      const res = await fetch(`http://127.0.0.1:${p}${ruta}`, { signal: AbortSignal.timeout(timeout) })
+      const res = await fetch(`${baseUrl(p)}${ruta}`, { signal: AbortSignal.timeout(timeout) })
       const texto = await res.text()
       if (!res.ok) return { ok: false, status: res.status, error: `HTTP ${res.status}`, texto }
       return { ok: true, texto }

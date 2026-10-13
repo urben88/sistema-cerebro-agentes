@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "descripcion": "Reglas de reparto del Cerebro Hub: respaldo del triaje con Laya y guía para los agentes. Editable desde el panel (se copia a la carpeta de datos).",
+  "confianzaMinima": 0.6,
+  "paraleloMax": 2,
+  "presupuestos": {
+    "explorador-ds": 0.2,
+    "redactor-ds": 0.2,
+    "testeador": 0.3,
+    "revisor": 0.5,
+    "implementador": 0.75,
+    "debugger": 1.0,
+    "local": 0
+  },
+  "reglas": [
+    { "claves": ["arquitectura", "migracion", "migración", "contrato", "diseno global", "diseño global", "decision tecnica", "decisión técnica"], "capa": "claude", "agente": "arquitecto", "esfuerzo": "high", "motivo": "decisión de alto valor: la paga el cerebro con Sonnet" },
+    { "claves": ["spec", "especifica", "planifica", "planificar", "requisitos", "desglosa"], "capa": "claude", "agente": "cerebro", "esfuerzo": "medium", "motivo": "pensar, decidir y documentar" },
+    { "claves": ["explorar", "explora", "buscar", "busca", "resumir", "resume", "localiza", "encuentra"], "capa": "opencode", "agente": "explorador-ds", "esfuerzo": "low", "motivo": "lectura barata: no gasta la ventana de Claude" },
+    { "claves": ["documenta", "documentar", "readme", "changelog", "manual", "guia", "guía"], "capa": "opencode", "agente": "redactor-ds", "esfuerzo": "low", "motivo": "redacción barata" },
+    { "claves": ["test", "prueba", "testear", "testeo", "verificar tests"], "capa": "opencode", "agente": "testeador", "esfuerzo": "low", "motivo": "validación mecánica" },
+    { "claves": ["revisar", "revisa", "revision", "revisión", "diff", "calidad", "edge case"], "capa": "opencode", "agente": "revisor", "esfuerzo": "max", "motivo": "revisión técnica contra spec" },
+    { "claves": ["error", "fallo", "bug", "depurar", "depura", "arregla", "roto", "no funciona"], "capa": "opencode", "agente": "debugger", "esfuerzo": "high", "motivo": "diagnóstico y corrección iterativa" },
+    { "claves": ["implementa", "implementar", "crear", "codigo", "código", "endpoint", "componente", "modulo", "módulo", "feature", "funcion", "función", "clase", "refactor"], "capa": "opencode", "agente": "implementador", "esfuerzo": "high", "motivo": "implementación delimitada por spec" },
+    { "claves": ["renombra", "renombrar", "clasifica", "transforma", "mecanico", "mecánico", "boilerplate"], "capa": "opencode", "agente": "local", "esfuerzo": null, "motivo": "tarea mecánica (solo si el usuario lo pide expresamente)" }
+  ],
+  "porDefecto": { "capa": "claude", "agente": "cerebro", "esfuerzo": "medium", "motivo": "sin coincidencia clara: decide el cerebro" }
+}

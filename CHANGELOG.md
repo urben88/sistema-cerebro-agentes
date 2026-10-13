@@ -18,6 +18,17 @@ Versionado semántico (MAJOR.MINOR.PATCH).
   - **Panel minimalista** (`/`): organización (agentes, modelo y esfuerzo en vivo), proyectos, vigilante, trabajos, gasto y ventana de Claude.
   - **Gasto**: saldo de DeepSeek + coste de sesiones + estimación local de la ventana de Claude (tokens nuevos y caché por modelo, 5 h / 7 días).
   - Lanzador `hub.ps1` / `hub.sh` (arrancar, parar, estado), en el puerto 4597.
+- **Laya en Docker** (`docker/`): modelo local de decisiones (Apache 2.0, CPU) servido por `laya[serve]` en su contenedor, con los checkpoints en un volumen propio. El hub lo consulta por su red interna.
+  - **Triaje** (`/api/triaje`): decide `{capa, agente, esfuerzo, escalar, riesgo}` con la confianza calibrada de Laya; si no está disponible o duda, aplica `reglas.json` (editable en la carpeta de datos). Cada decisión queda registrada en `logs/decisiones.jsonl`.
+  - **MCP `triaje`** (`config/mcp/triaje-mcp.mjs`): herramienta `triaje_decidir` disponible para Claude (inline en `cerebro` y `subdirector`) y para OpenCode.
+  - **Stack Docker** (`docker/docker-compose.yml`): servicios `hub` (127.0.0.1:4597) y `laya`, con `restart: unless-stopped`, healthchecks y la memoria del host montada; el puente MCP y el servidor V1 siguen en el host (el hub los alcanza por `host.docker.internal`). Gestor: `docker/gestion.ps1` / `gestion.sh` (`up/down/status/logs`).
+  - Panel: tarjeta de **Triaje · Laya** con estado y últimas decisiones.
+- **Hooks de contexto** (`config/hooks/`, desplegados en `~/.sistema-cerebro-agentes/hooks/` y registrados en `~/.claude/settings.json`):
+  - `SessionStart` (startup/resume/clear/compact): inyecta el briefing del proyecto (estado, contexto, bitácora, alertas y trabajos) al abrir cualquier sesión; si el hub está apagado, lee la memoria del disco; si el proyecto no tiene memoria, no dice nada.
+  - `PreCompact` (manual/auto): guarda un checkpoint antes de comprimir y recuerda completar el `ESTADO.md`.
+  - `SessionEnd(clear)`: checkpoint de seguridad al cerrar la sesión con `/clear`.
+  - CLI `estado` (`--leer`, `--escribir --archivo`, `--bitacora`, `--checkpoint`) para que los agentes actualicen la memoria en una línea.
+  - Verificado de punta a punta: una sesión real de Claude respondió la tarea activa del proyecto **sin que se le dijera**, solo desde el briefing inyectado.
 
 ### Corregido
 

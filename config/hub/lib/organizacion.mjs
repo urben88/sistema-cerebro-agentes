@@ -42,12 +42,14 @@ function leerDir(dir) {
   return lista
 }
 
-export function crearOrganizacion({ home = os.homedir() } = {}) {
+export function crearOrganizacion({ home = os.homedir(), opencodeDir = null, claudeDir = null } = {}) {
+  const dirOC = opencodeDir || path.join(home, '.config', 'opencode')
+  const dirCC = claudeDir || path.join(home, '.claude')
   function datos() {
-    const ocPlural = leerDir(path.join(home, '.config', 'opencode', 'agents'))
-    const ocSingular = leerDir(path.join(home, '.config', 'opencode', 'agent'))
+    const ocPlural = leerDir(path.join(dirOC, 'agents'))
+    const ocSingular = leerDir(path.join(dirOC, 'agent'))
     const opencode = [...ocPlural, ...ocSingular.filter((a) => !ocPlural.some((b) => b.nombre === a.nombre))]
-    const claude = leerDir(path.join(home, '.claude', 'agents'))
+    const claude = leerDir(path.join(dirCC, 'agents'))
     return {
       claude: claude.map((a) => ({ ...a, origen: '~/.claude/agents' })),
       opencode: opencode.map((a) => ({ ...a, origen: '~/.config/opencode/agents' })),
