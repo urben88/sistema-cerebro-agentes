@@ -67,3 +67,10 @@ Rehacer el panel del Cerebro Hub (`config/hub/panel/`) para que se entienda de u
 
 ## Convenciones a respetar
 ESM sin dependencias, sin punto y coma, factorías `crearX({...})`, JSDoc de cabecera, comentarios y UI en español, `try/catch` silencioso en lo no crítico, rutas con `path` y compatibilidad Windows/Linux.
+
+## Ajustes tras el Tramo A (decisiones del Cerebro)
+- **A1 · Familia `generica`** es un valor válido más del enum de R1 (agente desconocido o sin nombre). Se dibuja como un personaje neutro gris.
+- **A2 · Trabajos zombi**: un job `running|accepted` cuyo `updatedAt` tenga más de 30 min NO es «trabajando»: pasa a `atascado` si tiene menos de 12 h, y se oculta (fuera de la escena) si tiene más de 12 h. Un job `running` de hace horas no puede animar a nadie tecleando. Lo hace el backend (`actividad.mjs`), no el panel.
+- **A3 · Nombre de agente**: si el nombre es `Object`, vacío o `desconocido`, el panel lo muestra como «Agente» con la familia `generica`. Nunca imprimir «Object».
+- **A4 · Estilo visual elegido**: figuras planas minimalistas en SVG (cabeza redonda, cuerpo simple, color y accesorio por familia), vista 2D lateral tipo oficina con mesas y monitores. Sin pixel-art ni imágenes externas.
+- **A5 · Pruebas del tramo B**: NO arrancar servidores desde la herramienta bash (se queda colgada esperando al proceso hijo). Valida con `node --check` y pruebas de lógica pura. La comprobación visual la hace el Cerebro en el navegador.
