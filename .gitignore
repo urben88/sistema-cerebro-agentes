@@ -7,3 +7,5 @@ desktop.ini
 *.log
 backups/
 node_modules/
+
+.playwright-mcp/
