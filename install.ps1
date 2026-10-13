@@ -225,23 +225,23 @@ $panelCfg = (@{ repoRoot = $RepoRoot } | ConvertTo-Json)
 [System.IO.File]::WriteAllText((Join-Path $SystemDir 'panel-config.json'), $panelCfg + "`n", (New-Object System.Text.UTF8Encoding($false)))
 Write-Ok 'panel-config.json escrito (ruta del repositorio)'
 
-# ---------------------------------------------------------------- 4. MCP en Claude Code
-Write-Step 'MCP opencode en Claude Code'
+# ---------------------------------------------------------------- 4. Agente cerebro (con el MCP dentro)
+Write-Step 'Agente cerebro en Claude Code (con el MCP dentro)'
 
-$mcpArgs = @(
-  'mcp', 'add', 'opencode', '--scope', 'user',
-  '--', 'cmd', '/c', 'powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $LauncherPath
-)
-$removeResult = Invoke-Cli 'claude' @('mcp', 'remove', 'opencode', '--scope', 'user')
-if ($removeResult.Code -eq 0) { Write-Note 'Registro MCP anterior sustituido' }
-$addResult = Invoke-Cli 'claude' $mcpArgs
-if ($addResult.Code -eq 0) {
-  Write-Ok 'MCP registrado (scope de usuario, via lanzador)'
-} else {
-  Write-Warn 'No se pudo registrar el MCP automaticamente:'
-  Write-Host $addResult.Output -ForegroundColor DarkGray
-  $warnings.Add("Registra el MCP a mano: claude mcp add opencode --scope user -- cmd /c powershell -NoProfile -ExecutionPolicy Bypass -File `"$LauncherPath`"")
-}
+# Migracion: el MCP ya no se registra globalmente; vive DENTRO del agente cerebro.
+$rm = Invoke-Cli 'claude' @('mcp', 'remove', 'opencode', '--scope', 'user')
+if ($rm.Code -eq 0) { Write-Note 'Retirado el registro global antiguo del MCP (ahora vive en el agente cerebro)' }
+
+$agentSrc = Join-Path $ConfigRoot 'claude\agents\cerebro.md'
+$agentDir = Join-Path $UserHome '.claude\agents'
+$agentDst = Join-Path $agentDir 'cerebro.md'
+New-Item -ItemType Directory -Force -Path $agentDir | Out-Null
+Backup-Item $agentDst
+$argsJson = '["/c","powershell","-NoProfile","-ExecutionPolicy","Bypass","-File","' + ($LauncherPath.Replace('\', '\\')) + '"]'
+$tpl = [System.IO.File]::ReadAllText($agentSrc).Replace('__COMANDO__', 'cmd').Replace('__ARGUMENTOS_JSON__', $argsJson)
+[System.IO.File]::WriteAllText($agentDst, $tpl, (New-Object System.Text.UTF8Encoding($false)))
+Write-Ok "Agente cerebro instalado: $agentDst"
+Write-Note 'Activalo con @cerebro, "usa el agente cerebro" o claude --agent cerebro'
 
 # ---------------------------------------------------------------- 5. Rol Cerebro (Claude Code)
 Write-Step 'Rol Cerebro en Claude Code'

@@ -81,17 +81,29 @@ for name in implementador.md revisor.md testeador.md; do
   [ -f "$HOME/.config/opencode/agents/$name" ] && test_item 0 "Agente $name" || test_item 1 "Agente $name no encontrado" 'Ejecuta install.sh'
 done
 
-step 'MCP opencode en Claude Code'
+step 'Agente cerebro en Claude Code'
+AGENT_DST="$HOME/.claude/agents/cerebro.md"
+if [ -f "$AGENT_DST" ]; then
+  test_item 0 'Agente cerebro instalado (~/.claude/agents/cerebro.md)'
+  if grep -q '__COMANDO__' "$AGENT_DST"; then
+    test_item 1 'Agente sin templar (falta la ruta del lanzador)' 'Ejecuta install.sh de nuevo'
+  else
+    test_item 0 'Agente templado (ruta del lanzador aplicada)'
+  fi
+  if grep -q 'mcpServers' "$AGENT_DST" && grep -q 'launcher.sh' "$AGENT_DST"; then
+    test_item 0 'El MCP va inline dentro del agente'
+  else
+    test_item 1 'El MCP inline no aparece en el agente' 'Ejecuta install.sh de nuevo'
+  fi
+else
+  test_item 1 'Agente cerebro no instalado' 'Ejecuta install.sh'
+fi
 MCP_LIST="$(claude mcp list 2>&1 || true)"
 MCP_LINE="$(printf '%s\n' "$MCP_LIST" | grep -E '^[[:space:]]*opencode:' | head -n1 || true)"
 if [ -n "$MCP_LINE" ]; then
-  if printf '%s' "$MCP_LINE" | grep -qi 'connected'; then
-    test_item 0 "Registrado: $(printf '%s' "$MCP_LINE" | sed 's/^[[:space:]]*//')"
-  else
-    test_item 1 "Registrado pero no conectado: $(printf '%s' "$MCP_LINE" | sed 's/^[[:space:]]*//')" 'Reinicia Claude Code; si sigue mal, ejecuta install.sh de nuevo'
-  fi
+  test_item 1 'El MCP sigue registrado globalmente' 'Retíralo: claude mcp remove opencode --scope user'
 else
-  test_item 1 'MCP opencode no registrado' 'Ejecuta install.sh'
+  test_item 0 'MCP no registrado globalmente (solo dentro del agente)'
 fi
 
 if [ "$SMOKE" -eq 1 ]; then

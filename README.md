@@ -82,19 +82,32 @@ bash scripts/verificar.sh --smoke
 |---|---|---|
 | Servidor OpenCode V1 (`opencode-ai`, el que usa el MCP) | `~/.sistema-cerebro-agentes/server/` (datos aislados en `server-data/`) | se instala con npm (`opencode-ai@1.18.35`) |
 | Lanzador del MCP y gestor del servidor | `~/.sistema-cerebro-agentes/launcher.*`, `servidor.*` | `config/mcp/` |
-| MCP `opencode` en Claude Code (scope de usuario, vía lanzador) | Configuración de Claude Code | `install.ps1` / `install.sh` |
+| Agente `cerebro` en Claude Code (con el MCP `opencode` **inline**: solo existe dentro del agente) | `~/.claude/agents/cerebro.md` | `config/claude/agents/cerebro.md` |
 | Rol Cerebro (memoria global) | `~/.claude/CLAUDE.md` → bloque gestionado | `config/claude/CLAUDE.md` |
 | Skill de delegación | `~/.claude/skills/delegar-a-opencode/` | `config/claude/skills/delegar-a-opencode/` |
 | Agentes de OpenCode | `~/.config/opencode/agents/` | `config/opencode/agents/` |
 
 ## Uso diario
 
-1. Abre Claude Code **en la carpeta del proyecto** donde quieras trabajar.
-2. Pide lo que quieras en lenguaje natural («añade autenticación», «corrige este bug», «crea un script que…»).
-3. El Cerebro investiga, escribe la spec en `docs/specs/`, la delega a OpenCode y vigila la ejecución.
-4. Revisa el resumen que te devuelve el Cerebro y decide el siguiente paso.
+**Claude normal (por defecto):** abre Claude Code en la carpeta del proyecto y trabaja con normalidad — puede hacer cualquier cosa, incluido escribir código, sin OpenCode de por medio.
+
+**Modo combinado (agente `cerebro`):** actívalo y el Cerebro investiga, escribe la spec en `docs/specs/`, la delega a OpenCode y vigila la ejecución; al final te resume qué se hizo.
 
 Detalles y ejemplos en [docs/uso-diario.md](docs/uso-diario.md).
+
+## El modo combinado: agente `cerebro`
+
+El flujo combinado (pensar → documentar → **codificar con OpenCode**) vive en un agente de Claude Code llamado **`cerebro`**, y el MCP de OpenCode **solo existe dentro de ese agente**: en tus sesiones normales de Claude no hay herramientas `opencode_*`.
+
+Actívalo así:
+
+| Forma | Cómo |
+|---|---|
+| **@-mención** (una tarea) | Escribe `@cerebro` en el prompt y elígelo en el autocompletado |
+| **Lenguaje natural** | "usa el agente cerebro para …" (o "modo cerebro") |
+| **Sesión completa** | `claude --agent cerebro` (todos los turnos son el Cerebro) |
+
+La primera vez que se crea `~/.claude/agents/`, reinicia Claude Code para que lo descubra (después, los cambios se detectan en caliente).
 
 ## Panel web en tiempo real
 

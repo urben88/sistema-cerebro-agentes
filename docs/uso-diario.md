@@ -3,11 +3,11 @@
 ## Lo básico
 
 1. Abre **Claude Code dentro de la carpeta del proyecto** (`cd mi-proyecto && claude`).
-2. Pide lo que quieras en lenguaje natural.
-3. El Cerebro investigará, escribirá la especificación en `docs/specs/`, delegará el código a OpenCode y vigilará el trabajo.
-4. Al terminar, te dará un resumen: qué se hizo, qué archivos cambiaron, qué pruebas se ejecutaron y qué queda pendiente.
+2. **Activa el Cerebro** (solo cuando quieras el flujo combinado): escribe `@cerebro` en tu petición, di "usa el agente cerebro", o lanza la sesión entera con `claude --agent cerebro`.
+3. Pide lo que quieras en lenguaje natural.
+4. El Cerebro investigará, escribirá la especificación en `docs/specs/`, delegará el código a OpenCode y vigilará el trabajo. Al terminar te dará un resumen.
 
-Tú no tienes que invocar el MCP a mano: la skill `delegar-a-opencode` hace que Claude sepa cuándo y cómo delegar.
+Fuera del agente `cerebro`, Claude funciona con normalidad y **no tiene** las herramientas de OpenCode (no puede delegar por accidente): el MCP vive dentro del agente.
 
 ## Ejemplo completo
 

@@ -92,6 +92,16 @@ if (Test-Path -LiteralPath $skillDst) {
   Write-Warn 'La skill delegar-a-opencode no estaba instalada'
 }
 
+# 3b. Agente cerebro
+$agentDst = Join-Path $UserHome '.claude\agents\cerebro.md'
+if (Test-Path -LiteralPath $agentDst) {
+  Backup-Item $agentDst
+  Remove-Item -LiteralPath $agentDst -Force
+  Write-Ok "Eliminado: $agentDst"
+} else {
+  Write-Warn 'El agente cerebro no estaba instalado'
+}
+
 # 4. Agentes de OpenCode
 $agentsDst = Join-Path $UserHome '.config\opencode\agents'
 foreach ($name in @('implementador.md', 'revisor.md', 'testeador.md', 'constructor.md')) {

@@ -149,16 +149,18 @@ ok "Instalado: $SYSTEM_DIR/panel.sh"
 node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({ repoRoot: process.argv[2] }, null, 2) + "\n")' "$SYSTEM_DIR/panel-config.json" "$REPO_ROOT"
 ok 'panel-config.json escrito (ruta del repositorio)'
 
-# ---------------------------------------------------------------- 4. MCP en Claude Code
-step 'MCP opencode en Claude Code'
+# ---------------------------------------------------------------- 4. Agente cerebro (con el MCP dentro)
+step 'Agente cerebro en Claude Code (con el MCP dentro)'
 
-claude mcp remove opencode --scope user >/dev/null 2>&1 || true
-if claude mcp add opencode --scope user -- bash "$LAUNCHER" >/dev/null 2>&1; then
-  ok 'MCP registrado (scope de usuario, vía lanzador)'
-else
-  warn 'No se pudo registrar el MCP automáticamente'
-  WARNINGS+=("Registra el MCP a mano: claude mcp add opencode --scope user -- bash \"$LAUNCHER\"")
-fi
+claude mcp remove opencode --scope user >/dev/null 2>&1 && note 'Retirado el registro global antiguo del MCP (ahora vive en el agente cerebro)' || true
+AGENT_DIR="$HOME/.claude/agents"
+AGENT_DST="$AGENT_DIR/cerebro.md"
+mkdir -p "$AGENT_DIR"
+backup_item "$AGENT_DST"
+ARGS_JSON='["'"$SYSTEM_DIR"'/launcher.sh"]'
+node -e 'const fs=require("fs");const [src,dst,cmd,args]=process.argv.slice(1);let t=fs.readFileSync(src,"utf8");t=t.replace("__COMANDO__",cmd).replace("__ARGUMENTOS_JSON__",args);fs.writeFileSync(dst,t)' "$CONFIG_ROOT/claude/agents/cerebro.md" "$AGENT_DST" "bash" "$ARGS_JSON"
+ok "Agente cerebro instalado: $AGENT_DST"
+note 'Actívalo con @cerebro, "usa el agente cerebro" o claude --agent cerebro'
 
 # ---------------------------------------------------------------- 5. Rol Cerebro (Claude Code)
 step 'Rol Cerebro en Claude Code'

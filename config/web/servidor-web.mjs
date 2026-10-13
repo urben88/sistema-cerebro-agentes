@@ -201,6 +201,7 @@ function construirFicheros() {
   add('Cerebro · Claude Code', path.join(HOME, '.claude', 'CLAUDE.md'), 'CLAUDE.md')
   add('Cerebro · Claude Code', path.join(HOME, '.claude', 'skills', 'delegar-a-opencode', 'SKILL.md'), 'SKILL.md')
   add('Cerebro · Claude Code', path.join(HOME, '.claude', 'skills', 'delegar-a-opencode', 'plantilla-spec.md'), 'plantilla-spec.md')
+  glob('Cerebro · Claude Code', path.join(HOME, '.claude', 'agents'), (n) => n.endsWith('.md'))
 
   add('OpenCode · TUI', path.join(HOME, '.config', 'opencode', 'opencode.jsonc'), 'opencode.jsonc')
 

@@ -88,15 +88,18 @@ foreach ($name in @('implementador.md', 'revisor.md', 'testeador.md')) {
   Test-Item (Test-Path -LiteralPath (Join-Path $agentsDst $name)) "Agente $name" 'Ejecuta install.ps1'
 }
 
-Write-Step 'MCP opencode en Claude Code'
-$mcpList = (& claude mcp list 2>&1 | Out-String)
-$line = ($mcpList -split "`n" | Where-Object { $_ -match '^\s*opencode:' } | Select-Object -First 1)
-if ($line) {
-  $trimmed = $line.Trim()
-  Test-Item ($trimmed -match 'Connected') "Registrado: $trimmed" 'Reinicia Claude Code; si sigue mal, ejecuta install.ps1 de nuevo'
-} else {
-  Test-Item $false 'MCP opencode no registrado' 'Ejecuta install.ps1'
+Write-Step 'Agente cerebro en Claude Code'
+$agentDst = Join-Path $UserHome '.claude\agents\cerebro.md'
+$agentOk = Test-Path -LiteralPath $agentDst
+Test-Item $agentOk 'Agente cerebro instalado (~/.claude/agents/cerebro.md)' 'Ejecuta install.ps1'
+if ($agentOk) {
+  $agentTxt = [System.IO.File]::ReadAllText($agentDst)
+  Test-Item (-not $agentTxt.Contains('__COMANDO__')) 'Agente templado (ruta del lanzador aplicada)' 'Ejecuta install.ps1 de nuevo'
+  Test-Item ($agentTxt.Contains('mcpServers') -and $agentTxt.Contains('launcher.ps1')) 'El MCP va inline dentro del agente' 'Ejecuta install.ps1 de nuevo'
 }
+$mcpList = (& claude mcp list 2>&1 | Out-String)
+$globalLine = ($mcpList -split "`n" | Where-Object { $_ -match '^\s*opencode:' } | Select-Object -First 1)
+Test-Item (-not $globalLine) 'MCP no registrado globalmente (solo dentro del agente)' 'Retiralo: claude mcp remove opencode --scope user'
 
 if ($Smoke) {
   Write-Step 'Smoke test del MCP (arranque real por stdio)'

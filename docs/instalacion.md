@@ -34,7 +34,7 @@ bash install.sh
 
 1. Comprueba prerrequisitos (Node ≥ 22, OpenCode, Claude Code) y avisa si falta algo.
 2. Avisa si el proveedor **DeepSeek** no está conectado (no bloquea la instalación, pero las manos no podrán trabajar hasta conectarlo); informa si OpenRouter también está conectado (opcional).
-3. Instala el **servidor OpenCode V1** (`opencode-ai 1.18.35`) en `~/.sistema-cerebro-agentes/server` con datos aislados, copia el **lanzador** a `~/.sistema-cerebro-agentes/` y registra el MCP `opencode` en Claude Code (scope de usuario) apuntando a ese lanzador. El lanzador arranca el servidor en `127.0.0.1:4599` cuando hace falta y lo reutiliza después (perfil `essential`: 25 herramientas MCP).
+3. Instala el **servidor OpenCode V1** (`opencode-ai 1.18.35`, datos aislados) y copia el **lanzador** a `~/.sistema-cerebro-agentes/`. Instala además el **agente `cerebro`** en `~/.claude/agents/cerebro.md` con el MCP `opencode` **inline dentro del agente** (retirando el registro global antiguo): así solo el agente cerebro puede delegar en OpenCode.
 4. Instala el rol Cerebro en `~/.claude/CLAUDE.md` dentro de un **bloque gestionado** (entre marcadores). Si ya tienes contenido propio, no se toca.
 5. Copia la skill a `~/.claude/skills/delegar-a-opencode/`.
 6. Copia los agentes `implementador`, `revisor` y `testeador` a `~/.config/opencode/agents/` (y retira el antiguo `constructor.md` si existe: ese nombre es una palabra reservada de JavaScript y rompía el servidor).
@@ -59,7 +59,8 @@ bash install.sh
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
-| Claude Code no ve las herramientas `opencode_*` | No se reinició tras registrar el MCP | Reinicia Claude Code; comprueba con `/mcp` |
+| Fuera del agente cerebro no hay herramientas `opencode_*` | Es lo normal: el MCP vive solo dentro del agente `cerebro` | Actívalo con `@cerebro`, "usa el agente cerebro" o `claude --agent cerebro` |
+| Claude Code no lista el agente `cerebro` | El directorio `~/.claude/agents/` no existía al arrancar | Reinicia Claude Code (después, los cambios se detectan en caliente) |
 | El servidor local no responde (`UNREACHABLE`) | Servidor V1 caído | Relánzalo: `servidor.ps1` (Windows) / `bash servidor.sh` (macOS/Linux) y reintenta |
 | Quiero ver o parar el servidor | — | `servidor.ps1 -Status` / `-Stop`, o `bash servidor.sh --status` / `--stop` |
 | `claude mcp list` dice que opencode no conecta | Node desactualizado o npx sin red la primera vez | Comprueba Node ≥ 22; ejecuta `npx -y opencode-mcp` una vez a mano para forzar la descarga |

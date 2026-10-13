@@ -73,6 +73,16 @@ else
   warn 'La skill delegar-a-opencode no estaba instalada'
 fi
 
+# 3b. Agente cerebro
+AGENT_DST="$HOME/.claude/agents/cerebro.md"
+if [ -e "$AGENT_DST" ]; then
+  backup_item "$AGENT_DST"
+  rm -f "$AGENT_DST"
+  ok "Eliminado: $AGENT_DST"
+else
+  warn 'El agente cerebro no estaba instalado'
+fi
+
 # 4. Agentes de OpenCode
 AGENTS_DST="$HOME/.config/opencode/agents"
 for name in implementador.md revisor.md testeador.md constructor.md; do
