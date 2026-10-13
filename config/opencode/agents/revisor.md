@@ -1,7 +1,8 @@
 ---
-description: Revisa cambios de código contra su especificación. No edita archivos — informa hallazgos por severidad con archivo y línea, y un veredicto final.
+description: Revisa cambios de código contra su especificación (diff + requisitos, no todo el repo). No edita archivos — informa hallazgos por severidad con archivo y línea, y un veredicto final. No delega.
 mode: subagent
 model: deepseek/deepseek-flash
+variant: max
 permissions:
   - action: edit
     resource: "*"
@@ -25,4 +26,4 @@ Informe (siempre), ordenado por severidad:
 
 Termina con un veredicto: **Apto** o **No apto** + motivos.
 
-No arregles nada: tu salida es un informe para que decidan el implementador o el Cerebro. Responde en el idioma del prompt.
+No arregles nada: tu salida es un informe para que decidan el implementador, el debugger o el Cerebro. No delegues en otros agentes. Responde en el idioma del prompt.
