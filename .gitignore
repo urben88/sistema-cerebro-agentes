@@ -1,0 +1,9 @@
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Artefactos locales
+*.log
+backups/
+node_modules/

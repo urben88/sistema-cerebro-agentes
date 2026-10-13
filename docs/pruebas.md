@@ -1,0 +1,50 @@
+# Pruebas y verificación
+
+## Automática
+
+```powershell
+# Windows
+powershell -ExecutionPolicy Bypass -File .\scripts\verificar.ps1 -Smoke
+```
+
+```bash
+# macOS / Linux
+bash scripts/verificar.sh --smoke
+```
+
+Comprueba: Node ≥ 22, OpenCode, Claude Code, OpenRouter conectado, rol Cerebro, skill, agentes, MCP registrado y conectado, y un arranque real del MCP por stdio con llamada a `opencode_status`.
+
+### Smoke test por niveles
+
+```bash
+# 1. MCP arranca, herramientas presentes y opencode_status responde
+node scripts/smoke-mcp.mjs
+
+# 2. Además: inferencia real (pregunta trivial al modelo)
+node scripts/smoke-mcp.mjs --ask
+
+# 3. Además: prueba de punta a punta con el constructor sobre una carpeta de prueba
+node scripts/smoke-mcp.mjs --e2e "C:\ruta\a\carpeta-de-prueba"
+```
+
+El `--e2e` crea un `saludo.mjs` + `prueba.mjs`, lanza el agente `constructor`, espera el resultado y muestra el diff. Es la prueba más completa sin abrir Claude Code.
+
+## Manual (checklist de aceptación)
+
+| # | Paso | Resultado esperado |
+|---|---|---|
+| 1 | `install.ps1` (o `install.sh`) | Termina sin errores; backups creados si reemplazó algo |
+| 2 | Repetir el instalador | Idempotente: termina igual, sin duplicar nada |
+| 3 | `verificar -Smoke` | Todo `[OK]` |
+| 4 | Abrir Claude Code en un proyecto y ejecutar `/mcp` | `opencode` aparece como connected |
+| 5 | Pedir al Cerebro: «usa la herramienta opencode_status» | Devuelve el estado del servidor OpenCode |
+| 6 | Pedir una feature pequeña real | Crea spec en `docs/specs/`, delega, y el resumen final coincide con lo implementado |
+| 7 | `git status` en el repo del sistema | Limpio tras el commit; nada de secretos |
+
+## Prueba de fuego sugerida
+
+En una carpeta vacía:
+
+> Crea un proyecto Node mínimo con `package.json`, un módulo `saludo.mjs` con la función `saludar(nombre)` y un test con `node:test` que se ejecute con `node --test`. Documenta el objetivo y los criterios de aceptación antes de implementar.
+
+El Cerebro debería: escribir la spec → delegar al `constructor` → vigilar → revisar el diff → resumirte. Si todo eso ocurre sin intervención tuya, el sistema está funcionando.
