@@ -157,17 +157,48 @@ if [ -f "$SYSTEM_DIR/web-port.txt" ] && curl -fsS --max-time 3 "http://127.0.0.1
   ok 'Panel web reiniciado con la versión nueva'
 fi
 
+# ---------------------------------------------------------------- 3c. Cerebro Hub
+step 'Cerebro Hub (memoria compartida, hooks y triaje)'
+
+backup_item "$SYSTEM_DIR/hub"
+rm -rf "$SYSTEM_DIR/hub"
+cp -R "$CONFIG_ROOT/hub" "$SYSTEM_DIR/hub"
+ok "Hub instalado: $SYSTEM_DIR/hub"
+
+backup_item "$SYSTEM_DIR/hub.sh"
+cp -f "$CONFIG_ROOT/hub/hub.sh" "$SYSTEM_DIR/hub.sh"
+chmod +x "$SYSTEM_DIR/hub.sh"
+ok "Lanzador instalado: $SYSTEM_DIR/hub.sh"
+
+backup_item "$SYSTEM_DIR/hooks"
+rm -rf "$SYSTEM_DIR/hooks"
+cp -R "$CONFIG_ROOT/hooks" "$SYSTEM_DIR/hooks"
+ok "Hooks instalados: $SYSTEM_DIR/hooks"
+
+mkdir -p "$SYSTEM_DIR/mcp"
+backup_item "$SYSTEM_DIR/mcp/triaje-mcp.mjs"
+cp -f "$CONFIG_ROOT/mcp/triaje-mcp.mjs" "$SYSTEM_DIR/mcp/triaje-mcp.mjs"
+ok 'MCP de triaje instalado (mcp/triaje-mcp.mjs)'
+
 # ---------------------------------------------------------------- 4. Agente cerebro (con el MCP dentro)
 step 'Agente cerebro en Claude Code (con el MCP dentro)'
 
 claude mcp remove opencode --scope user >/dev/null 2>&1 && note 'Retirado el registro global antiguo del MCP (ahora vive en el agente cerebro)' || true
 AGENT_DIR="$HOME/.claude/agents"
-AGENT_DST="$AGENT_DIR/cerebro.md"
 mkdir -p "$AGENT_DIR"
-backup_item "$AGENT_DST"
 ARGS_JSON='["'"$SYSTEM_DIR"'/launcher.sh"]'
-node -e 'const fs=require("fs");const [src,dst,cmd,args]=process.argv.slice(1);let t=fs.readFileSync(src,"utf8");t=t.replace("__COMANDO__",cmd).replace("__ARGUMENTOS_JSON__",args);fs.writeFileSync(dst,t)' "$CONFIG_ROOT/claude/agents/cerebro.md" "$AGENT_DST" "bash" "$ARGS_JSON"
-ok "Agente cerebro instalado: $AGENT_DST"
+TRIAJE_MCP="$SYSTEM_DIR/mcp/triaje-mcp.mjs"
+for f in cerebro.md subdirector.md; do
+  dst="$AGENT_DIR/$f"
+  backup_item "$dst"
+  node -e 'const fs=require("fs");const [src,dst,cmd,args,mcp]=process.argv.slice(1);let t=fs.readFileSync(src,"utf8");t=t.replace("__COMANDO__",cmd).replace("__ARGUMENTOS_JSON__",args).replace("__TRIAJE_MCP__",mcp);fs.writeFileSync(dst,t)' "$CONFIG_ROOT/claude/agents/$f" "$dst" "bash" "$ARGS_JSON" "$TRIAJE_MCP"
+  ok "Agente instalado: $dst"
+done
+for f in explorador.md redactor.md analista.md arquitecto.md; do
+  backup_item "$AGENT_DIR/$f"
+  cp -f "$CONFIG_ROOT/claude/agents/$f" "$AGENT_DIR/$f"
+  ok "Subagente instalado: $AGENT_DIR/$f"
+done
 note 'Actívalo con @cerebro, "usa el agente cerebro" o claude --agent cerebro'
 
 BIN_DIR="$HOME/.local/bin"
@@ -231,6 +262,15 @@ rm -rf "$SKILL_DST"
 cp -R "$SKILL_SRC" "$SKILL_DST"
 ok "Skill instalada: $SKILL_DST"
 
+# ---------------------------------------------------------------- 5b. Ajustes de Claude (esfuerzos + hooks)
+step 'Esfuerzos y hooks de contexto en Claude (settings.json)'
+backup_item "$HOME/.claude/settings.json"
+if node "$SYSTEM_DIR/hub/settings-merge.mjs" "$SYSTEM_DIR/hooks"; then
+  ok 'settings.json actualizado'
+else
+  warn 'No se pudo actualizar settings.json'
+fi
+
 # ---------------------------------------------------------------- 6. Agentes de OpenCode
 step 'Agentes de OpenCode'
 
@@ -247,6 +287,14 @@ if [ -f "$AGENTS_DST/constructor.md" ]; then
   rm -f "$AGENTS_DST/constructor.md"
   warn 'Retirado constructor.md (renombrado a implementador.md: era una palabra reservada de JavaScript que rompía el servidor V1)'
 fi
+for viejo in chat-deepseek.md chat-local.md; do
+  p="$HOME/.config/opencode/agent/$viejo"
+  if [ -f "$p" ]; then
+    backup_item "$p"
+    rm -f "$p"
+    warn "Retirado agente antiguo: $viejo (sustituido por local.md)"
+  fi
+done
 
 # ---------------------------------------------------------------- 7. Arrancar servidor
 step 'Arrancando servidor local'
@@ -256,6 +304,24 @@ else
   warn 'El servidor no respondió; se arrancará en la primera llamada del MCP'
 fi
 
+# ---------------------------------------------------------------- 7b. Docker (hub + Laya)
+step 'Docker (hub + Laya)'
+if command -v docker >/dev/null 2>&1; then
+  backup_item "$SYSTEM_DIR/docker"
+  rm -rf "$SYSTEM_DIR/docker"
+  cp -R "$REPO_ROOT/docker" "$SYSTEM_DIR/docker"
+  sed -i.bak 's|\.\./config/hub|../hub|' "$SYSTEM_DIR/docker/docker-compose.yml" && rm -f "$SYSTEM_DIR/docker/docker-compose.yml.bak"
+  ok "Stack Docker instalado: $SYSTEM_DIR/docker"
+  if docker compose -f "$SYSTEM_DIR/docker/docker-compose.yml" up -d --build >/dev/null 2>&1; then
+    ok 'Hub + Laya en marcha (contenedores cerebro-hub y cerebro-laya)'
+  else
+    warn 'No se pudo levantar el stack Docker; prueba: docker compose -f ~/.sistema-cerebro-agentes/docker/docker-compose.yml up -d --build'
+  fi
+  note 'Autoarranque en macOS/Linux: añade un servicio de usuario que ejecute docker compose up -d'
+else
+  warn 'Docker no encontrado: el hub puede ejecutarse en nativo (hub.sh); Laya no estará disponible'
+fi
+
 # ---------------------------------------------------------------- Resumen
 step 'Resumen'
 printf 'Instalación completada. Próximos pasos:\n'
@@ -263,8 +329,8 @@ printf '  1. Reinicia Claude Code si lo tienes abierto (para que cargue el MCP).
 printf '  2. Verifica el sistema:\n'
 printf '       bash scripts/verificar.sh --smoke\n'
 printf '  3. Uso: abre Claude Code en la carpeta de un proyecto y pide lo que quieras.\n'
-printf '  4. Panel web en tiempo real:\n'
-printf '       bash ~/.sistema-cerebro-agentes/panel.sh\n'
+printf '  4. Panel del Cerebro Hub (organización, memoria, gasto y triaje):\n'
+printf '       bash ~/.sistema-cerebro-agentes/hub.sh\n'
 if [ "${#WARNINGS[@]}" -gt 0 ]; then
   printf '\nAvisos:\n'
   for w in "${WARNINGS[@]}"; do warn "$w"; done

@@ -12,8 +12,7 @@ name: cerebro-hub
 services:
   laya:
     build:
-      context: ..
-      dockerfile: docker/laya/Dockerfile
+      context: ./laya
     image: cerebro-hub-laya:latest
     container_name: cerebro-laya
     restart: unless-stopped
@@ -29,8 +28,8 @@ services:
 
   hub:
     build:
-      context: ..
-      dockerfile: docker/hub/Dockerfile
+      # En el repositorio: ../config/hub · En la instalación: ../hub (lo ajusta el instalador)
+      context: ../config/hub
     image: cerebro-hub:latest
     container_name: cerebro-hub
     restart: unless-stopped

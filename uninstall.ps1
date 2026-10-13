@@ -102,6 +102,45 @@ if (Test-Path -LiteralPath $agentDst) {
   Write-Warn 'El agente cerebro no estaba instalado'
 }
 
+# 3c. Subagentes de Claude
+foreach ($f in @('subdirector.md', 'explorador.md', 'redactor.md', 'analista.md', 'arquitecto.md')) {
+  $p = Join-Path $UserHome ".claude\agents\$f"
+  if (Test-Path -LiteralPath $p) { Backup-Item $p; Remove-Item -LiteralPath $p -Force; Write-Ok "Eliminado: $p" }
+}
+
+# 3d. Hub, hooks y MCP de triaje
+$hubLauncher = Join-Path $sysDir 'hub.ps1'
+if (Test-Path -LiteralPath $hubLauncher) { & powershell -NoProfile -ExecutionPolicy Bypass -File $hubLauncher -Stop 2>$null | Out-Null }
+foreach ($f in @('hub.ps1', 'hub.sh', 'hub', 'hooks', 'mcp')) {
+  $p = Join-Path $sysDir $f
+  if (Test-Path -LiteralPath $p) { Backup-Item $p; Remove-Item -LiteralPath $p -Recurse -Force; Write-Ok "Eliminado: $p" }
+}
+
+# 3e. Docker y autoarranque
+$sch = Invoke-Cli 'schtasks' @('/Delete', '/TN', 'Cerebro Hub', '/F')
+if ($sch.Code -eq 0) { Write-Ok 'Tarea de autoarranque eliminada' }
+$arranque = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\cerebro-hub.cmd'
+if (Test-Path -LiteralPath $arranque) { Backup-Item $arranque; Remove-Item -LiteralPath $arranque -Force; Write-Ok 'Autoarranque (carpeta de Inicio) retirado' }
+$compose = Join-Path $sysDir 'docker\docker-compose.yml'
+if (Test-Path -LiteralPath $compose) {
+  Invoke-Cli 'docker' @('compose', '-f', $compose, 'down') | Out-Null
+  Write-Ok 'Contenedores del hub detenidos (la memoria de hub-data se conserva)'
+}
+$p = Join-Path $sysDir 'docker'
+if (Test-Path -LiteralPath $p) { Backup-Item $p; Remove-Item -LiteralPath $p -Recurse -Force; Write-Ok "Eliminado: $p" }
+
+# 3f. Hooks del sistema en settings.json
+$settingsPath = Join-Path $UserHome '.claude\settings.json'
+if (Test-Path -LiteralPath $settingsPath) {
+  Backup-Item $settingsPath
+  $js = 'const fs=require("fs");const p=process.argv[2];let s={};try{s=JSON.parse(fs.readFileSync(p,"utf8"))}catch{};if(s.hooks){for(const ev of ["SessionStart","PreCompact","SessionEnd"]){const arr=s.hooks[ev];if(Array.isArray(arr)){s.hooks[ev]=arr.filter(g=>!(g&&Array.isArray(g.hooks)&&g.hooks.some(h=>String(h.command||"").includes("sistema-cerebro-agentes"))));if(!s.hooks[ev].length)delete s.hooks[ev]}}if(!Object.keys(s.hooks).length)delete s.hooks}fs.writeFileSync(p,JSON.stringify(s,null,2)+"\n")'
+  $tmp = Join-Path $env:TEMP 'quitar-hooks-sistema.cjs'
+  [System.IO.File]::WriteAllText($tmp, $js, (New-Object System.Text.UTF8Encoding($false)))
+  Invoke-Cli 'node' @($tmp, $settingsPath) | Out-Null
+  Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+  Write-Ok 'Hooks del sistema retirados de settings.json (los demas ajustes se conservan)'
+}
+
 foreach ($f in @('cerebro.cmd', 'cerebro')) {
   $p = Join-Path $UserHome ".local\bin\$f"
   if (Test-Path -LiteralPath $p) { Backup-Item $p; Remove-Item -LiteralPath $p -Force; Write-Ok "Eliminado: $p" }
@@ -109,7 +148,7 @@ foreach ($f in @('cerebro.cmd', 'cerebro')) {
 
 # 4. Agentes de OpenCode
 $agentsDst = Join-Path $UserHome '.config\opencode\agents'
-foreach ($name in @('implementador.md', 'revisor.md', 'testeador.md', 'constructor.md')) {
+foreach ($name in @('implementador.md', 'revisor.md', 'testeador.md', 'constructor.md', 'cerebro-oc.md', 'debugger.md', 'explorador-ds.md', 'redactor-ds.md', 'local.md')) {
   $p = Join-Path $agentsDst $name
   if (Test-Path -LiteralPath $p) {
     Backup-Item $p

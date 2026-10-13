@@ -1,55 +1,65 @@
 # sistema-cerebro-agentes
 
-Arquitectura de dos capas para desarrollo con IA, instalable en **Windows, macOS y Linux**:
+Arquitectura de IA para desarrollo **instalable en Windows, macOS y Linux**, pensada para gastar poco y trabajar mucho:
 
 | Capa | Quién | Qué hace | Coste |
 |---|---|---|---|
-| 🧠 **Cerebro** | Claude Code (tu suscripción) | Piensa, investiga, decide y escribe la documentación (specs, arquitectura, planes) | Suscripción de Claude |
-| 🤖 **Manos** | OpenCode + modelos baratos | Escribe, revisa y prueba el código siguiendo las specs del Cerebro | Tokens baratos (DeepSeek V4.1 Flash; GPT-6 Luna cuando la cuenta de OpenRouter tenga crédito) |
+| 🧠 **Cerebro** | Claude Code (tu suscripción) | Piensa, decide, escribe specs y revisa. Los subagentes Haiku hacen lo barato (leer, resumir, documentar). | Suscripción de Claude (20 $) |
+| 🖥️ **Cerebro Hub** | App local (Docker) | Memoria compartida de todos los proyectos, contexto de sesiones (briefing/checkpoints), vigilante de trabajos, triaje de tareas y panel. | Gratis (Docker local) |
+| 🧭 **Laya** | Modelo local de decisiones (Docker) | Decide en milisegundos **qué agente y qué esfuerzo** toca cada tarea, con probabilidades calibradas. | Gratis (CPU) |
+| 🤖 **Manos** | OpenCode + **DeepSeek V4.1 Flash** (oficial) | Escribe, depura, prueba y revisa el código siguiendo las specs, por céntimos. | Tokens de DeepSeek |
+| 🐌 **Local** | Ollama/Qwen (tu GPU) | Tareas mecánicas explícitas, solo si tú lo pides. | Gratis |
 
-El puente entre ambas capas es **[opencode-mcp](https://github.com/AlaeddineMessadi/opencode-mcp)** (servidor MCP local por stdio, sin Docker).
-
-Este repositorio es la **fuente de verdad** del sistema: configuración, agentes e instaladores. Cualquier mejora se hace aquí y se despliega en cada máquina con `git pull` + instalador.
+El puente entre capas es **[opencode-mcp](https://github.com/AlaeddineMessari/opencode-mcp)** (stdio local) y el hub. Este repositorio es la **fuente de verdad**: configuración, agentes, app, instaladores y documentación.
 
 ## Cómo funciona
 
 ```
  Tú
-  │  (pides una feature, una app, una corrección…)
+  │  (hablas en lenguaje natural)
   ▼
-┌──────────────────────────────────────────────┐
-│ 🧠 Claude Code — CEREBRO                     │
-│  · investiga y decide                        │
-│  · escribe docs/specs/NN-feature.md          │
-│  · delega por MCP ────────────────┐          │
-└───────────────────────────────────│──────────┘
-                                    ▼
-                     ┌──────────────────────────────┐
-                     │ opencode-mcp (local, vía npx)│
-                     └──────────────┬───────────────┘
-                                    ▼
-                     ┌──────────────────────────────┐
-                     │ 🤖 OpenCode — MANOS          │
-                     │  constructor · revisor ·     │
-                     │  testeador                   │
-                     │  (DeepSeek V4.1 Flash vía    │
-                     │   OpenRouter)                │
-                     └──────────────────────────────┘
+┌──────────────────────────── Claude Code (cerebro) ────────────────────────────┐
+│  · decide, escribe specs, revisa            · subagentes Haiku: explorador,   │
+│  · MCP `opencode` → código en DeepSeek        redactor, analista, arquitecto, │
+│  · MCP `triaje`   → ¿a quién le toca?         subdirector (control/gasto)     │
+└───────┬───────────────────────────────────────────────────────────────┬───────┘
+        │ hooks (briefing/checkpoints)                                  │ MCP
+        ▼                                                               ▼
+┌────────────────────────── Cerebro Hub (Docker) ──────────────┐  servidor OpenCode V1
+│  memoria externa a los repos · vigilante · panel · triaje ──►│  (nativo: trabaja
+│      ▲                                                       │   sobre tus carpetas)
+│      └── Laya (Docker, decisiones locales)                   │      │
+└──────────────────────────────────────────────────────────────┘      ▼
+                                                        agentes DeepSeek por esfuerzo:
+                                                        implementador · debugger · revisor
+                                                        testeador · explorador-ds · redactor-ds
 ```
+
+**Sin Claude** (cuota agotada) el mismo flujo lo dirige `cerebro-oc` dentro de OpenCode: al abrirlo, ya te atiende el agente "más listo" (DeepSeek · max) y delega él solo en el resto.
+
+## Qué hace por ti sin que te enteres
+
+- **Briefing automático**: al abrir cualquier sesión de Claude en un proyecto con memoria, el hub le inyecta el estado (tarea activa, quién la tiene, siguiente paso, alertas y trabajos en curso). Verificado: Claude responde "¿en qué estamos?" sin que se lo cuentes.
+- **`/clear` sin miedo**: al ~70 % de contexto, el agente vuelca el estado; al abrir la siguiente sesión, todo está de vuelta. Antes de compactar, un hook guarda un checkpoint solo.
+- **Reparto por esfuerzos**: DeepSeek low/high/max según el trabajo (`testeador` low, `implementador`/`debugger` high, `revisor` max); Claude medium por defecto; el código **no consume tu ventana de Claude**.
+- **Triaje local (Laya)**: decide a quién mandar cada tarea; si duda (confianza < 0,60), mandan las reglas; **cada decisión queda registrada** para afinar Laya con tu uso real.
+- **Vigilante**: detecta trabajos atascados o permisos colgados y avisa (histórico silencioso al arrancar).
+- **Panel local** (solo en `127.0.0.1`): organización en vivo, proyectos y memorias, vigilante, gasto (saldo DeepSeek + sesiones) y **ventana de Claude** estimada (tokens nuevos y caché, 5 h/7 d).
 
 ## Requisitos
 
 - **Node.js ≥ 22** — [nodejs.org](https://nodejs.org)
-- **OpenCode V2** — [opencode.ai](https://opencode.ai), con el proveedor **DeepSeek** conectado (`opencode auth login`, o `/connect` en la TUI). Opcional: conecta también **OpenRouter** si quieres usar GPT-6 Luna (requiere crédito en la cuenta). El instalador añade su propio servidor **opencode-ai (V1)** en `~/.sistema-cerebro-agentes/server` — es el que usa el MCP; tu OpenCode V2 (TUI) no se toca.
-- **Claude Code** — [claude.com/claude-code](https://claude.com/claude-code), con tu suscripción de Claude.
-- **Git** — para clonar y actualizar este repositorio.
+- **OpenCode V2** — [opencode.ai](https://opencode.ai) con el proveedor **DeepSeek** conectado (`opencode auth login` o `/connect`). *(El instalador añade su propio servidor OpenCode V1 aislado en `~/.sistema-cerebro-agentes/server` para el MCP; tu TUI no se toca.)*
+- **Claude Code** — [claude.com/claude-code](https://claude.com/claude-code) con tu suscripción.
+- **Docker Desktop** — para el hub y Laya (la primera vez, Laya descarga ~850 MB de pesos; quedan en un volumen).
+- **Git** — para clonar y actualizar.
 
 ## Instalación
 
 ### Windows
 
 ```powershell
-git clone <URL-DEL-REPO> %USERPROFILE%\Desktop\sistema-cerebro-agentes
+git clone https://github.com/urben88/sistema-cerebro-agentes.git %USERPROFILE%\Desktop\sistema-cerebro-agentes
 cd %USERPROFILE%\Desktop\sistema-cerebro-agentes
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
@@ -57,139 +67,104 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 ### macOS / Linux
 
 ```bash
-git clone <URL-DEL-REPO> ~/sistema-cerebro-agentes
+git clone https://github.com/urben88/sistema-cerebro-agentes.git ~/sistema-cerebro-agentes
 cd ~/sistema-cerebro-agentes
 bash install.sh
 ```
 
-El instalador es **idempotente** (puedes ejecutarlo las veces que quieras), hace **copia de seguridad** de todo lo que reemplaza en `~/.sistema-cerebro-agentes/backups/` y **no toca** nada más de tu configuración.
-
-Después de instalar: **reinicia Claude Code** (para que cargue el MCP) y ejecuta la verificación:
+El instalador es **idempotente**, hace **copia de seguridad** de todo lo que reemplaza en `~/.sistema-cerebro-agentes/backups/` y no toca nada más de tu configuración. Después: **reinicia Claude Code** y verifica:
 
 ```powershell
-# Windows
-powershell -ExecutionPolicy Bypass -File .\scripts\verificar.ps1 -Smoke
+powershell -ExecutionPolicy Bypass -File .\scripts\verificar.ps1 -Smoke    # Windows
+bash scripts/verificar.sh --smoke                                          # macOS/Linux
 ```
-
-```bash
-# macOS / Linux
-bash scripts/verificar.sh --smoke
-```
-
-## Qué instala exactamente
-
-| Componente | Destino | Origen en el repo |
-|---|---|---|
-| Servidor OpenCode V1 (`opencode-ai`, el que usa el MCP) | `~/.sistema-cerebro-agentes/server/` (datos aislados en `server-data/`) | se instala con npm (`opencode-ai@1.18.35`) |
-| Lanzador del MCP y gestor del servidor | `~/.sistema-cerebro-agentes/launcher.*`, `servidor.*` | `config/mcp/` |
-| Agente `cerebro` en Claude Code (con el MCP `opencode` **inline**: solo existe dentro del agente) | `~/.claude/agents/cerebro.md` | `config/claude/agents/cerebro.md` |
-| Rol Cerebro (memoria global) | `~/.claude/CLAUDE.md` → bloque gestionado | `config/claude/CLAUDE.md` |
-| Skill de delegación | `~/.claude/skills/delegar-a-opencode/` | `config/claude/skills/delegar-a-opencode/` |
-| Agentes de OpenCode | `~/.config/opencode/agents/` | `config/opencode/agents/` |
 
 ## Uso diario
 
-**Claude normal (por defecto):** abre Claude Code en la carpeta del proyecto y trabaja con normalidad — puede hacer cualquier cosa, incluido escribir código, sin OpenCode de por medio.
+| Quieres | Haz esto | Qué pasa por detrás |
+|---|---|---|
+| Trabajar con Claude | Abre Claude Code en tu proyecto y escribe `cerebro` (o `@cerebro …`) | Briefing inyectado; reparto automático Sonnet → Haiku → OpenCode; revisión y cierre |
+| Sin Claude (cuota agotada) | Abre OpenCode en tu proyecto | Arranca `cerebro-oc` (DeepSeek · max): specs y delegación en el resto |
+| Verlo todo | Abre el panel: `~/.sistema-cerebro-agentes/hub.ps1` (o `hub.sh`) → `http://127.0.0.1:4597` | Organización, memoria, triaje, gasto y ventana |
+| Cambiar algo | Editor de bots del panel antiguo (`panel.ps1`) o edita el repo y `scripts/actualizar` | Todo queda versionado en este repositorio |
 
-**Modo combinado (agente `cerebro`):** actívalo y el Cerebro investiga, escribe la spec en `docs/specs/`, la delega a OpenCode y vigila la ejecución; al final te resume qué se hizo.
+Reglas de oro para que la ventana de Claude dure: **`/clear` al cambiar de tarea**, nada de fanout de subagentes, el código siempre por DeepSeek, y las specs en archivo. Detalles en [docs/ventanas-y-ahorro.md](docs/ventanas-y-ahorro.md).
 
-Detalles y ejemplos en [docs/uso-diario.md](docs/uso-diario.md).
+## La organización (agentes)
 
-## El modo combinado: agente `cerebro`
+| Familia | Agente | Modelo · esfuerzo | Cuándo |
+|---|---|---|---|
+| Dirección | `cerebro` (Claude) | Sonnet · medium | Decide, specs, desbloquea, revisión final |
+| Dirección intensa | `arquitecto` (Claude) | Sonnet | Arquitectura compleja, migraciones |
+| Exploración | `explorador` (Claude) / `explorador-ds` (OC) | Haiku / DeepSeek · low | Buscar, resumir, extraer contexto |
+| Documentación | `redactor` / `redactor-ds` | Haiku / DeepSeek · low | README, docs, changelog |
+| Verificación | `analista` (Claude) | Haiku | Requisitos vs realidad, checklists |
+| Control | `subdirector` (Claude) | Haiku | Bucles y gasto de los trabajos |
+| Implementación | `implementador` (OC) | DeepSeek · high | Código delimitado por una spec |
+| Depuración | `debugger` (OC) | DeepSeek · high | Fallos reproducibles (máx. 2 ciclos) |
+| Revisión técnica | `revisor` (OC) | DeepSeek · max | Diff + edge cases |
+| Pruebas | `testeador` (OC) | DeepSeek · low | Ejecutar/interpretar tests |
+| Sin Claude | `cerebro-oc` (OC) | DeepSeek · max | El cerebro de sustitución |
+| Mecánico | `local` (OC) | Ollama/Qwen | Solo si tú lo pides |
 
-El flujo combinado (pensar → documentar → **codificar con OpenCode**) vive en un agente de Claude Code llamado **`cerebro`**, y el MCP de OpenCode **solo existe dentro de ese agente**: en tus sesiones normales de Claude no hay herramientas `opencode_*`.
+Los agentes son **perfiles**: se activan bajo demanda y terminan al devolver su resultado. La delegación **se corta** en los subagentes (nada de cadenas).
 
-### Rotar entre modos (conservando la conversación)
-
-> Claude Code **no permite añadir modos personalizados al ciclo de Shift+Tab** (ese ciclo solo cambia modos de permisos: manual → aceptar ediciones → plan → [auto]). La rotación práctica es el comando `cerebro`, que cambia de modo **sin perder la conversación** (verificado).
-
-| Quieres | Escribe |
-|---|---|
-| Pasar a **modo Cerebro** (continúa tu conversación actual) | `cerebro` |
-| Volver a **Claude normal** (la misma conversación) | `claude --continue` |
-| Cerebro en una **sesión nueva** | `claude --agent cerebro` |
-| Cerebro **solo para una tarea** desde una sesión normal | `@cerebro …` o "usa el agente cerebro" |
-
-`cerebro` se instala en `~/.local/bin` (junto a `claude`), así que funciona desde cualquier terminal. La primera vez que se crea `~/.claude/agents/`, reinicia Claude Code para que descubra el agente (después, los cambios se detectan en caliente).
-
-## Panel web en tiempo real
-
-Dashboard local (solo lectura) para ver qué está pasando y cómo está configurado todo:
+## Docker (hub + Laya)
 
 ```powershell
-# Windows — desde el repositorio o instalado
-powershell -ExecutionPolicy Bypass -File .\scripts\panel.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File ~\.sistema-cerebro-agentes\panel.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File ~\.sistema-cerebro-agentes\docker\gestion.ps1 up   # arrancar
+powershell -NoProfile -ExecutionPolicy Bypass -File ~\.sistema-cerebro-agentes\docker\gestion.ps1 status
+powershell -NoProfile -ExecutionPolicy Bypass -File ~\.sistema-cerebro-agentes\docker\gestion.ps1 down   # parar
 ```
 
-```bash
-# macOS / Linux
-bash scripts/panel.sh
-```
+- `hub` → `127.0.0.1:4597` (backend + panel). Laya vive en la red interna; el puente MCP y el servidor OpenCode siguen en el host (trabajan sobre tus carpetas) y el hub los alcanza por `host.docker.internal`.
+- En Windows, el instalador registra el **autoarranque** al iniciar sesión (tarea programada «Cerebro Hub»; si Windows deniega la tarea, cae a la carpeta de Inicio con `cerebro-hub.cmd`).
+- La memoria vive en `~/.sistema-cerebro-agentes/hub-data/` (montada en el contenedor): `memoria/global`, `memoria/proyectos/<slug>` (ESTADO, BITACORA, CONTEXTO-REPO, checkpoints) y `memoria/temporal`.
 
-Muestra: pipeline visual del sistema con estado en vivo, servidor V1 (puerto/versión), sesiones y trabajos MCP en tiempo real, los agentes con sus características (modo, modelo, descripción, sincronía con el repo) y un **editor de bots** (crear, editar, elegir modelo fijo o heredado, eliminar — guarda en el repositorio y lo despliega al momento), más un **visor de los ficheros de configuración** (agentes, CLAUDE.md, skill, lanzadores, docs…). Parar: `panel.ps1 -Stop`. Detalles en [docs/panel.md](docs/panel.md).
+## El Cerebro Hub por dentro
 
-## Agentes de OpenCode
+- **API local** (solo `127.0.0.1`): `salud`, `briefing`, `proyectos`, `memoria/*` (estado, contexto, bitácora, checkpoints), `vigilante`, `organizacion`, `gasto`, `ventana`, `reglas`, `triaje`, `decisiones`.
+- **Hooks** (`~/.sistema-cerebro-agentes/hooks/`): `session-start`, `pre-compact`, `session-end` y el CLI `estado` (`--leer`, `--escribir --archivo`, `--bitacora`, `--checkpoint`).
+- **MCP de triaje** (`config/mcp/triaje-mcp.mjs`): herramienta `triaje_decidir` disponible dentro de `cerebro` y `subdirector`.
+- **Reglas** (`config/hub/reglas.json`): reparto, topes de coste por job y paralelismo máximo; editables en la copia de datos.
 
-| Agente | Papel | Modelo (v0.1.0) |
-|---|---|---|
-| `implementador` | Implementa la spec (código, build, tests) | `deepseek/deepseek-flash` |
-| `revisor` | Revisa el diff contra la spec, sin editar | `deepseek/deepseek-flash` |
-| `testeador` | Escribe y ejecuta pruebas | `deepseek/deepseek-flash` |
-
-### Cambiar de modelo (p. ej. activar GPT-6 Luna)
-
-Edita el `model:` del agente en `config/opencode/agents/*.md` y reinstala:
-
-```yaml
-# config/opencode/agents/revisor.md
-model: openrouter/openai/gpt-6-luna   # requiere crédito en la cuenta de OpenRouter
-```
-
-Después: `git add -A && git commit -m "revisor: usa GPT-6 Luna" && git push` y ejecuta el instalador (o `scripts/actualizar`) en cada máquina.
-
-> Los modelos vía OpenRouter solo funcionan con crédito en la cuenta. Si una petición falla con «requires more credits, or fewer max_tokens», recarga tu cuenta de OpenRouter (o vuelve a `deepseek/deepseek-flash`).
-
-## Evolución (varias máquinas)
-
-- **Máquina de desarrollo** (la tuya principal): edita aquí (tú o tu Cerebro), y sube: `git add -A && git commit && git push`.
-- **Cualquier otra máquina**: `git pull` + `scripts/actualizar.ps1` (o `scripts/actualizar.sh`) → hace pull y reinstala todo.
-- Versionado: `VERSION` + `CHANGELOG.md` + tags de Git. Cada cambio queda documentado.
+Guía completa: [docs/contexto-sesiones.md](docs/contexto-sesiones.md) · [docs/ventanas-y-ahorro.md](docs/ventanas-y-ahorro.md).
 
 ## Estructura del repositorio
 
 ```
 sistema-cerebro-agentes/
-├── install.ps1 / install.sh          ← instaladores (Windows / macOS+Linux)
-├── uninstall.ps1 / uninstall.sh      ← desinstaladores
-├── config/                           ← LA DISTRIBUCIÓN (lo que se despliega)
-│   ├── claude/
-│   │   ├── CLAUDE.md                 ← rol Cerebro
-│   │   └── skills/delegar-a-opencode/
-│   │       ├── SKILL.md              ← protocolo de delegación
-│   │       └── plantilla-spec.md     ← plantilla de specs
-│   ├── mcp/                          ← lanzador del MCP y gestor del servidor V1
-│   ├── web/                          ← panel web en tiempo real (dashboard)
-│   └── opencode/
-│       └── agents/                   ← agentes implementador, revisor, testeador
-├── docs/                             ← arquitectura, uso, pruebas, decisiones
-└── scripts/                          ← verificar, actualizar, smoke test del MCP
+├── install.ps1 / install.sh          ← instaladores (idempotentes, con backups)
+├── uninstall.ps1 / uninstall.sh      ← desinstaladores (conservan memoria y backups)
+├── config/
+│   ├── claude/                       ← agente cerebro + subagentes, CLAUDE.md, skill de delegación
+│   ├── opencode/agents/              ← agentes DeepSeek por esfuerzo (+ local)
+│   ├── hub/                          ← Cerebro Hub: backend, panel, plantillas, reglas, Dockerfile
+│   ├── hooks/                        ← hooks de contexto y CLI `estado`
+│   ├── mcp/                          ← lanzador del MCP y MCP de triaje
+│   ├── web/                          ← panel antiguo de actividad (sigue disponible)
+│   └── bin/                          ← comando `cerebro`
+├── docker/                           ← docker-compose (hub + Laya) y gestor
+├── docs/                             ← arquitectura, uso, panel, contexto/sesiones, ahorro, decisiones
+└── scripts/                          ← verificar, actualizar, smoke del MCP, panel
 ```
+
+## Mover a otra máquina
+
+En la máquina de desarrollo: `git add -A && git commit && git push`. En cualquier otra: `git pull` + `scripts/actualizar.ps1`/`actualizar.sh` (pull + reinstalación completa). El versionado vive en `VERSION`, `CHANGELOG.md` y los tags de Git.
 
 ## Desinstalación
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\uninstall.ps1   # Windows
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1    # Windows
+bash uninstall.sh                                           # macOS/Linux
 ```
 
-```bash
-bash uninstall.sh   # macOS / Linux
-```
-
-Quita el MCP, la skill, los agentes y el bloque gestionado de `CLAUDE.md`. Los backups quedan en `~/.sistema-cerebro-agentes/backups/` por si quieres restaurar algo. Los agentes propios que ya tenías en OpenCode (`chat-*`) no se tocan.
+Quita agentes, hooks (solo los del sistema), hub, contenedores y tarea de autoarranque; **conserva** la memoria (`hub-data`) y los backups en `~/.sistema-cerebro-agentes/backups/`.
 
 ## Créditos
 
-- [opencode-mcp](https://github.com/AlaeddineMessadi/opencode-mcp) — puente MCP entre Claude y OpenCode.
+- [opencode-mcp](https://github.com/AlaeddineMessari/opencode-mcp) — puente MCP entre Claude y OpenCode.
 - [OpenCode](https://opencode.ai) — capa de ejecución.
 - [Claude Code](https://claude.com/claude-code) — capa de pensamiento.
+- [Laya](https://huggingface.co/convaiinnovations/laya) — modelo local de decisiones (Apache 2.0).

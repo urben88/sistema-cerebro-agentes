@@ -79,6 +79,33 @@ El usuario pidió que el Cerebro fuera rotable "como los modos que se ciclan con
 ### D17 — Gestión visual de bots en el panel web · 2026-10-13
 El usuario quería una herramienta visual (sin crear nada de cero) para crear sus propios "bots" (agentes de OpenCode) y asignarles un modelo concreto o heredado. Se extendió el **panel web existente** con un editor de bots: API (`GET /api/modelos`, `POST /api/bot`, `POST /api/bot/eliminar`) + formulario en el dashboard. Al guardar, el bot se escribe en el repo (`config/opencode/agents/<nombre>.md`) y en `~/.config/opencode/agents/`, con copia de seguridad y validación de nombres (incluida la lista de nombres reservados de JavaScript que rompen el servidor V1). El Cerebro usa el bot indicado por el usuario; si el bot fija modelo, se omite `providerID`/`modelID` en `opencode_fire` para respetarlo. Alternativas consideradas: plataformas visuales externas (Dify/n8n/Flowise) — descartadas porque no conducen los agentes de OpenCode ni el flujo cerebro→implementador sin trabajo de integración adicional.
 
+### D18 — OpenRouter retirado; DeepSeek oficial como único proveedor de pago · 2026-10-13
+Decisión del usuario: nada de OpenRouter. Se retira el bloque de configuración de `opencode.jsonc` y la credencial (`opencode auth logout`, con backup del `auth.json`). Todos los agentes usan `deepseek/deepseek-flash` (V4.1 Flash oficial, ya con saldo). Los proveedores locales (Ollama, LM Studio) quedan como estaban.
+
+### D19 — Agentes por esfuerzo (variante de razonamiento) y delegación cortada · 2026-10-13
+Verificado que el frontmatter de agentes acepta `variant:` tanto en V2 (TUI) como en el servidor V1 (el del MCP). Reparto: `implementador`/`debugger` high, `revisor` max, `testeador`/`explorador-ds`/`redactor-ds` low, `cerebro-oc` max. Regla de diseño: **los subagentes no encadenan más agentes**; solo el cerebro delega (máximo: preparación + ejecución + validación). `chat-local`/`chat-deepseek` se retiran (los sustituyen `local` y el reparto nuevo).
+
+### D20 — Lado Claude: subagentes Haiku, esfuerzos medium y reglas anti-fanout · 2026-10-13
+`modelSettings` de Sonnet 5/5.5 y Haiku 5.5 a **medium** por defecto (subir con `/effort high`); Opus intacto. Subagentes nuevos: `explorador`, `redactor`, `analista`, `arquitecto` y `subdirector`. El esfuerzo por subagente no existe en Claude Code (es por modelo/sesión): la guía de reparto vive en los prompts y en el skill. Anti-fanout y `/clear` al 70 % como reglas duras.
+
+### D21 — Cerebro Hub: la capa de organización, como aplicación · 2026-10-13
+Petición del usuario: la organización (memoria, contexto, vigilante, panel) no vive en sus repositorios y es una **aplicación con backend**, no solo configuración. Implementación: `config/hub/` (Node sin dependencias) con API local, memoria externa en `hub-data/`, vigilante, briefing para hooks y panel minimalista. Se abre en el puerto 4597 (sin tocar el 4598/4599 del panel antiguo y del V1).
+
+### D22 — Docker para la capa de aplicación (hub + Laya); puente MCP nativo · 2026-10-13
+`docker-compose` con dos servicios: `hub` (127.0.0.1:4597) y `laya` (red interna). El **puente MCP y el servidor OpenCode V1 siguen en el host** porque trabajan sobre las carpetas de Windows del usuario (montarlos en contenedor exigiría traducir rutas; frágil). El hub los alcanza por `host.docker.internal`. Autoarranque en Windows: tarea programada y, si el sistema la deniega, carpeta de Inicio. Esta decisión sustituye, **solo para la capa de aplicación**, el «sin Docker» de D2.
+
+### D23 — Laya como motor de triaje local, con reglas de respaldo y registro · 2026-10-13
+`laya[serve]` en contenedor CPU (3 checkpoints, `multilingual` para español). API real: `POST /v1/systemone` con `questions` como diccionario (`criteria` + `instructions`). Decisiones tipadas: agente, esfuerzo, escalar, riesgo. Confianza mínima 0,60: por debajo, mandan las reglas fijas (`reglas.json`). Cada decisión se registra con probabilidades (`logs/decisiones.jsonl`) para poder afinar Laya más adelante con uso real.
+
+### D24 — Hooks de contexto y CLI `estado` · 2026-10-13
+`SessionStart` (briefing inyectado; fallback a lectura local si el hub está apagado; silencioso si el proyecto no tiene memoria), `PreCompact` (checkpoint + recordatorio del ESTADO.md), `SessionEnd(clear)` (checkpoint de seguridad) y CLI `estado`. Se fusionan en `settings.json` con backup mediante `config/hub/settings-merge.mjs` (idempotente). Verificado de punta a punta: una sesión real respondió la tarea activa del proyecto solo desde el briefing.
+
+### D25 — Nombres seguros y rutas normalizadas · 2026-10-13
+La memoria del hub **normaliza las rutas** (comparación por cadena, no por resolución del sistema de archivos) para funcionar igual en Windows y dentro del contenedor Linux; los slugs se derivan de la ruta normalizada. Se mantiene la prohibición de nombres de agente que sean propiedades reservadas de JavaScript (D14).
+
+### D26 — `default_agent` de OpenCode = `cerebro-oc` · 2026-10-13
+Sin Claude, abrir OpenCode debe poner al agente «más listo» (DeepSeek · max) que delega en el resto. `plan`/`build` siguen disponibles e intactos.
+
 ## Notas técnicas útiles
 
 - **Herramientas clave del MCP (perfil essential):** `opencode_setup`, `opencode_context`, `opencode_status`, `opencode_ask`, `opencode_fire`, `opencode_run`, `opencode_reply`, `opencode_check`, `opencode_wait`, `opencode_job_get/list/cancel/input`, `opencode_question_*`, `opencode_permission_*`, `opencode_conversation`, `opencode_review_changes`.

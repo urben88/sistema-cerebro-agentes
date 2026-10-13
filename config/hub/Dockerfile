@@ -1,8 +1,9 @@
 # Cerebro Hub — backend + panel (Node, sin dependencias).
+# El contexto de construcción es ESTA carpeta (config/hub o la instalada ~/hub).
 FROM node:22-alpine
 
 WORKDIR /app
-COPY config/hub /app/hub
+COPY . /app/hub
 
 ENV NODE_ENV=production \
     HUB_DATA_DIR=/sistema/hub-data \

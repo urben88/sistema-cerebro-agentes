@@ -4,15 +4,15 @@
   Instalador de sistema-cerebro-agentes para Windows.
 
 .DESCRIPTION
-  Despliega la arquitectura Cerebro (Claude Code) -> Manos (OpenCode):
-   1. Comprueba prerrequisitos (Node >= 22, OpenCode, Claude Code, proveedor DeepSeek).
+  Despliega la arquitectura Cerebro (Claude Code) -> Hub -> Manos (OpenCode):
+   1. Comprueba prerrequisitos (Node >= 22, OpenCode, Claude Code, proveedor DeepSeek, Docker opcional).
    2. Instala el servidor OpenCode V1 (opencode-ai) que usa el MCP, con datos aislados.
    3. Copia el lanzador del MCP a ~/.sistema-cerebro-agentes.
-   4. Registra el MCP opencode en Claude Code (scope de usuario).
-   5. Instala el rol Cerebro (CLAUDE.md, bloque gestionado) y la skill delegar-a-opencode.
-   6. Instala los agentes implementador/revisor/testeador en OpenCode y retira el
-      antiguo constructor.md (renombrado: era una palabra reservada de JavaScript).
-   7. Arranca el servidor local.
+   4. Instala el panel web y el Cerebro Hub (memoria compartida, vigilante, triaje).
+   5. Instala los hooks de contexto y los subagentes de Claude (cerebro, subdirector...).
+   6. Instala los agentes de OpenCode (por esfuerzo) y retira los antiguos.
+   7. Levanta el stack Docker (hub + Laya) y registra el autoarranque.
+   8. Arranca el servidor local.
 
   Es idempotente y hace copia de seguridad de todo lo que reemplaza en
   ~/.sistema-cerebro-agentes/backups/<fecha>/.
@@ -151,7 +151,12 @@ if ($authProviders -contains 'deepseek') {
   $warnings.Add("Conecta DeepSeek en OpenCode: ejecuta 'opencode auth login' (o /connect en la TUI) y elige DeepSeek")
 }
 if ($authProviders -contains 'openrouter') {
-  Write-Ok 'OpenRouter tambien conectado (opcional: habilita GPT-6 Luna cuando la cuenta tenga credito)'
+  Write-Warn 'OpenRouter sigue conectado en OpenCode; este sistema ya no lo usa (puedes retirarlo con: opencode auth logout OpenRouter)'
+}
+if (Get-Command docker -ErrorAction SilentlyContinue) {
+  Write-Ok 'Docker disponible (hub + Laya en contenedores)'
+} else {
+  Write-Warn 'Docker no encontrado: el hub podra ejecutarse en nativo (hub.ps1), pero Laya no estara disponible'
 }
 
 if ($fatal.Count -gt 0) {
@@ -243,6 +248,33 @@ if ($panelActivo) {
   Write-Ok 'Panel web reiniciado con la version nueva'
 }
 
+# ---------------------------------------------------------------- 3c. Cerebro Hub
+Write-Step 'Cerebro Hub (memoria compartida, hooks y triaje)'
+
+$hubSrc = Join-Path $ConfigRoot 'hub'
+$hubDst = Join-Path $SystemDir 'hub'
+Backup-Item $hubDst
+if (Test-Path -LiteralPath $hubDst) { Remove-Item -LiteralPath $hubDst -Recurse -Force }
+Copy-Item -LiteralPath $hubSrc -Destination $hubDst -Recurse -Force
+Write-Ok "Hub instalado: $hubDst"
+
+$hubLauncher = Join-Path $SystemDir 'hub.ps1'
+Backup-Item $hubLauncher
+Copy-Item -LiteralPath (Join-Path $hubSrc 'hub.ps1') -Destination $hubLauncher -Force
+Write-Ok "Lanzador instalado: $hubLauncher"
+
+$hooksDst = Join-Path $SystemDir 'hooks'
+Backup-Item $hooksDst
+if (Test-Path -LiteralPath $hooksDst) { Remove-Item -LiteralPath $hooksDst -Recurse -Force }
+Copy-Item -LiteralPath (Join-Path $ConfigRoot 'hooks') -Destination $hooksDst -Recurse -Force
+Write-Ok "Hooks instalados: $hooksDst"
+
+$mcpDst = Join-Path $SystemDir 'mcp'
+New-Item -ItemType Directory -Force -Path $mcpDst | Out-Null
+Backup-Item (Join-Path $mcpDst 'triaje-mcp.mjs')
+Copy-Item -LiteralPath (Join-Path $ConfigRoot 'mcp\triaje-mcp.mjs') -Destination (Join-Path $mcpDst 'triaje-mcp.mjs') -Force
+Write-Ok 'MCP de triaje instalado (mcp/triaje-mcp.mjs)'
+
 # ---------------------------------------------------------------- 4. Agente cerebro (con el MCP dentro)
 Write-Step 'Agente cerebro en Claude Code (con el MCP dentro)'
 
@@ -250,15 +282,24 @@ Write-Step 'Agente cerebro en Claude Code (con el MCP dentro)'
 $rm = Invoke-Cli 'claude' @('mcp', 'remove', 'opencode', '--scope', 'user')
 if ($rm.Code -eq 0) { Write-Note 'Retirado el registro global antiguo del MCP (ahora vive en el agente cerebro)' }
 
-$agentSrc = Join-Path $ConfigRoot 'claude\agents\cerebro.md'
+$agentSrcDir = Join-Path $ConfigRoot 'claude\agents'
 $agentDir = Join-Path $UserHome '.claude\agents'
-$agentDst = Join-Path $agentDir 'cerebro.md'
 New-Item -ItemType Directory -Force -Path $agentDir | Out-Null
-Backup-Item $agentDst
 $argsJson = '["/c","powershell","-NoProfile","-ExecutionPolicy","Bypass","-File","' + ($LauncherPath.Replace('\', '\\')) + '"]'
-$tpl = [System.IO.File]::ReadAllText($agentSrc).Replace('__COMANDO__', 'cmd').Replace('__ARGUMENTOS_JSON__', $argsJson)
-[System.IO.File]::WriteAllText($agentDst, $tpl, (New-Object System.Text.UTF8Encoding($false)))
-Write-Ok "Agente cerebro instalado: $agentDst"
+$triajeMcp = Join-Path $SystemDir 'mcp\triaje-mcp.mjs'
+foreach ($f in @('cerebro.md', 'subdirector.md')) {
+  $dst = Join-Path $agentDir $f
+  Backup-Item $dst
+  $tpl = [System.IO.File]::ReadAllText((Join-Path $agentSrcDir $f)).Replace('__COMANDO__', 'cmd').Replace('__ARGUMENTOS_JSON__', $argsJson).Replace('__TRIAJE_MCP__', $triajeMcp)
+  [System.IO.File]::WriteAllText($dst, $tpl, (New-Object System.Text.UTF8Encoding($false)))
+  Write-Ok "Agente instalado: $dst"
+}
+foreach ($f in @('explorador.md', 'redactor.md', 'analista.md', 'arquitecto.md')) {
+  $dst = Join-Path $agentDir $f
+  Backup-Item $dst
+  Copy-Item -LiteralPath (Join-Path $agentSrcDir $f) -Destination $dst -Force
+  Write-Ok "Subagente instalado: $dst"
+}
 Write-Note 'Activalo con @cerebro, "usa el agente cerebro" o claude --agent cerebro'
 
 $binDir = Join-Path $UserHome '.local\bin'
@@ -285,6 +326,14 @@ if (Test-Path -LiteralPath $skillDst) { Remove-Item -LiteralPath $skillDst -Recu
 Copy-Item -LiteralPath $skillSrc -Destination $skillDst -Recurse -Force
 Write-Ok "Skill instalada: $skillDst"
 
+# ---------------------------------------------------------------- 5b. Ajustes de Claude (esfuerzos + hooks)
+Write-Step 'Esfuerzos y hooks de contexto en Claude (settings.json)'
+$settingsPath = Join-Path $UserHome '.claude\settings.json'
+Backup-Item $settingsPath
+$mergeRes = Invoke-Cli 'node' @((Join-Path $SystemDir 'hub\settings-merge.mjs'), $hooksDst)
+if ($mergeRes.Code -eq 0) { Write-Ok ($mergeRes.Output.Trim()) }
+else { Write-Warn 'No se pudo actualizar settings.json'; Write-Host $mergeRes.Output -ForegroundColor DarkGray }
+
 # ---------------------------------------------------------------- 6. Agentes de OpenCode
 Write-Step 'Agentes de OpenCode'
 
@@ -303,6 +352,14 @@ if (Test-Path -LiteralPath $legacy) {
   Remove-Item -LiteralPath $legacy -Force
   Write-Warn 'Retirado constructor.md (renombrado a implementador.md: era una palabra reservada de JavaScript que rompia el servidor V1)'
 }
+foreach ($viejo in @('chat-deepseek.md', 'chat-local.md')) {
+  $p = Join-Path $UserHome ".config\opencode\agent\$viejo"
+  if (Test-Path -LiteralPath $p) {
+    Backup-Item $p
+    Remove-Item -LiteralPath $p -Force
+    Write-Warn "Retirado agente antiguo: $viejo (sustituido por local.md / deepseek-oc)"
+  }
+}
 
 # ---------------------------------------------------------------- 7. Arrancar servidor
 Write-Step 'Arrancando servidor local'
@@ -312,6 +369,52 @@ if (Test-Path -LiteralPath (Join-Path $SystemDir 'servidor.ps1')) {
   else { Write-Warn 'El servidor no respondio; se arrancara en la primera llamada del MCP'; Write-Host $srvRes.Output -ForegroundColor DarkGray }
 }
 
+# ---------------------------------------------------------------- 7b. Docker (hub + Laya) y autoarranque
+Write-Step 'Docker (hub + Laya) y autoarranque'
+if (Get-Command docker -ErrorAction SilentlyContinue) {
+  $dockerDst = Join-Path $SystemDir 'docker'
+  Backup-Item $dockerDst
+  if (Test-Path -LiteralPath $dockerDst) { Remove-Item -LiteralPath $dockerDst -Recurse -Force }
+  Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker') -Destination $dockerDst -Recurse -Force
+  # El compose instalado construye desde la copia instalada del hub
+  $composePath = Join-Path $dockerDst 'docker-compose.yml'
+  $composeTxt = [System.IO.File]::ReadAllText($composePath).Replace('../config/hub', '../hub')
+  [System.IO.File]::WriteAllText($composePath, $composeTxt, (New-Object System.Text.UTF8Encoding($false)))
+  Write-Ok "Stack Docker instalado: $dockerDst"
+
+  $porConstruir = $false
+  foreach ($img in @('cerebro-hub:latest', 'cerebro-hub-laya:latest')) {
+    if ((Invoke-Cli 'docker' @('image', 'inspect', $img)).Code -ne 0) { $porConstruir = $true }
+  }
+  if ($porConstruir) {
+    Write-Note 'Construyendo imagenes de Docker (la de Laya descarga torch; puede tardar varios minutos)...'
+    $b = Invoke-Cli 'docker' @('compose', '-f', $composePath, 'build')
+    if ($b.Code -eq 0) { Write-Ok 'Imagenes construidas' }
+    else { Write-Warn 'No se pudieron construir las imagenes'; Write-Host $b.Output -ForegroundColor DarkGray }
+  }
+  $up = Invoke-Cli 'docker' @('compose', '-f', $composePath, 'up', '-d')
+  if ($up.Code -eq 0) { Write-Ok 'Hub + Laya en marcha (cerebro-hub, cerebro-laya)' }
+  else { Write-Warn 'No se pudo levantar el stack Docker'; Write-Host $up.Output -ForegroundColor DarkGray }
+
+  $taskName = 'Cerebro Hub'
+  $taskCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $dockerDst 'gestion.ps1') + '" up'
+  $sch = Invoke-Cli 'schtasks' @('/Create', '/TN', $taskName, '/TR', $taskCmd, '/SC', 'ONLOGON', '/F')
+  if ($sch.Code -eq 0) {
+    Write-Ok "Autoarranque registrado (tarea programada «$taskName»)"
+  } else {
+    # Sin permisos para tareas programadas: carpeta de Inicio del usuario
+    $inicio = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup'
+    New-Item -ItemType Directory -Force -Path $inicio | Out-Null
+    $arranque = Join-Path $inicio 'cerebro-hub.cmd'
+    Backup-Item $arranque
+    $contenido = "@echo off`r`npowershell -NoProfile -ExecutionPolicy Bypass -File `"$dockerDst\gestion.ps1`" up`r`n"
+    [System.IO.File]::WriteAllText($arranque, $contenido, (New-Object System.Text.ASCIIEncoding))
+    Write-Ok 'Autoarranque registrado (Inicio de Windows: cerebro-hub.cmd)'
+  }
+} else {
+  Write-Warn 'Docker no encontrado: el hub puede ejecutarse en nativo (hub.ps1); Laya no estara disponible'
+}
+
 # ---------------------------------------------------------------- Resumen
 Write-Step 'Resumen'
 Write-Host 'Instalacion completada. Proximos pasos:' -ForegroundColor Cyan
@@ -319,8 +422,9 @@ Write-Host '  1. Reinicia Claude Code si lo tienes abierto (para que cargue el M
 Write-Host '  2. Verifica el sistema:'
 Write-Host '       powershell -ExecutionPolicy Bypass -File .\scripts\verificar.ps1 -Smoke'
 Write-Host '  3. Uso: abre Claude Code en la carpeta de un proyecto y pide lo que quieras.'
-Write-Host '  4. Panel web en tiempo real:'
-Write-Host '       powershell -NoProfile -ExecutionPolicy Bypass -File ~\.sistema-cerebro-agentes\panel.ps1'
+Write-Host '  4. Panel del Cerebro Hub (organización, memoria, gasto y triaje):'
+Write-Host '       powershell -NoProfile -ExecutionPolicy Bypass -File ~\.sistema-cerebro-agentes\hub.ps1'
+Write-Host '     (El panel antiguo de actividad sigue disponible con panel.ps1.)'
 if ($warnings.Count -gt 0) {
   Write-Host "`nAvisos:" -ForegroundColor Yellow
   foreach ($w in $warnings) { Write-Warn $w }
