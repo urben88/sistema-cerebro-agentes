@@ -110,9 +110,36 @@ if ($hubPort -gt 0) {
 Test-Item $hubOk "Cerebro Hub responde en 127.0.0.1:$hubPort" 'Arranca: powershell -File ~/.sistema-cerebro-agentes/hub.ps1 (o docker compose up -d)'
 if ($hubOk) {
   Test-Item $layaOk 'Laya disponible para el triaje' 'Levanta el stack Docker: ~/.sistema-cerebro-agentes/docker/gestion.ps1 up'
+  $actOk = $false
+  try {
+    $act = Invoke-RestMethod -Uri "http://127.0.0.1:$hubPort/api/actividad" -TimeoutSec 4
+    $actOk = ($null -ne $act.proyectos)
+  } catch { $actOk = $false }
+  Test-Item $actOk 'GET /api/actividad devuelve proyectos' 'Revisa hub.mjs (R1 de la spec del panel)'
+  $latOk = $false
+  try {
+    $cuerpo = @{ cwd = $RepoRoot; sesion = 'verificar'; evento = 'SubagentStart'; agente = 'verificar' } | ConvertTo-Json
+    $lat = Invoke-RestMethod -Uri "http://127.0.0.1:$hubPort/api/latido" -Method Post -ContentType 'application/json' -Body $cuerpo -TimeoutSec 4
+    $latOk = ($lat.ok -eq $true)
+  } catch { $latOk = $false }
+  Test-Item $latOk 'POST /api/latido acepta un latido' 'Revisa hub.mjs (R3 de la spec del panel)'
 }
-foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'estado.mjs')) {
+foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'estado.mjs', 'latido.mjs')) {
   Test-Item (Test-Path -LiteralPath (Join-Path $sysDir "hooks\$f")) "Hook $f instalado" 'Ejecuta install.ps1'
+}
+$hookLatido = Join-Path $sysDir 'hooks\latido.mjs'
+if (Test-Path -LiteralPath $hookLatido) {
+  $prevHubUrl = $env:HUB_URL
+  $sw = [System.Diagnostics.Stopwatch]::StartNew()
+  try {
+    $env:HUB_URL = 'http://127.0.0.1:1'
+    '{"hook_event_name":"SubagentStart","cwd":"."}' | & node $hookLatido 2>$null | Out-Null
+    $hookCode = $LASTEXITCODE
+  } catch { $hookCode = 1 }
+  $sw.Stop()
+  if ($null -eq $prevHubUrl) { Remove-Item Env:\HUB_URL -ErrorAction SilentlyContinue } else { $env:HUB_URL = $prevHubUrl }
+  $seg = [math]::Round($sw.Elapsed.TotalSeconds, 2)
+  Test-Item (($hookCode -eq 0) -and ($sw.Elapsed.TotalSeconds -lt 2)) "Hook latido no bloquea con el hub caído ($seg s)" 'Revisa config/hooks/latido.mjs'
 }
 Test-Item (Test-Path -LiteralPath (Join-Path $sysDir 'mcp\triaje-mcp.mjs')) 'MCP de triaje instalado' 'Ejecuta install.ps1'
 $settingsPath = Join-Path $UserHome '.claude\settings.json'

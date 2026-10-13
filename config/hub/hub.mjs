@@ -61,8 +61,14 @@ function cargarConfig() {
   }
 }
 
-const argPort = process.argv.indexOf('--port')
-const puertoArg = argPort >= 0 ? parseInt(process.argv[argPort + 1], 10) || 0 : 0
+// Acepta `--port 4651` y `--port=4651` (los lanzadores hub.ps1/hub.sh usan la segunda).
+function puertoDeArgs(argv) {
+  const conIgual = argv.find((a) => a.startsWith('--port='))
+  if (conIgual) return parseInt(conIgual.slice('--port='.length), 10) || 0
+  const i = argv.indexOf('--port')
+  return i >= 0 ? parseInt(argv[i + 1], 10) || 0 : 0
+}
+const puertoArg = puertoDeArgs(process.argv)
 const config = cargarConfig()
 const LISTEN_PORT = puertoArg || config.puerto
 const LISTEN_HOST = process.env.HUB_HOST || '127.0.0.1'

@@ -107,6 +107,42 @@ else
   test_item 0 'MCP no registrado globalmente (solo dentro del agente)'
 fi
 
+step 'Cerebro Hub: actividad y latidos'
+HUB_PORT=""
+HUB_PORT_FILE="$HOME/.sistema-cerebro-agentes/hub-port.txt"
+[ -f "$HUB_PORT_FILE" ] && HUB_PORT="$(tr -d '[:space:]' < "$HUB_PORT_FILE")"
+if [ -z "$HUB_PORT" ] && curl -fsS --max-time 3 "http://127.0.0.1:4597/api/salud" 2>/dev/null | grep -q 'cerebro-hub'; then
+  HUB_PORT=4597
+fi
+HUB_OK=0
+[ -n "$HUB_PORT" ] && curl -fsS --max-time 4 "http://127.0.0.1:$HUB_PORT/api/salud" 2>/dev/null | grep -q 'cerebro-hub' && HUB_OK=1 || true
+if [ "$HUB_OK" -eq 1 ]; then
+  if curl -fsS --max-time 4 "http://127.0.0.1:$HUB_PORT/api/actividad" 2>/dev/null | grep -q '"proyectos"'; then
+    test_item 0 'GET /api/actividad devuelve proyectos'
+  else
+    test_item 1 'GET /api/actividad no responde' 'Revisa hub.mjs (R1 de la spec del panel)'
+  fi
+  if curl -fsS --max-time 4 -X POST -H 'Content-Type: application/json' -d "{\"cwd\":\"$REPO_ROOT\",\"sesion\":\"verificar\",\"evento\":\"SubagentStart\",\"agente\":\"verificar\"}" "http://127.0.0.1:$HUB_PORT/api/latido" 2>/dev/null | grep -q '"ok":true'; then
+    test_item 0 'POST /api/latido acepta un latido'
+  else
+    test_item 1 'POST /api/latido no responde' 'Revisa hub.mjs (R3 de la spec del panel)'
+  fi
+else
+  test_item 1 "Cerebro Hub responde en 127.0.0.1:${HUB_PORT:-?}" 'Arranca: bash ~/.sistema-cerebro-agentes/hub.sh'
+fi
+HOOK_LATIDO="$HOME/.sistema-cerebro-agentes/hooks/latido.mjs"
+if [ -f "$HOOK_LATIDO" ]; then
+  HOOK_INICIO=$SECONDS
+  if printf '%s' '{"hook_event_name":"SubagentStart","cwd":"."}' | HUB_URL="http://127.0.0.1:1" node "$HOOK_LATIDO" >/dev/null 2>&1; then HOOK_CODE=0; else HOOK_CODE=$?; fi
+  if [ "$HOOK_CODE" -eq 0 ] && [ $((SECONDS - HOOK_INICIO)) -lt 3 ]; then
+    test_item 0 'Hook latido no bloquea con el hub caído'
+  else
+    test_item 1 'Hook latido bloquea o falla' 'Revisa config/hooks/latido.mjs'
+  fi
+else
+  test_item 1 'Hook latido no instalado' 'Ejecuta install.sh'
+fi
+
 if [ "$SMOKE" -eq 1 ]; then
   step 'Smoke test del MCP (arranque real por stdio)'
   if [ "$ASK" -eq 1 ]; then
