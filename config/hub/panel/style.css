@@ -1,0 +1,82 @@
+/* Cerebro Hub — estilo minimalista, sin CDNs */
+:root {
+  --fondo: #0f1216;
+  --tarjeta: #171c22;
+  --borde: #262e38;
+  --texto: #e6e9ee;
+  --tenue: #8b97a7;
+  --acento: #6ea8fe;
+  --verde: #34d399;
+  --ambar: #fbbf24;
+  --rojo: #f87171;
+  --gris: #64748b;
+  --morado: #c084fc;
+  --azul: #60a5fa;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--fondo); color: var(--texto);
+  font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+}
+.barra {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 14px 20px; border-bottom: 1px solid var(--borde); flex-wrap: wrap;
+}
+.izq { display: flex; align-items: center; gap: 12px; }
+.logo { font-size: 26px; }
+h1 { margin: 0; font-size: 17px; }
+.sub { margin: 0; color: var(--tenue); font-size: 12px; }
+.der { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.chip {
+  border: 1px solid var(--borde); border-radius: 999px; padding: 3px 10px;
+  font-size: 12px; color: var(--tenue); white-space: nowrap;
+}
+.chip.modelo { color: var(--acento); border-color: rgba(110,168,254,.35); }
+.chip.modelo b { color: var(--ambar); font-weight: 600; }
+.vivo { display: flex; align-items: center; gap: 6px; }
+.punto { width: 8px; height: 8px; border-radius: 50%; background: var(--verde); }
+.punto.malo { background: var(--rojo); }
+.aviso {
+  margin: 12px 20px 0; padding: 10px 14px; border-radius: 8px;
+  background: rgba(248,113,113,.12); border: 1px solid rgba(248,113,113,.4); color: #fecaca;
+}
+.rejilla {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 14px; padding: 16px 20px 28px;
+}
+.tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 14px 16px; }
+.ancho2 { grid-column: 1 / -1; }
+h2 { margin: 0 0 10px; font-size: 14px; }
+h3 { margin: 0 0 8px; font-size: 13px; color: var(--tenue); font-weight: 600; }
+.tenue { color: var(--tenue); font-weight: 400; font-size: 12px; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 800px) { .cols { grid-template-columns: 1fr; } }
+.lista { display: flex; flex-direction: column; gap: 8px; }
+.agente { background: rgba(255,255,255,.02); border: 1px solid var(--borde); border-radius: 8px; padding: 8px 10px; }
+.agente.clic { cursor: pointer; }
+.agente.clic:hover { border-color: var(--acento); }
+.nombre { font-weight: 600; margin-right: 6px; }
+.desc { color: var(--tenue); font-size: 12px; margin-top: 3px; overflow-wrap: anywhere; }
+.badge { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 11px; border: 1px solid transparent; }
+.badge.verde { color: var(--verde); border-color: rgba(52,211,153,.4); }
+.badge.ambar { color: var(--ambar); border-color: rgba(251,191,36,.4); }
+.badge.rojo { color: var(--rojo); border-color: rgba(248,113,113,.4); }
+.badge.gris { color: var(--gris); border-color: rgba(100,116,139,.4); }
+.badge.azul { color: var(--azul); border-color: rgba(96,165,250,.4); }
+.badge.morado { color: var(--morado); border-color: rgba(192,132,252,.4); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: var(--tenue); font-weight: 500; padding: 4px 8px; border-bottom: 1px solid var(--borde); }
+td { padding: 5px 8px; border-bottom: 1px solid rgba(38,46,56,.5); }
+.tabla-scroll { max-height: 300px; overflow: auto; }
+.modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex;
+  align-items: center; justify-content: center; padding: 24px;
+}
+.modal.oculto, .oculto { display: none !important; }
+.caja { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; width: min(900px, 100%); max-height: 86vh; display: flex; flex-direction: column; }
+.cabecera { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--borde); }
+.titulo { font-weight: 600; }
+.cuerpo { margin: 0; padding: 16px; overflow: auto; white-space: pre-wrap; font-size: 12.5px; color: #cbd5e1; }
+.boton { background: #1f2731; color: var(--texto); border: 1px solid var(--borde); border-radius: 7px; padding: 5px 12px; cursor: pointer; }
+.boton:hover { border-color: var(--acento); }
+.pie { padding: 10px 20px 22px; color: var(--tenue); font-size: 12px; }

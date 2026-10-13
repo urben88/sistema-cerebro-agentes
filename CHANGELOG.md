@@ -11,6 +11,17 @@ Versionado semántico (MAJOR.MINOR.PATCH).
 - **Regla de delegación cortada**: los subagentes no encadenan más agentes; `cerebro-oc` es el único que delega (máximo: preparación + ejecución + validación).
 - **Subagentes de Claude** (`config/claude/agents/`): `explorador` (leer/resumir), `redactor` (docs), `analista` (checklists), `arquitecto` (dirección intensa) y `subdirector` (control de bucles/gasto con el MCP dentro). Todos Haiku salvo `arquitecto` (Sonnet).
 - **Reglas de contexto y sesión**: volcado de estado al 70 % para `/clear` sin pérdidas, una sola cadena por tarea, sin fanout, y reconocimiento del repositorio delegado (el repo manda sus propias reglas).
+- **Cerebro Hub** (`config/hub/`): aplicación con backend propio (Node sin dependencias) que da servicio a todas las carpetas:
+  - **Memoria compartida externa** a los repos (`~/.sistema-cerebro-agentes/hub-data/memoria/`): global, por proyecto (`ESTADO.md`, `BITACORA.md`, `CONTEXTO-REPO.md`, checkpoints) y temporal con caducidad.
+  - **Briefing** listo para los hooks de Claude (`/api/briefing?cwd=…`) con estado, contexto, bitácora, alertas y trabajos en curso.
+  - **Vigilante** de trabajos (atascos y permisos colgados; histórico silencioso al arrancar).
+  - **Panel minimalista** (`/`): organización (agentes, modelo y esfuerzo en vivo), proyectos, vigilante, trabajos, gasto y ventana de Claude.
+  - **Gasto**: saldo de DeepSeek + coste de sesiones + estimación local de la ventana de Claude (tokens nuevos y caché por modelo, 5 h / 7 días).
+  - Lanzador `hub.ps1` / `hub.sh` (arrancar, parar, estado), en el puerto 4597.
+
+### Corregido
+
+- El rango de puertos de `panel.ps1` (4598–4605) y del hub incluía el **4599 del servidor V1**: al parar el panel/hub se mataba el servidor de OpenCode. Ahora ambos usan un único puerto.
 
 ### Cambiado
 

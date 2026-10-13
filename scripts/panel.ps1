@@ -19,7 +19,7 @@ param(
   [switch]$Status,
   [switch]$NoOpen,
   [int]$BasePort = 4598,
-  [int]$MaxPorts = 8
+  [int]$MaxPorts = 1
 )
 
 $ErrorActionPreference = 'Continue'

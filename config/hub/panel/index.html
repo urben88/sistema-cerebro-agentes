@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cerebro Hub</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="barra">
+    <div class="izq">
+      <span class="logo">🧠</span>
+      <div>
+        <h1>Cerebro Hub</h1>
+        <p class="sub" id="sub">conectando…</p>
+      </div>
+    </div>
+    <div class="der">
+      <span class="chip" id="chipV1">servidor V1 —</span>
+      <span class="chip vivo"><span class="punto" id="punto"></span><span id="textoVivo">conectando</span></span>
+    </div>
+  </header>
+
+  <div id="aviso" class="aviso oculto"></div>
+
+  <main class="rejilla">
+    <section class="tarjeta ancho2">
+      <h2>Organización</h2>
+      <div class="cols">
+        <div>
+          <h3>Claude <span class="tenue">(dirección y trabajo barato)</span></h3>
+          <div id="agentesClaude" class="lista"></div>
+        </div>
+        <div>
+          <h3>OpenCode · DeepSeek <span class="tenue">(ejecución)</span></h3>
+          <div id="agentesOpenCode" class="lista"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Proyectos <span class="tenue">(memoria compartida)</span></h2>
+      <div id="proyectos" class="lista"></div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Vigilante</h2>
+      <div id="alertas" class="lista"></div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Trabajos recientes</h2>
+      <div class="tabla-scroll">
+        <table id="tablaTrabajos">
+          <thead><tr><th>Estado</th><th>Título</th><th>Carpeta</th><th>Hace</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Gasto</h2>
+      <div id="gasto" class="lista"></div>
+    </section>
+
+    <section class="tarjeta ancho2">
+      <h2>Ventana Claude <span class="tenue">(estimación local · la barra oficial está en /usage)</span></h2>
+      <div class="tabla-scroll">
+        <table id="tablaVentana">
+          <thead><tr><th>Modelo</th><th>Últimas 5 h</th><th>7 días</th><th>Caché 7 d</th><th>Mensajes</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="modal" class="modal oculto">
+    <div class="caja">
+      <div class="cabecera">
+        <div>
+          <div class="titulo" id="modalTitulo">—</div>
+          <div class="tenue" id="modalSub">—</div>
+        </div>
+        <button class="boton" id="cerrar">Cerrar ✕</button>
+      </div>
+      <pre class="cuerpo" id="modalCuerpo">—</pre>
+    </div>
+  </div>
+
+  <footer class="pie"><span id="pie">—</span></footer>
+  <script src="/app.js"></script>
+</body>
+</html>
