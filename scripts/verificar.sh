@@ -145,7 +145,7 @@ if [ -f "$HOOK_LATIDO" ]; then
 else
   test_item 1 'Hook latido no instalado' 'Ejecuta install.sh'
 fi
-for f in session-start.mjs pre-compact.mjs session-end.mjs estado.mjs latido.mjs aviso-contexto.mjs hallazgos.mjs; do
+for f in session-start.mjs pre-compact.mjs session-end.mjs cerrar-trabajos.mjs estado.mjs latido.mjs aviso-contexto.mjs hallazgos.mjs; do
   [ -f "$HOME/.sistema-cerebro-agentes/hooks/$f" ] && test_item 0 "Hook $f instalado" || test_item 1 "Hook $f no instalado" 'Ejecuta install.sh'
 done
 TRIAJE="$HOME/.sistema-cerebro-agentes/mcp/triaje-mcp.mjs"
@@ -175,6 +175,24 @@ if grep -q 'estado-linea.mjs' "$HOME/.claude/settings.json" 2>/dev/null; then
   test_item 0 'Barra de estado registrada en settings.json'
 else
   test_item 1 'Barra de estado no registrada' 'Ejecuta install.sh (o quita tu statusLine propia)'
+fi
+PARAR_TODO="$HOME/.sistema-cerebro-agentes/hub/parar-todo.mjs"
+if [ -f "$PARAR_TODO" ]; then
+  test_item 0 'Parada de emergencia instalada (hub/parar-todo.mjs)'
+  SALIDA_PARAR="$(node "$PARAR_TODO" --seco 2>/dev/null || true)"
+  if printf '%s' "$SALIDA_PARAR" | grep -qE 'Trabajos|No hab'; then
+    test_item 0 'La parada de emergencia responde (modo seco)'
+  else
+    test_item 1 'La parada de emergencia no responde' 'Revisa config/hub/parar-todo.mjs'
+  fi
+else
+  test_item 1 'Parada de emergencia no instalada' 'Ejecuta install.sh'
+fi
+[ -x "$HOME/.local/bin/cerebro-parar" ] && test_item 0 'Comando cerebro-parar instalado' || test_item 1 'Comando cerebro-parar no instalado' 'Ejecuta install.sh'
+if grep -q 'cerrar-trabajos.mjs' "$HOME/.claude/settings.json" 2>/dev/null; then
+  test_item 0 'Apagado de trabajos registrado al cerrar sesion'
+else
+  test_item 1 'Apagado de trabajos no registrado' 'Ejecuta install.sh'
 fi
 
 if [ "$SMOKE" -eq 1 ]; then

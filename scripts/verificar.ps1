@@ -124,7 +124,7 @@ if ($hubOk) {
   } catch { $latOk = $false }
   Test-Item $latOk 'POST /api/latido acepta un latido' 'Revisa hub.mjs (R3 de la spec del panel)'
 }
-foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'estado.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'hallazgos.mjs')) {
+foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'estado.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'hallazgos.mjs')) {
   Test-Item (Test-Path -LiteralPath (Join-Path $sysDir "hooks\$f")) "Hook $f instalado" 'Ejecuta install.ps1'
 }
 $hookLatido = Join-Path $sysDir 'hooks\latido.mjs'
@@ -154,11 +154,20 @@ if (Test-Path -LiteralPath $estadoLinea) {
   try { $salidaEstado = ($entrada | & node $estadoLinea 2>$null | Out-String) } catch { $salidaEstado = '' }
   Test-Item ($salidaEstado.Contains('Test')) 'La barra de estado responde' 'Revisa config/hub/estado-linea.mjs'
 }
+$pararTodo = Join-Path $sysDir 'hub\parar-todo.mjs'
+Test-Item (Test-Path -LiteralPath $pararTodo) 'Parada de emergencia instalada (hub/parar-todo.mjs)' 'Ejecuta install.ps1'
+if (Test-Path -LiteralPath $pararTodo) {
+  $salidaParar = ''
+  try { $salidaParar = (& node $pararTodo --seco 2>$null | Out-String) } catch { $salidaParar = '' }
+  Test-Item (($LASTEXITCODE -eq 0) -and ($salidaParar -match 'Trabajos|No hab')) 'La parada de emergencia responde (modo seco)' 'Revisa config/hub/parar-todo.mjs'
+}
+Test-Item (Test-Path -LiteralPath (Join-Path $UserHome '.local\bin\cerebro-parar.cmd')) 'Comando cerebro-parar instalado (~/.local/bin)' 'Ejecuta install.ps1'
 $settingsPath = Join-Path $UserHome '.claude\settings.json'
 $setTxt = if (Test-Path -LiteralPath $settingsPath) { [System.IO.File]::ReadAllText($settingsPath) } else { '' }
 Test-Item ($setTxt -match 'session-start\.mjs') 'Hooks registrados en settings.json' 'Ejecuta install.ps1'
 Test-Item ($setTxt -match 'claude-haiku-5-5') 'modelSettings de Haiku 5.5 configurado' 'Ejecuta install.ps1'
 Test-Item ($setTxt -match 'estado-linea\.mjs') 'Barra de estado registrada en settings.json' 'Ejecuta install.ps1 (o quita tu statusLine propia)'
+Test-Item ($setTxt -match 'cerrar-trabajos\.mjs') 'Apagado de trabajos registrado al cerrar sesion' 'Ejecuta install.ps1'
 $autoTarea = $false
 try { & schtasks /Query /TN 'Cerebro Hub' *> $null; $autoTarea = ($LASTEXITCODE -eq 0) } catch { $autoTarea = $false }
 $autoInicio = Test-Path -LiteralPath (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\cerebro-hub.cmd')

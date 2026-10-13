@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Cerebro: para de golpe los trabajos de OpenCode en segundo plano.
+# Uso: cerebro-parar            (todo)
+#      cerebro-parar --seco     (solo dice lo que haría)
+#      cerebro-parar ~/proyecto (solo ese proyecto)
+exec node "$HOME/.sistema-cerebro-agentes/hub/parar-todo.mjs" "$@"

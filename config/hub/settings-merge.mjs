@@ -27,7 +27,7 @@ for (const modelo of ['claude-sonnet-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'
 s.hooks = s.hooks || {}
 
 /** Ficheros que gestiona el sistema: se registran solo si existen en disco. */
-const GESTIONADOS = ['session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'latido.mjs', 'aviso-contexto.mjs']
+const GESTIONADOS = ['session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'latido.mjs', 'aviso-contexto.mjs']
 const existe = (f) => fs.existsSync(path.join(hooksDir, f))
 const comando = (f) => `node "${path.join(hooksDir, f)}"`
 const faltan = []
@@ -49,7 +49,17 @@ function registrarContexto(evento, matcher, archivo) {
 }
 registrarContexto('SessionStart', 'startup|resume|clear|compact', 'session-start.mjs')
 registrarContexto('PreCompact', 'manual|auto', 'pre-compact.mjs')
-registrarContexto('SessionEnd', 'clear', 'session-end.mjs')
+// SessionEnd: checkpoint en /clear + apagado de los trabajos de OpenCode al cerrar
+// la sesión (cualquier motivo: prompt_input_exit, logout, other…). El de apagado
+// lleva 8 s de presupuesto para abortar las sesiones en el servidor V1.
+{
+  const grupos = []
+  if (existe('session-end.mjs')) grupos.push({ matcher: 'clear', hooks: [{ type: 'command', command: comando('session-end.mjs') }] })
+  else faltan.push('session-end.mjs')
+  if (existe('cerrar-trabajos.mjs')) grupos.push({ hooks: [{ type: 'command', command: comando('cerrar-trabajos.mjs'), timeout: 8 }] })
+  else faltan.push('cerrar-trabajos.mjs')
+  if (grupos.length) s.hooks.SessionEnd = grupos
+}
 
 // Latidos de actividad (panel «La oficina»): se añaden sin pisar los hooks del usuario
 // y sin duplicar si ya estaban registrados (idempotente). Solo si el fichero existe.

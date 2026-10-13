@@ -141,7 +141,7 @@ if (Test-Path -LiteralPath $settingsPath) {
   Write-Ok 'Hooks del sistema retirados de settings.json (los demas ajustes se conservan)'
 }
 
-foreach ($f in @('cerebro.cmd', 'cerebro')) {
+foreach ($f in @('cerebro.cmd', 'cerebro', 'cerebro-parar.cmd', 'cerebro-parar')) {
   $p = Join-Path $UserHome ".local\bin\$f"
   if (Test-Path -LiteralPath $p) { Backup-Item $p; Remove-Item -LiteralPath $p -Force; Write-Ok "Eliminado: $p" }
 }

@@ -167,7 +167,7 @@ export function crearOpenCode({ systemDir, host = null }) {
    * Detalle de un trabajo para los resúmenes de progreso: estado, coste, tokens,
    * último paso y últimas herramientas. Sin volcar la conversación entera.
    */
-  function detalleJob(jobId) {
+  function rutaJob(jobId) {
     const esperado = `job_${String(jobId || '').replace(/^job_/, '')}.json`
     let encontrado = null
     const walk = (dir) => {
@@ -182,6 +182,11 @@ export function crearOpenCode({ systemDir, host = null }) {
       }
     }
     walk(tareasMcp)
+    return encontrado
+  }
+
+  function detalleJob(jobId) {
+    const encontrado = rutaJob(jobId)
     if (!encontrado) return { ok: false, error: `trabajo no encontrado: ${jobId}` }
     let j
     try { j = JSON.parse(fs.readFileSync(encontrado, 'utf8')) } catch { return { ok: false, error: 'el fichero del trabajo no se pudo leer' } }
@@ -214,5 +219,69 @@ export function crearOpenCode({ systemDir, host = null }) {
     }
   }
 
-  return { puerto, get, sesiones, sesionesRecientes, leerJobs, leerJobsRecientes, detalleJob }
+  /** Aborta la sesión de un trabajo en el servidor OpenCode V1 (corta el consumo). */
+  async function abortarSesion(sessionId) {
+    const p = puerto()
+    if (!p) return { ok: false, error: 'servidor V1 no arrancado (falta server-port.txt)' }
+    if (!sessionId) return { ok: false, status: 404, error: 'el trabajo no tiene sessionId' }
+    try {
+      const res = await fetch(`${baseUrl(p)}/session/${encodeURIComponent(sessionId)}/abort`, { method: 'POST', signal: AbortSignal.timeout(4000) })
+      if (res.ok) return { ok: true }
+      const texto = await res.text().catch(() => '')
+      return { ok: false, status: res.status, error: `HTTP ${res.status}${texto ? ' ' + texto.slice(0, 120) : ''}` }
+    } catch (e) {
+      return { ok: false, error: String(e?.message || e) }
+    }
+  }
+
+  /** Marca un fichero de trabajo como cancelado (que el panel no lo deje «en curso»). */
+  function marcarCancelado(jobId, nota) {
+    const p = rutaJob(jobId)
+    if (!p) return false
+    try {
+      const j = JSON.parse(fs.readFileSync(p, 'utf8'))
+      j.status = 'cancelled'
+      j.updatedAt = Date.now()
+      j.error = { message: `Cerebro: ${nota}` }
+      fs.writeFileSync(p, JSON.stringify(j), 'utf8')
+      return true
+    } catch { return false }
+  }
+
+  /**
+   * Cancela trabajos de OpenCode: los del directorio indicado o todos (`todo`).
+   * Aborta la sesión en el servidor V1 y marca el fichero del trabajo; con
+   * `dryRun` solo informa de lo que cancelaría.
+   */
+  async function cancelarTrabajos({ directory = null, todo = false, dryRun = false, maxHoras = 24 } = {}) {
+    const normalizar = (r) => String(r || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+    const objetivo = directory ? normalizar(directory) : null
+    const limite = Date.now() - maxHoras * 60 * 60 * 1000
+    const ventana = todo ? 30 * 24 * 60 * 60 * 1000 : maxHoras * 60 * 60 * 1000
+    const candidatos = leerJobsRecientes(ventana, 100).filter((j) =>
+      ['running', 'accepted', 'input_required'].includes(j.status) &&
+      (j.updatedAt || 0) >= limite &&
+      (todo || (objetivo && normalizar(j.directory) === objetivo)))
+    const resultados = []
+    for (const j of candidatos) {
+      if (dryRun) {
+        resultados.push({ jobId: j.jobId, agente: j.agent, estado: j.status, cancelado: false, motivo: 'prueba (dry-run): no se toca' })
+        continue
+      }
+      const ab = await abortarSesion(j.sessionId)
+      // 404 = la sesión ya no existe: no hay nada consumiendo; el trabajo se descarta igual.
+      const cancelado = ab.ok || ab.status === 404
+      if (cancelado) marcarCancelado(j.jobId, ab.ok ? 'cancelado (sesión cerrada)' : 'descartado (la sesión ya no existía)')
+      resultados.push({
+        jobId: j.jobId,
+        agente: j.agent,
+        estado: j.status,
+        cancelado,
+        motivo: ab.ok ? 'abortado en el servidor V1' : (ab.status === 404 ? 'la sesión ya no existía' : ab.error),
+      })
+    }
+    return { ok: true, revisados: candidatos.length, cancelados: resultados.filter((r) => r.cancelado).length, resultados }
+  }
+
+  return { puerto, get, sesiones, sesionesRecientes, leerJobs, leerJobsRecientes, detalleJob, abortarSesion, cancelarTrabajos }
 }

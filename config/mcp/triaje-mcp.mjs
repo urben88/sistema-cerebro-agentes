@@ -9,6 +9,8 @@
  *   · trabajo_estado { jobId? } → lista de trabajos activos/recientes o detalle
  *     de uno (estado, tiempo, coste, tokens, último paso, herramientas y
  *     pregunta pendiente). Para enseñar el progreso sin volcar conversaciones.
+ *   · parar_trabajos { todo?, directorio? } → cancela los trabajos de OpenCode
+ *     (corta el consumo); todo:true los para todos.
  *
  * Variables: HUB_URL (por defecto http://127.0.0.1:4597)
  */
@@ -18,7 +20,7 @@ import { fileURLToPath } from 'node:url'
 
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
 const VERSION = '0.3.0'
-const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const RAIZ = process.env.SISTEMA_CEREBRO_DIR || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const TOOLS = [
   {
@@ -40,6 +42,18 @@ const TOOLS = [
       type: 'object',
       properties: {
         jobId: { type: 'string', description: 'ID del trabajo (job_…). Si se omite, se listan los trabajos.' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'parar_trabajos',
+    description: 'Cancela de golpe los trabajos de OpenCode en segundo plano (corta el consumo de tokens). Úsalo cuando el usuario diga "para todo", "cancela los trabajos" o al terminar una sesión con trabajos colgados: con `todo: true` los para todos; con `directorio` solo los de ese proyecto.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        todo: { type: 'boolean', description: 'true para cancelar TODOS los trabajos activos (todos los proyectos).' },
+        directorio: { type: 'string', description: 'Ruta absoluta del proyecto: cancela solo los trabajos de ese directorio.' },
       },
       required: [],
     },
@@ -162,6 +176,17 @@ rl.on('line', async (line) => {
         } else {
           texto = formatearLista(oc.leerJobsRecientes(12 * 60 * 60 * 1000, 40))
         }
+        return send({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: texto }] } })
+      }
+      if (nombre === 'parar_trabajos') {
+        const todo = args.todo === true
+        const directorio = args.directorio ? String(args.directorio) : ''
+        if (!todo && !directorio) throw new Error('indica "todo": true para pararlo todo, o "directorio" para un proyecto concreto')
+        const oc = await cargarOpenCode()
+        const r = await oc.cancelarTrabajos({ todo, directory: directorio || null })
+        const texto = r.revisados === 0
+          ? 'No había trabajos activos que cancelar.'
+          : `Cancelados ${r.cancelados} de ${r.revisados} trabajos activos:\n` + r.resultados.map((x) => `- ${x.jobId} · ${x.agente || '?'} · ${x.cancelado ? 'cancelado' : 'NO cancelado'} · ${x.motivo}`).join('\n')
         return send({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: texto }] } })
       }
       throw new Error(`herramienta desconocida: ${nombre}`)

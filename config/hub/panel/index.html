@@ -1,96 +1,171 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-tema="oscuro">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cerebro Hub</title>
+  <title>Cerebro Hub · La oficina</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header class="barra">
     <div class="izq">
-      <span class="logo">🧠</span>
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="30" height="30"><path d="M9 20c-2 0-3-1.6-3-3.4 0-1.5.9-2.8 2.2-3.3C8.4 10 11 7 14.6 7c2.6 0 4.9 1.5 5.9 3.9 2.4.2 4.3 2.1 4.3 4.5 0 2.5-2 4.6-4.6 4.6H9Z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M16 12v9M12.5 15.5h7" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
+      </span>
       <div>
-        <h1>Cerebro Hub</h1>
+        <h1>La oficina del equipo</h1>
         <p class="sub" id="sub">conectando…</p>
       </div>
     </div>
     <div class="der">
-      <span class="chip" id="chipV1">servidor V1 —</span>
-      <span class="chip vivo"><span class="punto" id="punto"></span><span id="textoVivo">conectando</span></span>
+      <span class="etiqueta-demo oculto" id="etiquetaDemo">MODO DEMO · datos simulados</span>
+      <span class="contadores" id="contadores" aria-live="polite"></span>
+      <span class="chip conexion" id="chipConexion">conectando…</span>
+      <button class="boton mini" id="botonTema" type="button" title="Cambiar entre tema oscuro y claro">Tema</button>
     </div>
   </header>
 
-  <div id="aviso" class="aviso oculto"></div>
+  <div id="aviso" class="aviso oculto" role="alert"></div>
 
-  <main class="rejilla">
-    <section class="tarjeta ancho2">
-      <h2>Organización</h2>
-      <div class="cols">
-        <div>
-          <h3>Claude <span class="tenue">(dirección y trabajo barato)</span></h3>
-          <div id="agentesClaude" class="lista"></div>
-        </div>
-        <div>
-          <h3>OpenCode · DeepSeek <span class="tenue">(ejecución)</span></h3>
-          <div id="agentesOpenCode" class="lista"></div>
-        </div>
+  <nav class="pestanas" id="pestanas" role="tablist" aria-label="Secciones del panel"></nav>
+
+  <main id="main">
+    <!-- ============ OFICINA (vista principal, R7–R14) ============ -->
+    <section class="vista" id="vista-oficina" role="tabpanel" aria-label="Oficina">
+      <div class="cab-oficina">
+        <div class="filtros" id="filtrosSala"></div>
+        <label class="chip casilla" title="Plegar las salas sin actividad en 30 minutos">
+          <input type="checkbox" id="plegarInactivas" checked> Plegar inactivas
+        </label>
+      </div>
+      <div id="oficina" class="oficina"></div>
+      <div id="oficinaVacia" class="vacio oculto"></div>
+    </section>
+
+    <!-- ============ ORGANIZACIÓN (R12 + R15) ============ -->
+    <section class="vista oculto" id="vista-organizacion" role="tabpanel" aria-label="Organización">
+      <div class="rejilla">
+        <section class="tarjeta ancho2">
+          <h2>Organigrama <span class="tenue">(Claude y OpenCode por familia; en color, los activos)</span></h2>
+          <div id="organigrama" class="organigrama"></div>
+        </section>
+        <section class="tarjeta ancho2">
+          <h2>Reparto por familia y modelo <span class="tenue">(solo actividad real)</span></h2>
+          <div id="reparto" class="reparto"></div>
+        </section>
+        <section class="tarjeta ancho2">
+          <h2>Agentes <span class="tenue">(quién es quién)</span></h2>
+          <div class="cols">
+            <div>
+              <h3>Claude <span class="tenue">(dirección y trabajo barato)</span></h3>
+              <div id="agentesClaude" class="lista"></div>
+            </div>
+            <div>
+              <h3>OpenCode · DeepSeek <span class="tenue">(ejecución)</span></h3>
+              <div id="agentesOpenCode" class="lista"></div>
+            </div>
+          </div>
+        </section>
       </div>
     </section>
 
-    <section class="tarjeta">
-      <h2>Proyectos <span class="tenue">(memoria compartida)</span></h2>
-      <div id="proyectos" class="lista"></div>
-    </section>
-
-    <section class="tarjeta">
-      <h2>Vigilante</h2>
-      <div id="alertas" class="lista"></div>
-    </section>
-
-    <section class="tarjeta">
-      <h2>Trabajos recientes</h2>
-      <div class="tabla-scroll">
-        <table id="tablaTrabajos">
-          <thead><tr><th>Estado</th><th>Título</th><th>Carpeta</th><th>Hace</th></tr></thead>
-          <tbody></tbody>
-        </table>
+    <!-- ============ PROYECTOS ============ -->
+    <section class="vista oculto" id="vista-proyectos" role="tabpanel" aria-label="Proyectos">
+      <div class="rejilla">
+        <section class="tarjeta ancho2">
+          <h2>Proyectos <span class="tenue">(memoria compartida · clic para abrir)</span></h2>
+          <div id="proyectos" class="lista"></div>
+        </section>
       </div>
     </section>
 
-    <section class="tarjeta">
-      <h2>Triaje · Laya <span class="tenue">(decisiones locales)</span></h2>
-      <div id="layaEstado" class="lista"></div>
-      <h3 style="margin-top:10px">Últimas decisiones</h3>
-      <div id="decisiones" class="lista"></div>
+    <!-- ============ VIGILANTE ============ -->
+    <section class="vista oculto" id="vista-vigilante" role="tabpanel" aria-label="Vigilante">
+      <div class="rejilla">
+        <section class="tarjeta ancho2">
+          <h2>Vigilante <span class="tenue">(atascos y permisos colgados)</span></h2>
+          <div id="alertas" class="lista"></div>
+        </section>
+      </div>
     </section>
 
-    <section class="tarjeta">
-      <h2>MCPs instalados <span class="tenue">(inventario automático)</span></h2>
-      <div id="mcps" class="lista"></div>
+    <!-- ============ TRABAJOS ============ -->
+    <section class="vista oculto" id="vista-trabajos" role="tabpanel" aria-label="Trabajos">
+      <div class="rejilla">
+        <section class="tarjeta ancho2">
+          <h2>Trabajos recientes</h2>
+          <div class="tabla-scroll">
+            <table id="tablaTrabajos">
+              <thead><tr><th>Estado</th><th>Título</th><th>Carpeta</th><th>Hace</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </section>
 
-    <section class="tarjeta">
-      <h2>Hallazgos <span class="tenue">(buscar antes de crear)</span></h2>
-      <div id="hallazgos" class="lista"></div>
+    <!-- ============ TRIAJE · LAYA ============ -->
+    <section class="vista oculto" id="vista-triaje" role="tabpanel" aria-label="Triaje y Laya">
+      <div class="rejilla">
+        <section class="tarjeta ancho2">
+          <h2>Triaje · Laya <span class="tenue">(decisiones locales)</span></h2>
+          <div id="layaEstado" class="lista"></div>
+          <h3 style="margin-top:10px">Últimas decisiones</h3>
+          <div id="decisiones" class="lista"></div>
+        </section>
+      </div>
     </section>
 
-    <section class="tarjeta">
-      <h2>Gasto</h2>
-      <div id="gasto" class="lista"></div>
+    <!-- ============ DATOS (gasto + ventana, R12c) ============ -->
+    <section class="vista oculto" id="vista-datos" role="tabpanel" aria-label="Datos">
+      <div class="rejilla">
+        <section class="tarjeta">
+          <h2>Gasto</h2>
+          <div id="gasto" class="lista"></div>
+        </section>
+        <section class="tarjeta ancho2">
+          <h2>Ventana Claude <span class="tenue">(estimación local · la barra oficial está en /usage)</span></h2>
+          <div class="tabla-scroll">
+            <table id="tablaVentana">
+              <thead><tr><th>Modelo</th><th>Últimas 5 h</th><th>7 días</th><th>Caché 7 d</th><th>Mensajes</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </section>
 
-    <section class="tarjeta ancho2">
-      <h2>Ventana Claude <span class="tenue">(estimación local · la barra oficial está en /usage)</span></h2>
-      <div class="tabla-scroll">
-        <table id="tablaVentana">
-          <thead><tr><th>Modelo</th><th>Últimas 5 h</th><th>7 días</th><th>Caché 7 d</th><th>Mensajes</th></tr></thead>
-          <tbody></tbody>
-        </table>
+    <!-- ============ MCPS ============ -->
+    <section class="vista oculto" id="vista-mcps" role="tabpanel" aria-label="MCPs">
+      <div class="rejilla">
+        <section class="tarjeta ancho2">
+          <h2>MCPs instalados <span class="tenue">(inventario automático)</span></h2>
+          <div id="mcps" class="lista"></div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ============ HALLAZGOS ============ -->
+    <section class="vista oculto" id="vista-hallazgos" role="tabpanel" aria-label="Hallazgos">
+      <div class="rejilla">
+        <section class="tarjeta ancho2">
+          <h2>Hallazgos <span class="tenue">(buscar antes de crear)</span></h2>
+          <div id="hallazgos" class="lista"></div>
+        </section>
       </div>
     </section>
   </main>
 
+  <!-- Panel lateral de detalle de personaje (R10) -->
+  <aside id="lateral" class="lateral oculto" aria-label="Detalle de la actividad">
+    <div class="lateral-cab">
+      <strong id="lateralTitulo">—</strong>
+      <button class="boton mini" id="lateralCerrar" type="button">Cerrar</button>
+    </div>
+    <div class="lateral-cuerpo" id="lateralCuerpo"></div>
+  </aside>
+
+  <!-- Modal de memoria de proyecto -->
   <div id="modal" class="modal oculto">
     <div class="caja">
       <div class="cabecera">
@@ -98,7 +173,7 @@
           <div class="titulo" id="modalTitulo">—</div>
           <div class="tenue" id="modalSub">—</div>
         </div>
-        <button class="boton" id="cerrar">Cerrar ✕</button>
+        <button class="boton" id="cerrar" type="button">Cerrar</button>
       </div>
       <pre class="cuerpo" id="modalCuerpo">—</pre>
     </div>

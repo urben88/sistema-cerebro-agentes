@@ -134,12 +134,14 @@ if [ -f "$SETTINGS" ]; then
   ok 'Hooks y barra de estado del sistema retirados de settings.json'
 fi
 
-BIN_CEREBRO="$HOME/.local/bin/cerebro"
-if [ -e "$BIN_CEREBRO" ]; then
-  backup_item "$BIN_CEREBRO"
-  rm -f "$BIN_CEREBRO"
-  ok "Eliminado: $BIN_CEREBRO"
-fi
+for f in cerebro cerebro-parar; do
+  p="$HOME/.local/bin/$f"
+  if [ -e "$p" ]; then
+    backup_item "$p"
+    rm -f "$p"
+    ok "Eliminado: $p"
+  fi
+done
 
 # 4. Agentes de OpenCode
 AGENTS_DST="$HOME/.config/opencode/agents"

@@ -16,12 +16,19 @@
  * probarla sin hub ni OpenCode.
  */
 import crypto from 'node:crypto'
+import process from 'node:process'
+import { pathToFileURL } from 'node:url'
 
 // Ventanas de tiempo (R2/R3)
 const VENTANA_SESION_MS = 5 * 60 * 1000
 const VENTANA_TERMINADO_MS = 2 * 60 * 1000
 const VENTANA_LATIDO_MS = 3 * 60 * 1000
 const VENTANA_JOB_MS = 24 * 60 * 60 * 1000
+
+// A2 · Trabajos zombi: un job `running|accepted` sin actualizar no puede animar a nadie
+// tecleando. A partir de 30 min se marca «atascado» y a partir de 12 h se oculta.
+const ZOMBI_ATASCO_MS = 30 * 60 * 1000
+const ZOMBI_OCULTO_MS = 12 * 60 * 60 * 1000
 
 // R4 · familia por nombre de agente. Lo que no esté aquí va a `familiaGenerica`.
 const FAMILIAS = {
@@ -52,12 +59,25 @@ function slugLocal(ruta) {
   return `${base}-${h}`
 }
 
-// Mapeo de estado de los jobs del MCP (R2)
-function estadoDeJob(job, atascado, ahora) {
-  if (atascado) return 'atascado'
+// A3 · Nombre de agente: `Object`, vacío o «desconocido» nunca llegan a la escena.
+// Se muestran como «Agente» con la familia genérica (nunca se imprime «Object»).
+const NOMBRES_INVALIDOS = new Set(['object', '[object object]', 'desconocido'])
+export function normalizarAgente(nombre) {
+  const n = String(nombre ?? '').trim()
+  if (!n || NOMBRES_INVALIDOS.has(n.toLowerCase())) return 'Agente'
+  return n
+}
+
+// Mapeo de estado de los jobs del MCP (R2 + A2)
+export function estadoDeJob(job, atascado, ahora) {
   const s = job.status
-  if (s === 'running' || s === 'accepted') return 'trabajando'
-  if (s === 'input_required') return 'esperando'
+  if (s === 'running' || s === 'accepted') {
+    const edad = ahora - (job.updatedAt || 0)
+    if (edad > ZOMBI_OCULTO_MS) return 'inactivo'      // zombi viejo: fuera de la escena
+    if (atascado || edad > ZOMBI_ATASCO_MS) return 'atascado' // zombi reciente: atasco
+    return 'trabajando'
+  }
+  if (s === 'input_required') return atascado ? 'atascado' : 'esperando'
   if (s === 'completed') return ahora - (job.updatedAt || 0) < VENTANA_TERMINADO_MS ? 'terminado' : 'inactivo'
   return 'inactivo'
 }
@@ -147,7 +167,7 @@ export function crearActividad({
       if (estado === 'inactivo') continue
       // Solo las sesiones con un job vivo se saltan la fuente (b) para no duplicar.
       if (j.sessionId) sesionesConJob.add(j.sessionId)
-      const agente = j.agent || 'desconocido'
+      const agente = normalizarAgente(j.agent)
       const s = sala(j.directory)
       anadir(s, {
         id: `job:${j.jobId || j.sessionId || agente}`,
@@ -162,11 +182,11 @@ export function crearActividad({
         sesion: j.sessionId || null,
         error: j.error || null,
       }, j.updatedAt || t)
-      if (j.agent) {
-        const d = `${j.agent}:${j.jobId || ''}`
+      if (agente !== 'Agente') {
+        const d = `${agente}:${j.jobId || ''}`
         if (!s._delegaciones.has(d)) {
           s._delegaciones.add(d)
-          s.delegaciones.push({ de: 'cerebro', a: j.agent, jobId: j.jobId || null })
+          s.delegaciones.push({ de: 'cerebro', a: agente, jobId: j.jobId || null })
         }
       }
     }
@@ -178,7 +198,7 @@ export function crearActividad({
       if (!se?.directory || !se.updatedAt) continue
       if (t - se.updatedAt >= VENTANA_SESION_MS) continue
       if (se.id && sesionesConJob.has(se.id)) continue
-      const agente = se.agent || 'cerebro-oc'
+      const agente = se.agent ? normalizarAgente(se.agent) : 'cerebro-oc'
       const s = sala(se.directory)
       anadir(s, {
         id: `sesion:${se.id || normalizar(se.directory)}`,
@@ -202,7 +222,7 @@ export function crearActividad({
       if (!l?.cwd || t - (l.ts || 0) >= VENTANA_LATIDO_MS) continue
       const estado = estadoDeLatido(l.evento)
       if (estado === 'inactivo') continue
-      const agente = l.agente || 'cerebro'
+      const agente = l.agente ? normalizarAgente(l.agente) : 'cerebro'
       const s = sala(l.cwd)
       anadir(s, {
         id: `latido:${l.sesion || ''}:${agente}`,
@@ -235,4 +255,78 @@ export function crearActividad({
   }
 
   return { calcular }
+}
+
+// ---------------------------------------------------------------- pruebas (A2/A3)
+// Lógica pura: se ejecutan solo al lanzar este archivo directamente, nunca al importarlo
+// (hub.mjs lo importa). No arrancan servidores ni tocan la red.
+//   node config/hub/lib/actividad.mjs
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  let fallos = 0
+  const af = (cond, msg) => { if (cond) console.log(`  OK: ${msg}`); else { fallos++; console.error(`  FALLO: ${msg}`) } }
+
+  const T = 1_700_000_000_000 // instante fijo de referencia
+  const min = (n) => n * 60 * 1000
+  const horas = (n) => n * 60 * 60 * 1000
+  const job = (extra) => ({ jobId: 'j1', sessionId: 's1', directory: '/tmp/proyecto-a', agent: 'implementador', status: 'running', createdAt: T - min(5), updatedAt: T - min(1), title: 'Tarea', ...extra })
+
+  console.log('A2 · trabajos zombi (estadoDeJob)')
+  af(estadoDeJob(job(), false, T) === 'trabajando', 'running reciente → trabajando')
+  af(estadoDeJob(job({ status: 'accepted' }), false, T) === 'trabajando', 'accepted reciente → trabajando')
+  af(estadoDeJob(job({ updatedAt: T - min(30) }), false, T) === 'trabajando', 'running a 30 min exactos → trabajando (el umbral es «más de» 30)')
+  af(estadoDeJob(job({ updatedAt: T - min(31) }), false, T) === 'atascado', 'running a 31 min → atascado (zombi reciente)')
+  af(estadoDeJob(job({ updatedAt: T - horas(2) }), false, T) === 'atascado', 'running a 2 h → atascado')
+  af(estadoDeJob(job({ updatedAt: T - horas(12) }), false, T) === 'atascado', 'running a 12 h exactas → atascado (el umbral es «más de» 12 h)')
+  af(estadoDeJob(job({ updatedAt: T - horas(13) }), false, T) === 'inactivo', 'running a 13 h → oculto (fuera de la escena)')
+  af(estadoDeJob(job({ updatedAt: T - horas(2) }), true, T) === 'atascado', 'atasco del vigilante → atascado')
+  af(estadoDeJob(job({ updatedAt: T - horas(13) }), true, T) === 'inactivo', 'zombi de más de 12 h → oculto aunque el vigilante lo marque')
+  af(estadoDeJob(job({ status: 'input_required', updatedAt: T - horas(1) }), false, T) === 'esperando', 'input_required → esperando')
+  af(estadoDeJob(job({ status: 'completed', updatedAt: T - min(1) }), false, T) === 'terminado', 'completed reciente → terminado')
+  af(estadoDeJob(job({ status: 'completed', updatedAt: T - min(5) }), false, T) === 'inactivo', 'completed antiguo → inactivo')
+
+  console.log('A3 · nombre de agente (normalizarAgente)')
+  af(normalizarAgente('Object') === 'Agente', "'Object' → «Agente»")
+  af(normalizarAgente('[object Object]') === 'Agente', "'[object Object]' → «Agente»")
+  af(normalizarAgente('') === 'Agente', "vacío → «Agente»")
+  af(normalizarAgente('   ') === 'Agente', 'solo espacios → «Agente»')
+  af(normalizarAgente(null) === 'Agente', 'null → «Agente»')
+  af(normalizarAgente(undefined) === 'Agente', 'undefined → «Agente»')
+  af(normalizarAgente('desconocido') === 'Agente', "'desconocido' → «Agente»")
+  af(normalizarAgente('DESCONOCIDO') === 'Agente', "'DESCONOCIDO' (mayúsculas) → «Agente»")
+  af(normalizarAgente('implementador') === 'implementador', 'nombre válido se conserva')
+  af(normalizarAgente(' cerebro ') === 'cerebro', 'se recortan los espacios de un nombre válido')
+
+  console.log('A2/A3 · integración (crearActividad)')
+  const organizacionFuente = { datos: () => ({ claude: [], opencode: [] }) }
+  const calcular = (over = {}) => crearActividad({
+    leerJobs: () => over.jobs || [],
+    sesiones: () => over.sesiones || [],
+    latidos: () => over.latidos || [],
+    organizacion: organizacionFuente,
+    ahora: () => T,
+  }).calcular()
+
+  void (async () => {
+    const vivo = await calcular({ jobs: [job({ updatedAt: T - min(5) })] })
+    af(vivo.proyectos.length === 1 && vivo.proyectos[0].personajes[0].estado === 'trabajando', 'job vivo aparece como trabajando en su sala')
+
+    const zombi = await calcular({ jobs: [job({ updatedAt: T - horas(1) })] })
+    af(zombi.proyectos.length === 1 && zombi.proyectos[0].personajes[0].estado === 'atascado', 'job zombi (1 h) aparece como atascado')
+
+    const muerto = await calcular({ jobs: [job({ updatedAt: T - horas(13) })] })
+    af(muerto.proyectos.length === 0, 'job zombi viejo (13 h) queda fuera de la escena')
+
+    const sinNombre = await calcular({ jobs: [job({ agent: 'Object', updatedAt: T - min(2) })] })
+    const p = sinNombre.proyectos[0]?.personajes[0]
+    af(!!p && p.agente === 'Agente' && p.familia === 'generica', "'Object' → agente «Agente» y familia genérica")
+    af(sinNombre.proyectos[0]?.delegaciones.length === 0, 'un agente sin nombre no genera delegación desde «cerebro»')
+    af(JSON.stringify(sinNombre).includes('"Object"') === false, 'la cadena «Object» no aparece en la salida')
+
+    const desconocido = await calcular({ jobs: [job({ agent: 'desconocido', updatedAt: T - min(2) })] })
+    const d = desconocido.proyectos[0]?.personajes[0]
+    af(!!d && d.agente === 'Agente' && d.familia === 'generica', "'desconocido' → agente «Agente» y familia genérica")
+
+    console.log(fallos === 0 ? '\nPRUEBAS actividad.mjs: TODO OK' : `\nPRUEBAS actividad.mjs: ${fallos} fallo(s)`)
+    process.exitCode = fallos === 0 ? 0 : 1
+  })()
 }

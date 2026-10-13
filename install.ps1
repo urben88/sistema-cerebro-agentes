@@ -304,7 +304,7 @@ Write-Note 'Activalo con @cerebro, "usa el agente cerebro" o claude --agent cere
 
 $binDir = Join-Path $UserHome '.local\bin'
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null
-foreach ($f in @('cerebro.cmd', 'cerebro')) {
+foreach ($f in @('cerebro.cmd', 'cerebro', 'cerebro-parar.cmd', 'cerebro-parar')) {
   $binSrc = Join-Path $ConfigRoot "bin\$f"
   $binDst = Join-Path $binDir $f
   Backup-Item $binDst

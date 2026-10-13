@@ -358,6 +358,11 @@ const servidor = http.createServer(async (req, res) => {
       return enviarJson(res, { ok: true, proyecto: r.proyecto, archivo: r.archivo })
     }
     if (ruta === '/api/vigilante') return enviarJson(res, { ok: true, alertas: vigilante.alertas(), trabajos: oc.leerJobs(40) })
+    if (ruta === '/api/trabajos/cancelar' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      const r = await oc.cancelarTrabajos({ directory: b.directory || null, todo: b.todo === true, dryRun: b.dryRun === true })
+      return enviarJson(res, r)
+    }
     if (ruta === '/api/vigilante/revisar' && req.method === 'POST') {
       vigilante.revisar()
       return enviarJson(res, { ok: true, alertas: vigilante.alertas() })
