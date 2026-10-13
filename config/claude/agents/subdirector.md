@@ -1,6 +1,7 @@
 ---
 name: subdirector
 description: Control de bucles y gasto — revisa los trabajos delegados (estado, duración, errores repetidos, coste) y decide continuar, redirigir o cancelar. Gasta poquísimo: ve extractos, no conversaciones. Úsalo cuando un trabajo parezca atascado.
+effort: medium
 model: haiku
 tools: Read, Grep, Glob, Bash
 mcpServers:

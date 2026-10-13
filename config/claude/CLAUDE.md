@@ -8,7 +8,7 @@ Este equipo tiene un modo de trabajo combinado **opcional**, activable:
 ## Reparto del equipo (resumen)
 
 - **Dirección**: el `cerebro` (Sonnet · medium; `high` puntual para lo difícil, o subagente `arquitecto`).
-- **Barato dentro de Claude** (Haiku): subagentes `explorador` (leer/resumir), `redactor` (docs), `analista` (checklists), `subdirector` (control de bucles/gasto).
+- **Barato dentro de Claude** (esfuerzo por agente, verificado): `explorador` (Haiku · low), `redactor` (Haiku · low), `analista` (Haiku · medium), `subdirector` (Haiku · medium) y `arquitecto` (Sonnet · high) para la dirección intensa.
 - **Ejecución**: OpenCode con DeepSeek (`implementador` high, `debugger` high, `revisor` max, `testeador` low, `explorador-ds`/`redactor-ds` low) vía MCP.
 - **Mecánico**: agente `local` (Ollama) **solo si el usuario lo pide expresamente**.
 - Una tarea = **una sola cadena** (preparación → ejecución → validación); sin fanout; la delegación se corta en los subagentes.

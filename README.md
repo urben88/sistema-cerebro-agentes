@@ -95,11 +95,11 @@ Reglas de oro para que la ventana de Claude dure: **`/clear` al cambiar de tarea
 | Familia | Agente | Modelo · esfuerzo | Cuándo |
 |---|---|---|---|
 | Dirección | `cerebro` (Claude) | Sonnet · medium | Decide, specs, desbloquea, revisión final |
-| Dirección intensa | `arquitecto` (Claude) | Sonnet | Arquitectura compleja, migraciones |
-| Exploración | `explorador` (Claude) / `explorador-ds` (OC) | Haiku / DeepSeek · low | Buscar, resumir, extraer contexto |
-| Documentación | `redactor` / `redactor-ds` | Haiku / DeepSeek · low | README, docs, changelog |
-| Verificación | `analista` (Claude) | Haiku | Requisitos vs realidad, checklists |
-| Control | `subdirector` (Claude) | Haiku | Bucles y gasto de los trabajos |
+| Dirección intensa | `arquitecto` (Claude) | Sonnet · **high** | Arquitectura compleja, migraciones |
+| Exploración | `explorador` (Claude) / `explorador-ds` (OC) | Haiku · **low** / DeepSeek · low | Buscar, resumir, extraer contexto |
+| Documentación | `redactor` / `redactor-ds` | Haiku · **low** / DeepSeek · low | README, docs, changelog |
+| Verificación | `analista` (Claude) | Haiku · medium | Requisitos vs realidad, checklists |
+| Control | `subdirector` (Claude) | Haiku · medium | Bucles y gasto de los trabajos |
 | Implementación | `implementador` (OC) | DeepSeek · high | Código delimitado por una spec |
 | Depuración | `debugger` (OC) | DeepSeek · high | Fallos reproducibles (máx. 2 ciclos) |
 | Revisión técnica | `revisor` (OC) | DeepSeek · max | Diff + edge cases |

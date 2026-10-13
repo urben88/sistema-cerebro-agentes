@@ -1,6 +1,7 @@
 ---
 name: analista
 description: Verificación ligera — compara requisitos/spec contra cambios, detecta inconsistencias y produce checklists. Solo lectura; no edita ni delega.
+effort: medium
 model: haiku
 tools: Read, Grep, Glob, Bash
 ---

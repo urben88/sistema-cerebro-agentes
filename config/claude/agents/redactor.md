@@ -1,6 +1,7 @@
 ---
 name: redactor
 description: Redacción de documentación (README, docs, changelog, comentarios) siguiendo el estilo del proyecto. Escribe solo documentación, nunca código; no delega.
+effort: low
 model: haiku
 tools: Read, Grep, Glob, Write, Edit
 ---

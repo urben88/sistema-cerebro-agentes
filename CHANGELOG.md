@@ -37,6 +37,7 @@ Versionado semántico (MAJOR.MINOR.PATCH).
 ### Cambiado
 
 - El agente `cerebro` y el skill `delegar-a-opencode` se reescriben con la matriz de reparto completa, los topes de coste por job y el protocolo actualizado: **sin `providerID`/`modelID`** en `opencode_fire` (el modelo y el esfuerzo van fijados en el agente).
+- **Esfuerzo por agente también en Claude** (campo `effort` del frontmatter, verificado contra el propio Claude Code): `cerebro` medium, `arquitecto` **high**, `explorador`/`redactor` **low**, `analista`/`subdirector` medium — la misma lógica que las variantes de DeepSeek.
 - `~/.claude/settings.json`: esfuerzos por defecto de Claude a **medium** (Sonnet 5/5.5 y Haiku 5.5); Opus se deja intacto. Subir a `high` cuando la tarea lo merezca (`/effort high`).
 - **Instaladores** (`install.ps1` / `install.sh`): ahora despliegan también el hub, los hooks, el MCP de triaje y los subagentes; fusionan `settings.json` (esfuerzos + hooks, con backup) mediante `config/hub/settings-merge.mjs`; copian el stack Docker (con el compose ajustado a la ruta instalada), levantan los contenedores y, en Windows, registran el **autoarranque** con una tarea programada. El desinstalador retira todo lo nuevo (conservando memoria y backups) y `verificar` comprueba hub, Laya, hooks, subagentes y settings.
 
