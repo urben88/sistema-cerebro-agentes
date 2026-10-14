@@ -121,6 +121,17 @@ pendientes (encolar/listar/resolver) con tipo e id validados (un id con `../` se
 `aprobaciones.json` corrupto se tolera y se reescribe válido.
 `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
 
+**Aprobación inteligente · guardián (R8).** El mismo `test-aprobaciones.mjs` comprueba que en modo
+`inteligente` un `peligroso` devuelve `accion:'guardian'` (con el contexto y el circuito) y que
+`hardline`/`seguro` no cambian; que `registrarVeredicto` rechaza `hardline` con **cualquier**
+veredicto (incluido `APROBAR`) sin tocar la racha; que un veredicto basura o ausente → `ESCALAR` →
+`preguntar`; que `APROBAR` solo aprueba si el nivel es `peligroso` en `inteligente` con el circuito
+cerrado (en `manual` no aprueba); que 3 `DENEGAR` seguidas abren el circuito y `decision()` pasa a
+`preguntar` con `modoEfectivo:'manual'`; que un `APROBAR` intercalado reinicia la racha;
+`reiniciarCircuito` lo cierra y vuelve a `guardian`; que el circuito persiste entre instancias y el
+merge con `aprobaciones.json` no pierde ediciones a mano del allowlist; y que `guardian.jsonl`
+redacta `sk-`/`ghp_`/`Bearer`/`password=`.
+
 ## Skills autogenerados (spec 10 · R5)
 
 ```bash

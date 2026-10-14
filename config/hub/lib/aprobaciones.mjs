@@ -9,8 +9,16 @@
  *   · Niveles (`hardline | peligroso | seguro`) desde `reglas-peligro.json` (regex).
  *     Se evalúa hardline primero; lo que no casa nada es `peligroso` por prudencia
  *     (motivo «sin regla»).
- *   · Modos (`config.aprobaciones.modo`): `manual` (defecto), `inteligente` (hoy ≡
- *     manual) y `abierto` (solo bloquea hardline, por decisión explícita del usuario).
+ *   · Modos (`config.aprobaciones.modo`): `manual` (defecto), `inteligente` y `abierto`
+ *     (solo bloquea hardline, por decisión explícita del usuario). En `inteligente` un
+ *     `peligroso` no se pregunta al usuario: `decision()` devuelve `accion:'guardian'` y el
+ *     **cerebro** invoca al guardián (R8, subagente barato) y reporta su veredicto. El hub
+ *     no invoca al guardián: solo aplica reglas duras y lleva el circuit-breaker.
+ *   · R8 · Circuit-breaker de veredictos (`registrarVeredicto`): `hardline` se rechaza con
+ *     cualquier veredicto; `DENEGAR` rechaza y suma una denegación seguida; 3 seguidas abren
+ *     el circuito (modo efectivo `manual` hasta que el usuario lo reinicie con
+ *     `reiniciarCircuito`); un `APROBAR`/`ESCALAR` reinicia la racha. Cada veredicto se anota
+ *     en `hub-data/guardian.jsonl` (últimas 500 líneas, secretos redactados).
  *   · Allowlist propio en `hub-data/aprobaciones.json`
  *     `{siempre:[…], sesion:{<sessionId>:[…]}}`, escrito con `tmp`+`rename` y
  *     *read-merge-write*: se RELEE el disco justo antes de escribir y solo se añade la
@@ -32,6 +40,23 @@ const TIPOS_PENDIENTE = ['memoria', 'skills']
 const MODOS = ['manual', 'inteligente', 'abierto']
 const ALCANCES = ['una_vez', 'sesion', 'siempre']
 const ID_SEGURO = /^[A-Za-z0-9_-]+$/
+// R8 · guardián: veredictos admitidos y umbral del circuit-breaker.
+const VEREDICTOS = ['APROBAR', 'DENEGAR', 'ESCALAR']
+const MAX_DENEGACIONES_SEGUIDAS = 3
+const MAX_GUARDIAN_LINEAS = 500
+
+/** Redacta secretos evidentes antes de anotarlos en `guardian.jsonl`. */
+const SECRETOS = [
+  [/sk-[A-Za-z0-9_-]{6,}/g, 'sk-REDACTADO'],
+  [/ghp_[A-Za-z0-9_-]{6,}/g, 'ghp_REDACTADO'],
+  [/(Bearer\s+)\S+/gi, '$1REDACTADO'],
+  [/(password\s*[=:]\s*)\S+/gi, '$1REDACTADO'],
+]
+function redactar(texto) {
+  let t = String(texto ?? '')
+  for (const [re, rep] of SECRETOS) t = t.replace(re, rep)
+  return t
+}
 
 /** Compila una lista de reglas `{patron, motivo}`; un regex inválido queda inerte. */
 function compilarLista(lista) {
@@ -65,11 +90,12 @@ export function crearAprobaciones({ dataDir, reglasPath = null, config = {} } = 
   if (!dataDir) throw new Error('crearAprobaciones: falta dataDir')
   const rutaReglas = reglasPath || path.join(__dirname, 'reglas-peligro.json')
   const archivoAllowlist = path.join(dataDir, 'aprobaciones.json')
+  const archivoGuardian = path.join(dataDir, 'guardian.jsonl')
   const dirPendientes = path.join(dataDir, 'pendientes')
 
   const reglas = cargarReglas(rutaReglas)
 
-  /** Modo configurado (validado); `inteligente` se trata como `manual` al decidir. */
+  /** Modo configurado (validado). */
   function modo() {
     const m = config?.aprobaciones?.modo
     return MODOS.includes(m) ? m : 'manual'
@@ -87,10 +113,16 @@ export function crearAprobaciones({ dataDir, reglasPath = null, config = {} } = 
     return { nivel: 'peligroso', motivo: 'sin regla' }
   }
 
-  /** Lee el allowlist del disco (tolerante a ausencia o corrupción). */
-  function leerAllowlist() {
+  /** Lee el objeto crudo del disco (tolerante); conserva claves ajenas (p. ej. `guardian`). */
+  function leerCrudo() {
     let j = {}
     try { j = JSON.parse(fs.readFileSync(archivoAllowlist, 'utf8')) } catch { j = {} }
+    return j && typeof j === 'object' && !Array.isArray(j) ? j : {}
+  }
+
+  /** Lee el allowlist del disco (tolerante a ausencia o corrupción). */
+  function leerAllowlist() {
+    const j = leerCrudo()
     const siempre = Array.isArray(j?.siempre) ? j.siempre.filter((x) => typeof x === 'string') : []
     const sesion = {}
     if (j?.sesion && typeof j.sesion === 'object' && !Array.isArray(j.sesion)) {
@@ -132,20 +164,131 @@ export function crearAprobaciones({ dataDir, reglasPath = null, config = {} } = 
 
     if (alcance === 'sesion') {
       if (!sessionId) return { ok: false, error: 'falta sessionId' }
-      const cfg = leerAllowlist() // relectura del disco: no pisar cambios manuales
-      const lista = new Set(cfg.sesion[sessionId] || [])
+      const cfg = leerCrudo() // objeto completo: conserva `guardian` y ediciones a mano
+      const al = leerAllowlist()
+      const lista = new Set(al.sesion[sessionId] || [])
       lista.add(p)
-      cfg.sesion[sessionId] = [...lista]
+      cfg.sesion = {
+        ...(cfg.sesion && typeof cfg.sesion === 'object' && !Array.isArray(cfg.sesion) ? cfg.sesion : {}),
+        [sessionId]: [...lista],
+      }
       escribirAllowlist(cfg)
       return { ok: true, alcance, sessionId, persistido: true }
     }
 
-    const cfg = leerAllowlist()
-    const lista = new Set(cfg.siempre)
+    const cfg = leerCrudo()
+    const al = leerAllowlist()
+    const lista = new Set(al.siempre)
     lista.add(p)
     cfg.siempre = [...lista]
     escribirAllowlist(cfg)
     return { ok: true, alcance: 'siempre', persistido: true }
+  }
+
+  // -------------------------------------------------------------- R8 · guardián y circuit-breaker
+
+  /** Estado del circuit-breaker, persistido en `aprobaciones.json` → `guardian`. */
+  function leerCircuito() {
+    const g = leerCrudo()?.guardian
+    const src = g && typeof g === 'object' && !Array.isArray(g) ? g : {}
+    return {
+      denegacionesSeguidas: Number.isInteger(src.denegacionesSeguidas) && src.denegacionesSeguidas >= 0 ? src.denegacionesSeguidas : 0,
+      abierto: src.abierto === true,
+      desde: typeof src.desde === 'string' ? src.desde : null,
+    }
+  }
+
+  /** Persiste el circuito con read-merge-write (no pisa el allowlist ni el resto del fichero). */
+  function guardarCircuito(circuito) {
+    const bruto = leerCrudo()
+    bruto.guardian = {
+      denegacionesSeguidas: circuito.denegacionesSeguidas,
+      abierto: circuito.abierto === true,
+      desde: circuito.desde ?? null,
+    }
+    escribirAllowlist(bruto)
+  }
+
+  /** Modo efectivo: en `inteligente` con el circuito abierto, se degrada a `manual`. */
+  function modoEfectivo() {
+    return modo() === 'inteligente' && leerCircuito().abierto ? 'manual' : modo()
+  }
+
+  /** Añade una línea a `guardian.jsonl`, conservando las últimas 500 y redactando secretos. */
+  function anotarGuardian(entrada) {
+    let lineas = []
+    try { lineas = fs.readFileSync(archivoGuardian, 'utf8').split('\n').filter((l) => l.trim()) } catch { lineas = [] }
+    let linea = JSON.stringify(entrada)
+    if (linea.length > 2000) linea = JSON.stringify({ ...entrada, comando: String(entrada?.comando ?? '').slice(0, 500) + '…[recortado]', motivo: String(entrada?.motivo ?? '').slice(0, 300) })
+    lineas.push(linea)
+    if (lineas.length > MAX_GUARDIAN_LINEAS) lineas = lineas.slice(-MAX_GUARDIAN_LINEAS)
+    const texto = lineas.join('\n') + '\n'
+    try {
+      fs.mkdirSync(dataDir, { recursive: true })
+      const tmp = `${archivoGuardian}.tmp-${process.pid}-${Date.now()}`
+      fs.writeFileSync(tmp, texto, 'utf8')
+      try { fs.renameSync(tmp, archivoGuardian) } catch { fs.writeFileSync(archivoGuardian, texto, 'utf8'); try { fs.unlinkSync(tmp) } catch { /* nada */ } }
+    } catch { /* sin disco */ }
+  }
+
+  /** Últimos veredictos anotados en `guardian.jsonl` (más reciente al final). */
+  function leerVeredictos(limite = 20) {
+    let lineas = []
+    try { lineas = fs.readFileSync(archivoGuardian, 'utf8').split('\n').filter((l) => l.trim()) } catch { return [] }
+    return lineas.slice(-limite)
+      .map((l) => { try { return JSON.parse(l) } catch { return null } })
+      .filter(Boolean)
+  }
+
+  /**
+   * R8 · Registra el veredicto del guardián y aplica las reglas duras del hub.
+   *   hardline → `rechazar` SIEMPRE (cualquier veredicto, no toca la racha);
+   *   `DENEGAR` → `rechazar` y suma una denegación seguida (3 ⇒ circuito abierto);
+   *   `ESCALAR` (o veredicto desconocido/ausente) → `preguntar` al usuario y reinicia la racha;
+   *   `APROBAR` → solo aprueba si el nivel es `peligroso` y el modo es `inteligente` con el
+   *   circuito cerrado; en cualquier otro caso, `preguntar`. Reinicia la racha.
+   * Devuelve `{ok, accionFinal, circuito, nivel, veredicto}`.
+   */
+  function registrarVeredicto({ comando, veredicto, sessionId = null, motivo = '' } = {}) {
+    const texto = String(comando ?? '')
+    let circuito = leerCircuito()
+    if (!texto.trim()) return { ok: false, error: 'falta comando', accionFinal: 'preguntar', circuito }
+    const { nivel, motivo: motivoNivel } = clasificar(texto)
+    const pedido = String(veredicto ?? '').toUpperCase()
+    const v = VEREDICTOS.includes(pedido) ? pedido : 'ESCALAR'
+    let accionFinal
+    if (nivel === 'hardline') {
+      accionFinal = 'rechazar' // el guardián nunca puede aprobar hardline; no altera la racha
+    } else if (v === 'DENEGAR') {
+      const n = circuito.denegacionesSeguidas + 1
+      const abierto = n >= MAX_DENEGACIONES_SEGUIDAS ? true : circuito.abierto
+      circuito = { denegacionesSeguidas: n, abierto, desde: abierto && !circuito.abierto ? new Date().toISOString() : (circuito.desde ?? null) }
+      guardarCircuito(circuito)
+      accionFinal = 'rechazar'
+    } else {
+      // APROBAR y ESCALAR reinician la racha; solo un APROBAR válido aprueba.
+      circuito = { denegacionesSeguidas: 0, abierto: circuito.abierto, desde: circuito.desde ?? null }
+      guardarCircuito(circuito)
+      const valido = v === 'APROBAR' && nivel === 'peligroso' && modo() === 'inteligente' && !circuito.abierto
+      accionFinal = valido ? 'aprobar' : 'preguntar'
+    }
+    anotarGuardian({
+      ts: new Date().toISOString(),
+      sessionId: sessionId ? String(sessionId) : null,
+      nivel,
+      veredicto: v,
+      accionFinal,
+      motivo: redactar(String(motivo || motivoNivel || '')),
+      comando: redactar(texto),
+    })
+    return { ok: true, accionFinal, circuito, nivel, veredicto: v }
+  }
+
+  /** Cierra el circuito (solo el usuario): racha a 0 y `abierto:false`. */
+  function reiniciarCircuito() {
+    const circuito = { denegacionesSeguidas: 0, abierto: false, desde: null }
+    guardarCircuito(circuito)
+    return { ok: true, circuito }
   }
 
   /** ¿La entrada del allowlist cubre el texto? (igualdad, subcadena o regex). */
@@ -157,23 +300,33 @@ export function crearAprobaciones({ dataDir, reglasPath = null, config = {} } = 
   }
 
   /**
-   * Decisión completa: `{nivel, motivo, accion, permitidoPorAllowlist}`.
+   * Decisión completa: `{nivel, motivo, accion, permitidoPorAllowlist, modoEfectivo}`.
    *   hardline → `rechazar` (el allowlist nunca lo salva);
    *   allowlist o `seguro` o modo `abierto` → `aprobar`;
-   *   peligroso en manual/inteligente → `preguntar`.
+   *   `inteligente` con circuito cerrado y peligroso → `guardian` (lo evalúa el cerebro, R8);
+   *   en el resto (manual, o inteligente con circuito abierto) → `preguntar`.
    */
   function decision(texto, { sessionId = null } = {}) {
     const { nivel, motivo } = clasificar(texto)
-    if (nivel === 'hardline') return { nivel, motivo, accion: 'rechazar', permitidoPorAllowlist: false }
+    const circuito = leerCircuito()
+    const efectivo = modo() === 'inteligente' && circuito.abierto ? 'manual' : modo()
+    if (nivel === 'hardline') return { nivel, motivo, accion: 'rechazar', permitidoPorAllowlist: false, modoEfectivo: efectivo }
     const al = leerAllowlist()
     const lista = [...al.siempre]
     if (sessionId && Array.isArray(al.sesion[sessionId])) lista.push(...al.sesion[sessionId])
     if (lista.some((p) => coincidePatron(p, texto))) {
-      return { nivel, motivo, accion: 'aprobar', permitidoPorAllowlist: true }
+      return { nivel, motivo, accion: 'aprobar', permitidoPorAllowlist: true, modoEfectivo: efectivo }
     }
-    if (nivel === 'seguro') return { nivel, motivo, accion: 'aprobar', permitidoPorAllowlist: false }
-    if (modo() === 'abierto') return { nivel, motivo, accion: 'aprobar', permitidoPorAllowlist: false }
-    return { nivel, motivo, accion: 'preguntar', permitidoPorAllowlist: false }
+    if (nivel === 'seguro') return { nivel, motivo, accion: 'aprobar', permitidoPorAllowlist: false, modoEfectivo: efectivo }
+    if (modo() === 'abierto') return { nivel, motivo, accion: 'aprobar', permitidoPorAllowlist: false, modoEfectivo: efectivo }
+    if (efectivo === 'manual') {
+      return {
+        nivel, motivo, accion: 'preguntar', permitidoPorAllowlist: false, modoEfectivo: 'manual',
+        ...(modo() === 'inteligente' ? { motivoModo: 'circuito abierto (3 denegaciones seguidas)' } : {}),
+      }
+    }
+    // `inteligente` con circuito cerrado: el cerebro invoca al guardián (R8).
+    return { nivel, motivo, accion: 'guardian', permitidoPorAllowlist: false, modoEfectivo: 'inteligente', comando: String(texto ?? ''), circuito }
   }
 
   const tipoValido = (tipo) => TIPOS_PENDIENTE.includes(tipo)
@@ -234,11 +387,12 @@ export function crearAprobaciones({ dataDir, reglasPath = null, config = {} } = 
     } catch { return { ok: false, error: 'pendiente no encontrado' } }
   }
 
-  /** Vista resumida para `GET /api/aprobaciones`: modo + reglas + allowlist + pendientes. */
+  /** Vista resumida para `GET /api/aprobaciones`: modo + reglas + allowlist + pendientes + guardián. */
   function estado() {
     const resumir = (lista) => lista.map((r) => ({ patron: r.patron, motivo: r.motivo }))
     return {
       modo: modo(),
+      modoEfectivo: modoEfectivo(),
       reglas: {
         hardline: resumir(reglas.hardline),
         peligroso: resumir(reglas.peligroso),
@@ -247,17 +401,25 @@ export function crearAprobaciones({ dataDir, reglasPath = null, config = {} } = 
       },
       allowlist: leerAllowlist(),
       pendientes: listarPendientes(),
+      // R8 · estado del circuit-breaker y últimos veredictos del guardián.
+      guardian: { circuito: leerCircuito(), veredictos: leerVeredictos(20) },
     }
   }
 
   return {
     archivo: archivoAllowlist,
+    archivoGuardian,
     reglasPath: rutaReglas,
     clasificar,
     decision,
     registrar,
     modo,
+    modoEfectivo,
     leerAllowlist,
+    leerCircuito,
+    leerVeredictos,
+    registrarVeredicto,
+    reiniciarCircuito,
     estado,
     encolar,
     listarPendientes,

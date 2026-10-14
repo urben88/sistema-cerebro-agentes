@@ -1292,12 +1292,16 @@ function pintarAprobaciones(d) {
   const cardModo = h('div', { clase: 'agente' })
   const cabModo = h('div')
   cabModo.append(h('span', { clase: `badge ${datos.modo === 'abierto' ? 'ambar' : 'azul'}`, texto: `modo: ${datos.modo || 'manual'}` }))
+  if (datos.modoEfectivo && datos.modoEfectivo !== datos.modo) cabModo.append(h('span', { clase: 'chip', texto: `efectivo: ${datos.modoEfectivo}` }))
   cardModo.append(cabModo)
   const notaModo = datos.modo === 'abierto' ? 'Solo bloquea hardline; lo peligroso se aprueba (decisión explícita del usuario).'
-    : datos.modo === 'inteligente' ? 'Reservado para R8; hoy equivale a manual.'
+    : datos.modo === 'inteligente' ? 'Inteligente: lo peligroso lo evalúa el guardián; 3 denegaciones seguidas pasan a manual.'
       : 'Manual: lo peligroso pregunta; lo seguro se aprueba. El allowlist nunca salva un hardline.'
   cardModo.append(h('div', { clase: 'desc', texto: notaModo }))
   contModo.append(cardModo)
+
+  // R8 · guardián: circuit-breaker, últimos veredictos y reinicio del circuito.
+  pintarGuardian(datos.guardian || {})
 
   // Reglas activas: conteos + lista de hardline y peligroso (seguro solo el conteo).
   const reglas = datos.reglas || {}
@@ -1344,6 +1348,49 @@ function pintarAprobaciones(d) {
       c.append(h('div', { clase: 'desc tenue', texto: `${p.origen || '—'} · ${hace(ts)}` }))
       contPend.append(c)
     }
+  }
+}
+
+// R8 · guardián: estado del circuit-breaker, últimos veredictos y botón de reinicio.
+function pintarGuardian(g) {
+  const cont = vaciar($('aprobacionesGuardian'))
+  if (!cont) return
+  const circuito = (g && g.circuito) || {}
+  const card = h('div', { clase: 'agente' })
+  const cab = h('div')
+  cab.append(h('span', { clase: `badge ${circuito.abierto ? 'rojo' : 'verde'}`, texto: circuito.abierto ? 'circuito: abierto' : 'circuito: cerrado' }))
+  cab.append(h('span', { clase: 'chip', texto: `denegaciones seguidas: ${circuito.denegacionesSeguidas || 0}` }))
+  card.append(cab)
+  card.append(h('div', { clase: 'desc', texto: circuito.abierto
+    ? `Modo efectivo manual hasta que el usuario lo reinicie${circuito.desde ? ` (desde ${hace(Date.parse(circuito.desde))})` : ''}.`
+    : 'Lo peligroso lo evalúa el guardián (modo inteligente); ante duda, al usuario.' }))
+  const btn = h('button', { clase: 'boton mini', type: 'button', texto: 'Reiniciar circuito' })
+  btn.addEventListener('click', async () => {
+    try {
+      await fetch('/api/aprobaciones/circuito/reiniciar', { method: 'POST' })
+      refrescarPesado()
+    } catch { /* nada */ }
+  })
+  const fila = h('div', { clase: 'desc' })
+  fila.append(btn)
+  card.append(fila)
+  cont.append(card)
+
+  const veredictos = (g && g.veredictos) || []
+  if (!veredictos.length) {
+    cont.append(h('div', { clase: 'desc tenue', texto: 'Sin veredictos del guardián todavía.' }))
+  } else {
+    const lista = h('div', { clase: 'agente' })
+    lista.append(h('div', {}, h('span', { clase: 'nombre', texto: 'Últimos veredictos' }), h('span', { clase: 'chip', texto: `${veredictos.length}` })))
+    for (const v of [...veredictos].reverse()) {
+      const clase = v.veredicto === 'APROBAR' ? 'verde' : v.veredicto === 'DENEGAR' ? 'rojo' : 'ambar'
+      const fila2 = h('div', { clase: 'desc' })
+      fila2.append(h('span', { clase: `badge ${clase}`, texto: `${v.veredicto || '?'}→${v.accionFinal || '?'}` }))
+      const resumen = String(v.comando || '').replace(/\s+/g, ' ').slice(0, 120)
+      fila2.append(h('span', { texto: ` ${v.nivel || '?'} · ${resumen}${v.ts ? ` · ${hace(Date.parse(v.ts))}` : ''}` }))
+      lista.append(fila2)
+    }
+    cont.append(lista)
   }
 }
 
@@ -1415,14 +1462,22 @@ function pintarSkills(datos, usoDatos) {
 
 function aprobacionesDemo() {
   return {
-    modo: 'manual',
+    modo: 'inteligente',
+    modoEfectivo: 'manual',
     reglas: {
-      conteos: { hardline: 6, peligroso: 7, seguro: 3 },
+      conteos: { hardline: 6, peligroso: 9, seguro: 3 },
       hardline: [{ patron: '\\brm\\s+…(?:/|~|\\$HOME)…', motivo: 'borrado recursivo de la raíz o del directorio personal' }, { patron: '\\bmkfs…', motivo: 'formateo de disco' }],
       peligroso: [{ patron: '\\bgit\\s+push\\b…--force', motivo: 'git push forzado' }, { patron: '\\brm\\s+…-[a-zA-Z]*r', motivo: 'borrado recursivo' }],
       seguro: [],
     },
     allowlist: { siempre: ['npm run build'], sesion: { 'demo-ses': ['git push origin main'] } },
+    guardian: {
+      circuito: { denegacionesSeguidas: 3, abierto: true, desde: new Date(Date.now() - 12 * 60000).toISOString() },
+      veredictos: [
+        { ts: new Date(Date.now() - 12 * 60000).toISOString(), nivel: 'peligroso', veredicto: 'DENEGAR', accionFinal: 'rechazar', motivo: 'borrado recursivo fuera del proyecto', comando: 'rm -rf C:/Users/otro/proyecto' },
+        { ts: new Date(Date.now() - 20 * 60000).toISOString(), nivel: 'peligroso', veredicto: 'ESCALAR', accionFinal: 'preguntar', motivo: 'contexto insuficiente', comando: 'git reset --hard origin/main' },
+      ],
+    },
     pendientes: [
       { tipo: 'skills', id: 'demo-skill', resumen: 'Skill propuesto: resumir-bitacora', origen: 'cerebro', creado: new Date(Date.now() - 8 * 60000).toISOString(), payload: null },
       { tipo: 'memoria', id: 'demo-mem', resumen: 'Consolidar ESTADO.md del proyecto demo', origen: 'hub', creado: new Date(Date.now() - 32 * 60000).toISOString(), payload: null },

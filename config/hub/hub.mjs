@@ -66,7 +66,8 @@ const CONFIG_DEFECTO = {
   horasMaxJob: 24,
   temporalDias: 14,
   autolimpiarHoras: 6,
-  // R4 · aprobaciones por niveles: el hub clasifica; el cerebro decide.
+  // R4/R8 · aprobaciones por niveles: el hub clasifica y aplica reglas duras; el cerebro
+  // resuelve (lo peligroso lo evalúa el guardián en modo `inteligente`).
   aprobaciones: { modo: 'manual' },
 }
 
@@ -148,11 +149,12 @@ function cargarReglas() {
 const reglas = cargarReglas()
 const triaje = crearTriaje({ reglas, logDecisiones: path.join(LOGS_DIR, 'decisiones.jsonl') })
 
-// ----------------------------------------------------------------- aprobaciones (R4 · spec 10)
-// El hub CLASIFICA comandos/peticiones y mantiene su propio allowlist; no aprueba nada
-// (resuelve el cerebro vía MCP). Reglas en `lib/reglas-peligro.json`, allowlist en
-// `hub-data/aprobaciones.json` (tmp+rename con read-merge-write) y cola de pendientes
-// en `hub-data/pendientes/`.
+// ----------------------------------------------------------------- aprobaciones (R4/R8 · spec 10)
+// El hub CLASIFICA comandos/peticiones, aplica las reglas duras del guardián (R8) y mantiene
+// su propio allowlist; no aprueba por sí mismo (resuelve el cerebro vía MCP). Reglas en
+// `lib/reglas-peligro.json`, allowlist y circuit-breaker en `hub-data/aprobaciones.json`
+// (tmp+rename con read-merge-write), veredictos en `hub-data/guardian.jsonl` y cola de
+// pendientes en `hub-data/pendientes/`.
 const aprobaciones = crearAprobaciones({ dataDir: DATA_DIR, config })
 
 // ----------------------------------------------------------------- skills (R5 · spec 10)
@@ -616,6 +618,17 @@ const servidor = http.createServer(async (req, res) => {
       const b = await cuerpoJson(req)
       if (typeof b.comando !== 'string' || !b.comando.trim()) return enviarJson(res, { ok: false, error: 'falta comando' }, 400)
       const r = aprobaciones.registrar(b.comando, b.alcance, b.sessionId || null)
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    // R8 · el cerebro reporta aquí el veredicto del guardián; el hub aplica reglas duras.
+    if (ruta === '/api/aprobaciones/veredicto' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.comando !== 'string' || !b.comando.trim()) return enviarJson(res, { ok: false, error: 'falta comando' }, 400)
+      const r = aprobaciones.registrarVeredicto({ comando: b.comando, veredicto: b.veredicto, sessionId: b.sessionId || null, motivo: b.motivo })
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/aprobaciones/circuito/reiniciar' && req.method === 'POST') {
+      const r = aprobaciones.reiniciarCircuito()
       return enviarJson(res, r, r.ok ? 200 : 400)
     }
     if (ruta === '/api/aprobaciones' && req.method === 'GET') {
