@@ -29,6 +29,7 @@ import { crearActividad } from './lib/actividad.mjs'
 import { clasificarAlerta } from './lib/errores.mjs'
 import { crearVivo } from './lib/vivo.mjs'
 import { crearLogErrores } from './lib/errores-log.mjs'
+import { crearLedger, ESTADOS as ESTADOS_LEDGER } from './lib/ledger.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HOME = os.homedir()
@@ -49,6 +50,10 @@ const MAX_CUERPO = 1024 * 1024
 const CONFIG_DEFECTO = {
   puerto: 4597,
   minutosAtasco: 12,
+  // R3 · umbrales del ledger de trabajos (configurables en hub-data/config.json).
+  minutosAtascoHerramienta: null, // null = hereda minutosAtasco (spec 10, R3.4)
+  minutosGraciaAtasco: 2,
+  maxConcurrentes: 3,
   minutosPermiso: 20,
   minutosEnfriamiento: 30,
   horasMaxJob: 24,
@@ -333,6 +338,67 @@ function difundirSSE(evento, datos) {
 const vivo = crearVivo({ oc, dirDatos: DATA_DIR, emitir: (ev) => difundirSSE('trabajo', ev), latidos: () => latidosActivos(), registrarLog: (d) => logErrores.registrarYLog(d), intervaloMs: 4000 })
 vivo.arrancar()
 
+// ------------------------------------------------------- ledger de trabajos (R3 · spec 10)
+// Registro durable del hub (`hub-data/trabajos.json`) que sobrevive a los reinicios: se
+// reconcilia con `leerJobs()` (no con opencode_job_list), re-engancha lo vivo a `vivo.mjs`,
+// marca `desconocido` lo desaparecido y detecta atascos por progreso. NUNCA toca los
+// ficheros de job del MCP. Los avisos de atasco reutilizan el mecanismo del vigilante.
+// Limpieza de arranque: `tmp` huérfanos de una escritura atómica interrumpida (> 1 h).
+try {
+  const HORA = 60 * 60 * 1000
+  for (const n of fs.readdirSync(DATA_DIR)) {
+    if (!/^trabajos\.json\.tmp-/.test(n)) continue
+    try { if (Date.now() - fs.statSync(path.join(DATA_DIR, n)).mtimeMs > HORA) fs.unlinkSync(path.join(DATA_DIR, n)) } catch { /* nada */ }
+  }
+} catch { /* hub-data todavía no existe */ }
+
+const ledger = crearLedger({
+  dirDatos: DATA_DIR,
+  minutosAtasco: config.minutosAtasco,
+  minutosAtascoHerramienta: config.minutosAtascoHerramienta,
+  minutosGraciaAtasco: config.minutosGraciaAtasco,
+  maxConcurrentes: config.maxConcurrentes,
+  horasMaxJob: config.horasMaxJob,
+  avisar: (a) => { try { vigilante.agregar(a) } catch { /* nada */ } },
+  anotarBitacora: (dir, titulo, texto) => {
+    // Solo si el proyecto ya está registrado: no creamos proyectos por un job huérfano.
+    try {
+      if (!memoria.buscarProyecto(dir)) return
+      const p = memoria.agregarBitacora(dir, titulo, texto)
+      if (p?.slug) indexarProyectoSilencioso(p.slug) // como el resto de escrituras de memoria
+    } catch { /* nada */ }
+  },
+  // Sondeo por job: un job fuera del top-N de `leerJobs()` no es «desaparecido».
+  existeJob: (jobId) => oc.existeJob(jobId),
+  log: (d) => { try { logErrores.registrar(d) } catch { /* nada */ } },
+})
+
+let ultimoAvisoConcurrencia = 0
+function cicloLedger() {
+  try {
+    // top-80 por `updatedAt` para no parsear todo el histórico; un job vivo pero viejo
+    // quedará fuera y el ledger lo confirma con `existeJob` (no lo marca `desconocido`).
+    const jobs = oc.leerJobs(80)
+    const informe = ledger.reconciliar(jobs)
+    // Re-engancha a la vista viva lo que sigue vivo (recolectar ya cachea 15 s por job).
+    for (const jobId of informe.reEnganchados) { try { vivo.recolectar(jobId) } catch { /* nada */ } }
+    // Atasco por progreso: `updatedAt` del job + eventos con `ts` de vivo.mjs.
+    const eventos = {}
+    for (const e of ledger.leer()) eventos[e.jobId] = (vivo.detalle(e.jobId).eventos || [])
+    ledger.revisarAtascos({ jobs, eventos })
+    // Concurrencia: el hub solo mide y avisa (con freno para no inundar el registro).
+    const m = ledger.medir()
+    if (m.aviso && Date.now() - ultimoAvisoConcurrencia > 10 * 60 * 1000) {
+      ultimoAvisoConcurrencia = Date.now()
+      logErrores.registrar({ origen: 'ledger', severidad: 'aviso', mensaje: m.mensaje, contexto: { enCurso: m.enCurso, maxConcurrentes: m.maxConcurrentes, profundidad: m.profundidad } })
+    }
+  } catch (e) {
+    try { logErrores.registrar({ origen: 'ledger', severidad: 'aviso', mensaje: `Ciclo del ledger falló: ${e?.message || e}` }) } catch { /* nada */ }
+  }
+}
+cicloLedger() // reconciliación al arrancar (R3.3)
+setInterval(cicloLedger, 60 * 1000).unref?.()
+
 // ----------------------------------------------------------------- gasto
 
 let cacheGasto = { ts: 0, datos: null }
@@ -559,6 +625,16 @@ const servidor = http.createServer(async (req, res) => {
       // R6 · las alertas del vigilante se muestran con el mismo clasificador que los errores.
       const alertas = vigilante.alertas().map((a) => ({ ...a, info: clasificarAlerta(a) }))
       return enviarJson(res, { ok: true, alertas, trabajos: oc.leerJobs(40) })
+    }
+    if (ruta === '/api/trabajos/ledger' && req.method === 'GET') {
+      // R3.5 · lista del ledger durable (filtro ?estado=) + medición de concurrencia.
+      // Va ANTES de la ruta genérica /api/trabajos/<jobId>.
+      const estado = u.searchParams.get('estado') || null
+      if (estado && !ESTADOS_LEDGER.includes(estado)) {
+        return enviarJson(res, { ok: false, error: `estado inválido; válidos: ${ESTADOS_LEDGER.join(', ')}` }, 400)
+      }
+      const trabajos = ledger.listar({ estado })
+      return enviarJson(res, { ok: true, total: trabajos.length, trabajos, medicion: ledger.medir() })
     }
     if (ruta.startsWith('/api/trabajos/') && req.method === 'GET') {
       // R7 · detalle vivo de un trabajo (lo usa el panel lateral). Incluye lo que

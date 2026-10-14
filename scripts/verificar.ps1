@@ -225,6 +225,11 @@ $nudgesPruebas = Join-Path $RepoRoot 'scripts\test-nudges.mjs'
 & node $nudgesPruebas | Out-Null
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de nudges y límites de memoria' 'Ejecuta: node scripts\test-nudges.mjs'
 
+Write-Step 'Ledger de trabajos (R3 · spec 10)'
+$ledgerPruebas = Join-Path $RepoRoot 'scripts\test-ledger.mjs'
+& node $ledgerPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas del ledger de trabajos (reconciliación, atasco, retención)' 'Ejecuta: node scripts\test-ledger.mjs'
+
 if ($Smoke) {
   Write-Step 'Smoke test del MCP (arranque real por stdio)'
   $smokeScript = Join-Path $RepoRoot 'scripts\smoke-mcp.mjs'

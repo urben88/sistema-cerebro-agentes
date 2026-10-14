@@ -86,6 +86,25 @@ y `/api/memoria/contexto` responden HTTP 422 `{ok:false, motivo:'excede', limite
 (`contenidoActual` es el texto guardado hoy, para consolidar). El CLI `estado.mjs --escribir`
 muestra el error y sale con 1 pidiendo mover lo cerrado a la bitácora.
 
+## Ledger de trabajos (spec 10 · R3)
+
+```bash
+node scripts/test-ledger.mjs
+```
+
+Prueba sin dependencias (directorios temporales, nunca toca `hub-data` real ni los ficheros
+de job del MCP) con reloj y umbrales cortos inyectados: comprueba las transiciones de estado
+(`registrar()` traduce los estados del MCP), la reconciliación con un `leerJobs()` simulado
+(job vivo → `en_curso` y re-enganchado, desaparecido o `unknown` → `desconocido` con nota de
+bitácora), la inmutabilidad de lo terminal (`unknown`/activo no degradan un `completado`; un
+job vivo fuera del top-N no pasa a `desconocido`), el atasco por progreso (sin progreso →
+`atascado` + aviso; con progreso → no; y «dentro de una herramienta» con su propio umbral;
+nunca cancela; `atascado` + progreso nuevo vuelve a `en_curso` vía `reconciliar()`), que solo
+escribe bajo `dirDatos`, la tolerancia a un `trabajos.json` corrupto, la retención (7 días y
+tope de 50 completados), el merge por relectura (dos escritores secuenciales) y la medición de
+concurrencia/profundidad.
+`verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
+
 ## Prueba de fuego sugerida
 
 En una carpeta vacía:

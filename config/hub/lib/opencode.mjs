@@ -257,6 +257,15 @@ export function crearOpenCode({ systemDir, host = null }) {
     return encontrado
   }
 
+  /**
+   * ¿Sigue existiendo el fichero de un job? Lo usa el ledger para no confundir «fuera
+   * del top-N de `leerJobs()`» con «desaparecido»: un job vivo con `updatedAt` viejo
+   * puede no entrar en la ventana, pero su fichero sigue en disco.
+   */
+  function existeJob(jobId) {
+    try { return !!rutaJob(jobId) } catch { return false }
+  }
+
   function detalleJob(jobId) {
     const encontrado = rutaJob(jobId)
     if (!encontrado) return { ok: false, error: `trabajo no encontrado: ${jobId}` }
@@ -355,5 +364,5 @@ export function crearOpenCode({ systemDir, host = null }) {
     return { ok: true, revisados: candidatos.length, cancelados: resultados.filter((r) => r.cancelado).length, resultados }
   }
 
-  return { puerto, get, sesiones, sesionesRecientes, sesionMensajes, sesionTodo, leerJobs, leerJobsRecientes, detalleJob, abortarSesion, cancelarTrabajos }
+  return { puerto, get, sesiones, sesionesRecientes, sesionMensajes, sesionTodo, leerJobs, leerJobsRecientes, detalleJob, existeJob, abortarSesion, cancelarTrabajos }
 }

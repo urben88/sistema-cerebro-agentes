@@ -236,6 +236,13 @@ else
   test_item 1 'Pruebas de nudges y límites de memoria' 'Ejecuta: node scripts/test-nudges.mjs'
 fi
 
+step 'Ledger de trabajos (R3 · spec 10)'
+if node "$REPO_ROOT/scripts/test-ledger.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas del ledger de trabajos (reconciliación, atasco, retención)'
+else
+  test_item 1 'Pruebas del ledger de trabajos (reconciliación, atasco, retención)' 'Ejecuta: node scripts/test-ledger.mjs'
+fi
+
 if [ "$SMOKE" -eq 1 ]; then
   step 'Smoke test del MCP (arranque real por stdio)'
   if [ "$ASK" -eq 1 ]; then
