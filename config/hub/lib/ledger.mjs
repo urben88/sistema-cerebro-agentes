@@ -173,9 +173,23 @@ export function crearLedger({
     }
   }
 
+  /**
+   * Completa los datos de identidad de una entrada con lo que traiga el job observado
+   * (spec 14 · C6): si la entrada tenía `agente`/`directorio` vacíos —porque el fichero
+   * del job aún no los exponía al reconciliarla por primera vez— se rellenan ahora sin
+   * pisar lo ya conocido. También corrige un `'?'` heredado.
+   */
+  function completarDeJob(e, j) {
+    if (!e || !j) return e
+    if ((!e.agente || e.agente === '?') && j.agent) e.agente = j.agent
+    if (!e.directorio && j.directory) e.directorio = j.directory
+    return e
+  }
+
   /** Marca una entrada como `desconocido` y anota SOLO si cambia de estado (evita repetir). */
   function marcarDesconocido(e, job, motivo, informe) {
     const cambio = e.estado !== 'desconocido'
+    completarDeJob(e, job)
     e.estado = 'desconocido'
     e.motivo = `reconciliación: ${motivo}`
     if (job && num(job.updatedAt)) e.actualizado = Math.max(num(e.actualizado), num(job.updatedAt))
@@ -218,13 +232,16 @@ export function crearLedger({
         else if (ACTIVOS.has(est)) informe.reEnganchados.push(jobId)
         continue
       }
+      // C6 (spec 14) · aunque el estado sea terminal (inmutable), los datos de identidad
+      // sí se completan: si la entrada se creó sin `agente` (el fichero del job todavía no
+      // lo traía), se rellena con el agente conocido del registro del job.
+      completarDeJob(previo, j)
       // Lo terminal es inmutable: ni `unknown` lo degrada ni lo vivo lo revive a `en_curso`.
       if (TERMINALES.has(previo.estado)) continue
       if (est === 'desconocido') { marcarDesconocido(previo, j, 'status unknown', informe); continue }
       if (ACTIVOS.has(est)) {
         previo.estado = 'en_curso'
-        previo.agente = previo.agente || j.agent || null
-        previo.directorio = previo.directorio || j.directory || null
+        completarDeJob(previo, j)
         previo.actualizado = Math.max(num(previo.actualizado), num(j.updatedAt)) || num(previo.actualizado)
         previo.ultimoPaso = j.title || previo.ultimoPaso || null
         previo.motivo = 'reconciliación: job vivo, re-enganchado a la vista viva'
@@ -234,6 +251,7 @@ export function crearLedger({
         previo.motivo = `reconciliación: ${j.status}`
         previo.actualizado = Math.max(num(previo.actualizado), num(j.updatedAt)) || num(previo.actualizado)
         previo.ultimoPaso = j.title || previo.ultimoPaso || null
+        completarDeJob(previo, j)
       }
     }
 

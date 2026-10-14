@@ -3,6 +3,18 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado semántico (MAJOR.MINOR.PATCH).
 
+## [0.8.0] - 2026-10-14
+
+### Añadido (spec 14 · comunicación entre agentes y reparto)
+
+- **C1 · Directorio de agentes** (`config/hub/lib/a2a.mjs` + `GET /api/a2a/agentes`): Agent Card ligera por agente — `{name, description, version, skills[{id,name,description}], modelo, esfuerzo, capa, solo_lectura, coste_estimado, salud}`, a partir del frontmatter de `config/opencode/agents/*.md` y `config/claude/agents/*.md`, `reglas.json` y `salud-agentes`. Sin dependencias nuevas.
+- **C2 · Consulta síncrona mediada** (`POST /api/a2a/consultar`): valida (`para` de lectura, `pregunta` ≤ 2000, `directory` absoluto y existente), antepone la instrucción fija («responde en ≤ 10 líneas…»), lanza el job con `lanzador.mjs`, espera hasta 120 s vigilando el tope de coste de `presupuestos` (aborta la sesión al superarlo) y devuelve `{ok, jobId, respuesta (≤ 1200, con «…»), coste, ms}`. Rechaza con 409 si `de` ya está dentro de una consulta (profundidad 1) o si hay más de 3 en curso. Deja job en el ledger y evento `a2a` en métricas.
+- **C3 · Buzón asíncrono por tarea** (`POST/GET /api/a2a/mensajes`, `POST /api/a2a/mensajes/responder`): estados `pendiente|respondido|expirado`, TTL 30 min, máx. 20 pendientes por destinatario (429) y persistencia atómica read-merge-write en `hub-data/a2a.json`. Una respuesta no genera otro mensaje de tipo `pregunta`.
+- **C4 · Triaje en el camino**: la consulta mediada y el lanzamiento de jobs del hub registran la decisión de triaje (`decisiones.jsonl`) si no hay una reciente para el mismo encargo; `cerebro` y `cerebro-oc` pasan a decir «antes de delegar, `triaje_decidir`; para lecturas largas, `a2a/consultar` en vez de leer tú».
+- **C5 · Reparto medido** (`GET /api/reparto?dias=7`): agrega ledger + métricas (spec 11) + `decisiones.jsonl` en `{trabajos, completados, fallidos, cancelados, coste, mediaMs}` por agente y por capa, `%` de jobs con decisión de triaje previa y `consultasA2A {total, coste, mediaRespuestaChars}`. Tarjeta «Reparto» en el panel y evento de métricas `a2a` (consulta|mensaje; sin texto).
+- **C6 · Limpiar el ruido del ledger**: las entradas se creaban sin `agente` cuando el fichero del job aún no exponía `agent`/`session.agent` (o lo traía como `"Object"`); `reconciliar()` ahora **completa** `agente`/`directorio` con el registro del job aunque la entrada sea terminal (el estado sigue inmutable).
+- **C7 · Guías, docs y pruebas**: sección A2A en los agentes de OpenCode de lectura y en `implementador`/`debugger` (cuándo usar `consultar` por curl y sus límites), `docs/arquitectura.md` (diagrama del mediador), `docs/pruebas.md` y `scripts/test-a2a.mjs` (lanzador simulado, todo en `os.tmpdir()`) enganchado en `verificar.sh/.ps1`.
+
 ## [0.7.0] - 2026-10-14
 
 ### Añadido (spec 13 · guía de uso de MCPs)

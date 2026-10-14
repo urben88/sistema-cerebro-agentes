@@ -56,8 +56,10 @@ try {
 
   // Modo: cerebro solo si la sesión se arrancó con `--agent cerebro` (campo agent del
   // JSON de la barra, o el agente de los latidos de esta misma sesión). Si no, normal.
-  const agenteSesion = datos.agent?.name || latidos.find((l) => l.sesion && l.sesion === datos.session_id && l.agente)?.agente || ''
-  const modoCerebro = String(agenteSesion).toLowerCase() === 'cerebro'
+  // Solo cuenta lo que el hook declaró (`agenteDeclarado`): el campo `agente` de los latidos
+  // cae a «cerebro» por defecto en el hub y marcaba como cerebro cualquier sesión normal.
+  const modoCerebro = String(datos.agent?.name || '').toLowerCase() === 'cerebro' ||
+    latidos.some((l) => l.sesion && l.sesion === datos.session_id && String(l.agenteDeclarado || '').toLowerCase() === 'cerebro')
   const esfuerzo0 = datos.effort?.level ? nombreEsfuerzo(datos.effort.level) : ''
   const partes = [
     modoCerebro ? '🧠 CEREBRO' : '💬 normal',

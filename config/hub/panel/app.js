@@ -1100,6 +1100,41 @@ function pintarMetricas(resumen, activas) {
   cont.append(card)
 }
 
+// Spec 14 · C5 · tarjeta «Reparto»: carga por agente y capa, % con triaje previo y A2A.
+function pintarRepartoCarga(d) {
+  const cont = vaciar($('repartoCarga'))
+  if (!cont) return
+  const datos = d || {}
+  const agentes = datos.agentes || []
+  if (!agentes.length) {
+    cont.append(h('p', { clase: 'tenue', texto: 'Sin trabajos en el periodo (últimos 7 días).' }))
+  } else {
+    const tabla = h('table')
+    tabla.append(h('thead', {}, h('tr', {},
+      h('th', { texto: 'Agente' }), h('th', { texto: 'Trabajos' }), h('th', { texto: 'OK' }),
+      h('th', { texto: 'Fallidos' }), h('th', { texto: 'Cancel.' }), h('th', { texto: 'Coste' }),
+      h('th', { texto: 'Media' }))))
+    const tb = h('tbody')
+    for (const a of agentes) {
+      tb.append(h('tr', {},
+        h('td', { texto: a.agente || '?' }),
+        h('td', { texto: fmt(a.trabajos || 0) }),
+        h('td', { texto: fmt(a.completados || 0) }),
+        h('td', { texto: fmt(a.fallidos || 0) }),
+        h('td', { texto: fmt(a.cancelados || 0) }),
+        h('td', { texto: typeof a.coste === 'number' ? `$${a.coste.toFixed(2)}` : '—' }),
+        h('td', { texto: a.mediaMs ? `${Math.round(a.mediaMs / 1000)} s` : '—' })))
+    }
+    tabla.append(tb)
+    cont.append(tabla)
+  }
+  const t = datos.triaje || {}
+  const c = datos.consultasA2A || {}
+  const capas = (datos.capas || []).map((x) => `${x.capa}: ${x.trabajos}`).join(' · ')
+  cont.append(h('div', { clase: 'desc tenue', texto: `Triaje previo: ${t.pct || 0}% (${t.conDecision || 0}/${t.total || 0})${capas ? ` · por capa — ${capas}` : ''}` }))
+  cont.append(h('div', { clase: 'desc tenue', texto: `Consultas A2A: ${c.total || 0} · coste $${(c.coste || 0).toFixed(2)} · respuesta media ${c.mediaRespuestaChars || 0} chars` }))
+}
+
 function pintarVentana(v) {
   const tb = $('tablaVentana').querySelector('tbody')
   vaciar(tb)
@@ -1727,7 +1762,7 @@ async function refrescarLigero() {
 
 async function refrescarPesado() {
   try {
-    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs, aprob, skillsPend, skillsUso, cronDatos, metricasRes, metricasAct, agentesSalud] = await Promise.all([
+    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs, aprob, skillsPend, skillsUso, cronDatos, metricasRes, metricasAct, agentesSalud, repartoDatos] = await Promise.all([
       fetch('/api/gasto').then((r) => r.json()),
       fetch('/api/ventana').then((r) => r.json()),
       fetch('/api/laya').then((r) => r.json()),
@@ -1743,6 +1778,7 @@ async function refrescarPesado() {
       fetch('/api/metricas/resumen').then((r) => r.json()).catch(() => null),
       fetch('/api/metricas/activas').then((r) => r.json()).catch(() => null),
       fetch('/api/agentes/salud').then((r) => r.json()).catch(() => null),
+      fetch('/api/reparto?dias=7').then((r) => r.json()).catch(() => null),
     ])
     pintarGasto(gasto)
     pintarVentana(ventana)
@@ -1758,6 +1794,7 @@ async function refrescarPesado() {
     pintarSkills(estado.demo ? { pendientes: [] } : skillsPend, estado.demo ? { uso: {}, candidatos: [] } : skillsUso)
     pintarProgramadas(estado.demo ? { jobs: [], avisos: [] } : cronDatos)
     pintarMetricas(estado.demo ? { eventos: 0, bytes: 0, porTipo: {} } : (metricasRes || {}), estado.demo ? true : (metricasAct ? metricasAct.activas : true))
+    pintarRepartoCarga(estado.demo ? { agentes: [], capas: [], triaje: { conDecision: 0, total: 0, pct: 0 }, consultasA2A: { total: 0, coste: 0, mediaRespuestaChars: 0 } } : repartoDatos)
   } catch { /* nada */ }
 }
 

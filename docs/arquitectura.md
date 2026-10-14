@@ -153,6 +153,29 @@ El inventario automático (`memoria/global/MCPS.md`) dice **qué** MCPs hay; la 
 
 La guía trae la tabla «Si necesitas X → usa Y», una ficha por MCP (cuándo usarlo, cuándo no, ejemplo y herramientas) y 3 reglas (consultarla antes de decir «no se puede»; si el MCP falta o falla, decirlo y seguir sin inventar; citar la fuente). El hook `session-start.mjs` añade al briefing un resumen ≤ 1200 caracteres (tabla + reglas) leyéndola con `config/hooks/mcps-guia.mjs`; los agentes de Claude (`CLAUDE.md`, `cerebro`, `explorador`, `analista`) y los de OpenCode que buscan datos externos (`explorador-ds`, `implementador`, `debugger`, `redactor-ds`, `revisor`, `cerebro-oc`) apuntan a `MCPS-GUIA.md` con una línea, sin duplicar el contenido.
 
+## Comunicación entre agentes y reparto (spec 14 · A2A-lite por el hub)
+
+Los agentes **no se hablan entre sí**: el hub media (no hay servidores A2A reales por agente; se deja el formato compatible con Agent Card por si algún día se quiere interoperar). Todo mensaje pasa por el hub, que impone límites y deja rastro.
+
+```
+  agente A ──POST /api/a2a/consultar──▶  CEREBRO HUB (mediador)
+      {de,para,pregunta,directory}        · valida (agente de lectura, pregunta ≤ 2000, dir absoluto)
+                                          · profundidad 1 (A no consulta si ya consulta) y ≤ 3 en curso
+                                          · antepone instrucción fija y lanza el job (lanzador) al agente B
+                                          · espera (timeout 120 s) vigilando el tope de coste (aborta la sesión)
+  agente A ◀── {ok, jobId, respuesta ≤ 1200, coste, ms} ──  · deja job en el ledger + evento a2a (sin texto)
+```
+
+`config/hub/lib/a2a.mjs` (sin dependencias; lanzador, ledger, métricas y salud inyectados) implementa:
+
+- **C1 · Directorio (`GET /api/a2a/agentes`)** — Agent Card ligera de cada agente del catálogo: frontmatter de `config/opencode/agents/*.md` y `config/claude/agents/*.md` + `reglas.json` + salud del ledger (`{name, description, version, skills, modelo, esfuerzo, capa, solo_lectura, coste_estimado, salud}`).
+- **C2 · Consulta (`POST /api/a2a/consultar`)** — síncrona y mediada: solo agentes de **lectura** (`explorador-ds`, `revisor`, `testeador`, `redactor-ds`); profundidad 1 y máx. 3 en curso (409); tope de coste por `presupuestos` (aborta la sesión al superarlo); timeout 120 s; respuesta recortada a 1200 con «…».
+- **C3 · Buzón (`POST/GET /api/a2a/mensajes`, `POST /api/a2a/mensajes/responder`)** — asíncrono por tarea en `hub-data/a2a.json` (read-merge-write): estados `pendiente|respondido|expirado`, TTL 30 min y máx. 20 pendientes por destinatario (429). Una respuesta no genera otro mensaje de tipo `pregunta`.
+- **C4 · Triaje en el camino** — la consulta y el lanzamiento de jobs del hub registran la decisión de triaje (`decisiones.jsonl`) si no hay una reciente para el mismo encargo.
+- **C5 · Reparto (`GET /api/reparto?dias=7`)** — agrega ledger + métricas (spec 11) + decisiones: `{trabajos, completados, fallidos, cancelados, coste, mediaMs}` por agente, por capa, `%` de jobs con triaje previo y `consultasA2A {total, coste, mediaRespuestaChars}`. Tarjeta «Reparto» en el panel (pestaña «Datos»). Evento de métricas `a2a` (`subtipo consulta|mensaje`, `de`, `para`, `estado`, `chars`, `coste`, `ms`; **sin prompts ni respuestas**).
+
+El `%` con triaje previo es una heurística: cuenta un job si existe una decisión con `fecha` ≤ su `creado` y a menos de 30 min antes, del mismo agente (o de su original si se degradó). El **origen del agente `?` en el ledger (C6)**: las entradas se creaban sin `agente` cuando el fichero del job aún no exponía `agent`/`session.agent` (o lo traía como `"Object"`); al reconciliar, el ledger ahora **completa** `agente`/`directorio` con el registro del job aunque el estado sea terminal (que sigue siendo inmutable). Quedan sin resolver los jobs cuyo fichero **nunca** registró el agente (p. ej. cancelados con `session.agent` ausente o `"Object"`): no hay dato del que deducirlo y **no se inventa** (aparecen como `?` en el reparto).
+
 ## Evolución
 
 `VERSION`, `CHANGELOG.md` y tags; los cambios se hacen en este repositorio y se despliegan con `scripts/actualizar`. Decisiones y contexto en [contexto-y-decisiones.md](contexto-y-decisiones.md).

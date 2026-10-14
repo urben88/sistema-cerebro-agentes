@@ -245,6 +245,16 @@ node scripts/test-mcps-guia.mjs
 
 Prueba sin dependencias (directorio temporal; copia `mcps.mjs` a un `hub/` propio, apunta `HUB_DATA_DIR`/`OPENCODE_DIR`/`CLAUDE_DIR` al temporal y deja un `claude` de mentira para que el inventario sea determinista; nunca toca `hub-data` real ni configura ningún MCP): comprueba que la plantilla cabe en 4000 caracteres y trae la tabla, las fichas y las reglas; que la primera ejecución crea `MCPS-GUIA.md`; que editar la guía y re-ejecutar **no** la pisa y `--forzar-guia` sí; que `MCPS.md` es **idéntico con y sin guía**; que `resumenGuia` extrae la tabla y las reglas, respeta el tope de 1200 caracteres y es vacío sin guía; y que los agentes indicados apuntan a `MCPS-GUIA.md` (y `local-codigo` no). `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
 
+## Comunicación entre agentes y reparto (spec 14 · C1–C7)
+
+```bash
+node scripts/test-a2a.mjs
+```
+
+Prueba sin dependencias (todo en `os.tmpdir()`; el `lanzador` va **simulado** —no se lanza ningún job ni servidor real—): comprueba la Agent Card ligera (C1); la consulta mediada válida (≤ 1200 chars con «…», coste y ms, job con `agente` en el ledger y evento `a2a` en métricas **sin** la pregunta ni la respuesta) y sus rechazos (agente no de lectura, pregunta > 2000, `directory` relativo o inexistente); la **profundidad 1** y el **límite de 3 consultas** (409); el **tope de coste** (aborta la sesión); el buzón (estados, TTL 30 min, 20 pendientes → 429, «una respuesta no genera preguntas» y persistencia read-merge-write en `a2a.json`); el triaje registrado una sola vez por encargo/ventana (C4); y `reparto()` por agente, por capa, `%` con triaje previo y `consultasA2A` (C5). `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
+
+El fix del ledger (C6) se prueba además en `node scripts/test-ledger.mjs`: `reconciliar()` completa el `agente` de entradas que se crearon sin él (terminales incluidas) sin cambiar el estado ni pisar un agente ya conocido.
+
 ## Prueba de fuego sugerida
 
 En una carpeta vacía:

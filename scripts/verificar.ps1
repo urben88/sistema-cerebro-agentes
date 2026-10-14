@@ -265,6 +265,16 @@ $guiaPruebas = Join-Path $RepoRoot 'scripts\test-mcps-guia.mjs'
 & node $guiaPruebas | Out-Null
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de la guía de MCPs (copia sin pisar, --forzar-guia, MCPS.md idéntico, resumen)' 'Ejecuta: node scripts\test-mcps-guia.mjs'
 
+Write-Step 'Comunicación entre agentes y reparto (spec 14)'
+$a2aPruebas = Join-Path $RepoRoot 'scripts\test-a2a.mjs'
+& node $a2aPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de A2A-lite (directorio, consulta, buzón, triaje, reparto)' 'Ejecuta: node scripts\test-a2a.mjs'
+
+Write-Step 'Barra de estado: modo normal vs cerebro'
+$modoPruebas = Join-Path $RepoRoot 'scripts	est-modo.mjs'
+& node $modoPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas del modo normal/cerebro en la barra de estado' 'Ejecuta: node scripts	est-modo.mjs'
+
 if ($Smoke) {
   Write-Step 'Smoke test del MCP (arranque real por stdio)'
   $smokeScript = Join-Path $RepoRoot 'scripts\smoke-mcp.mjs'

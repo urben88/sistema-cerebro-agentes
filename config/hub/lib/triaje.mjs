@@ -161,7 +161,7 @@ export function crearTriaje({ url = process.env.LAYA_URL || 'http://127.0.0.1:80
     if (!logDecisiones) return
     try {
       fs.mkdirSync(path.dirname(logDecisiones), { recursive: true })
-      fs.appendFileSync(logDecisiones, JSON.stringify({ ...decision, fecha: new Date().toISOString() }) + '\n')
+      fs.appendFileSync(logDecisiones, JSON.stringify({ ...decision, tarea: typeof decision.tarea === 'string' && decision.tarea.length > 300 ? decision.tarea.slice(0, 300) + '…' : decision.tarea, fecha: new Date().toISOString() }) + '\n')
     } catch { /* nada */ }
   }
 

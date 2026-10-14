@@ -292,6 +292,20 @@ else
   test_item 1 'Pruebas de la guía de MCPs (copia sin pisar, --forzar-guia, MCPS.md idéntico, resumen)' 'Ejecuta: node scripts/test-mcps-guia.mjs'
 fi
 
+step 'Comunicación entre agentes y reparto (spec 14)'
+if node "$REPO_ROOT/scripts/test-a2a.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de A2A-lite (directorio, consulta, buzón, triaje, reparto)'
+else
+  test_item 1 'Pruebas de A2A-lite (directorio, consulta, buzón, triaje, reparto)' 'Ejecuta: node scripts/test-a2a.mjs'
+fi
+
+step 'Barra de estado: modo normal vs cerebro'
+if node "$REPO_ROOT/scripts/test-modo.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas del modo normal/cerebro en la barra de estado'
+else
+  test_item 1 'Pruebas del modo normal/cerebro en la barra de estado' 'Ejecuta: node scripts/test-modo.mjs'
+fi
+
 if [ "$SMOKE" -eq 1 ]; then
   step 'Smoke test del MCP (arranque real por stdio)'
   if [ "$ASK" -eq 1 ]; then

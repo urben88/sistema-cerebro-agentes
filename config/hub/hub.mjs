@@ -37,6 +37,7 @@ import { crearCron, parsearSchedule } from './lib/cron.mjs'
 import { crearCompresion } from './lib/compresion.mjs'
 import { crearMetricas } from './lib/metricas.mjs'
 import { crearSaludAgentes } from './lib/salud-agentes.mjs'
+import { crearA2A } from './lib/a2a.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HOME = os.homedir()
@@ -340,6 +341,9 @@ function registrarLatido(b) {
     sesion: b.sesion || previo?.sesion || null,
     evento: b.evento || previo?.evento || "desconocido",
     agente,
+    // Agente que el hook DECLARÓ de verdad (p. ej. `claude --agent cerebro`). `agente` cae a «cerebro»
+    // por defecto para el hilo principal; este campo no, y es el único fiable para saber el modo.
+    agenteDeclarado: b.agente || previo?.agenteDeclarado || null,
     tarea: b.tarea || (agente !== "cerebro" ? (previo?.tarea || tareaPendiente(cwd, agente)) : null) || null,
     modelo,
     esfuerzo: b.esfuerzo || previo?.esfuerzo || null,
@@ -473,6 +477,43 @@ let ultimoAvisoConcurrencia = 0
 // L2/L3/L4 (spec 12) · salud por agente derivada del ledger; el triaje la consulta.
 const salud = crearSaludAgentes({ ledger, reglas })
 saludResolver = (agente) => salud.resolver(agente)
+
+// ------------------------------------------------- mediador A2A-lite (spec 14)
+// Los agentes no se hablan entre sí: el hub media. `directorio` (C1), `consultar` (C2)
+// por el lanzador con tope de coste y profundidad 1, buzón asíncrono (C3), triaje en el
+// camino (C4) y reparto medido (C5). Datos del buzón en `hub-data/a2a.json`.
+const VERSION_SISTEMA = (() => {
+  // Instalado, `VERSION` puede no estar junto al hub; se prueban las ubicaciones conocidas.
+  for (const f of [path.join(__dirname, '..', '..', 'VERSION'), path.join(SYSTEM_DIR, 'VERSION')]) {
+    try { const v = fs.readFileSync(f, 'utf8').trim(); if (v) return v } catch { /* siguiente */ }
+  }
+  return '0.0.0'
+})()
+// Agentes: se prefieren los instalados (~/.config/opencode/agents, ~/.claude/agents) y, si no
+// existen (desarrollo desde el repo), se cae a `config/opencode/agents` y `config/claude/agents`.
+const agentesOCDir = fs.existsSync(path.join(OPENCODE_DIR, 'agents')) ? path.join(OPENCODE_DIR, 'agents') : path.join(__dirname, '..', 'opencode', 'agents')
+const agentesCLDir = fs.existsSync(path.join(CLAUDE_DIR, 'agents')) ? path.join(CLAUDE_DIR, 'agents') : path.join(__dirname, '..', 'claude', 'agents')
+function leerDecisiones() {
+  let texto = ''
+  try { texto = fs.readFileSync(path.join(LOGS_DIR, 'decisiones.jsonl'), 'utf8') } catch { return [] }
+  const out = []
+  for (const l of texto.split('\n')) { if (!l.trim()) continue; try { out.push(JSON.parse(l)) } catch { /* línea rota */ } }
+  return out
+}
+const a2a = crearA2A({
+  dirDatos: DATA_DIR,
+  agentesDir: agentesOCDir,
+  claudeAgentesDir: agentesCLDir,
+  skillsDir: SKILLS_DIR,
+  version: VERSION_SISTEMA,
+  reglas,
+  lanzador,
+  ledger,
+  metricas,
+  salud,
+  triaje,
+  leerDecisiones,
+})
 
 /** Estados del ledger que disparan el evento `job` (spec 11 · M2). */
 const ESTADOS_METRICA_JOB = new Set(['completado', 'fallido', 'cancelado', 'atascado'])
@@ -649,6 +690,12 @@ function registrarMetricaCron(r) {
   try {
     if (!r || !r.jobId) return
     const j = cron.obtener(r.jobId)
+    // Spec 14 · C4 · el lanzamiento de un job desde el hub registra la decisión de triaje
+    // (si no hay una reciente para el mismo encargo). Best-effort: no bloquea el cron.
+    try {
+      const encargo = j?.prompt || j?.nombre
+      if (encargo) { const p = a2a.registrarTriajeSiHaceFalta(encargo, { ref: r.jobId }); if (p && p.catch) p.catch(() => { /* nada */ }) }
+    } catch { /* nada */ }
     metricas.registrar(limpiarNulos({
       tipo: 'cron',
       id: r.jobId,
@@ -1127,6 +1174,40 @@ const servidor = http.createServer(async (req, res) => {
       metricas.activar(activas)
       guardarConfigClave('metricas_activas', activas)
       return enviarJson(res, { ok: true, activas })
+    }
+    // ------------------------------------------------ A2A-lite (spec 14)
+    // El hub media: directorio de agentes (C1), consulta síncrona (C2), buzón (C3) y
+    // reparto medido (C5). Nunca se devuelven prompts ni respuestas completas en métricas.
+    if (ruta === '/api/a2a/agentes' && req.method === 'GET') {
+      const r = a2a.directorio()
+      return enviarJson(res, r.body, r.status)
+    }
+    if (ruta === '/api/a2a/consultar' && req.method === 'POST') {
+      const b = (await cuerpoJson(req)) || {}
+      const r = await a2a.consultar(b)
+      return enviarJson(res, r.body, r.status)
+    }
+    if (ruta === '/api/a2a/mensajes' && req.method === 'GET') {
+      const r = a2a.listarMensajes({
+        para: u.searchParams.get('para') || null,
+        estado: u.searchParams.get('estado') || null,
+        ref: u.searchParams.get('ref') || null,
+      })
+      return enviarJson(res, r.body, r.status)
+    }
+    if (ruta === '/api/a2a/mensajes' && req.method === 'POST') {
+      const b = (await cuerpoJson(req)) || {}
+      const r = a2a.crearMensaje(b)
+      return enviarJson(res, r.body, r.status)
+    }
+    if (ruta === '/api/a2a/mensajes/responder' && req.method === 'POST') {
+      const b = (await cuerpoJson(req)) || {}
+      const r = a2a.responder(b)
+      return enviarJson(res, r.body, r.status)
+    }
+    if (ruta === '/api/reparto' && req.method === 'GET') {
+      const r = a2a.reparto({ dias: u.searchParams.get('dias') })
+      return enviarJson(res, r.body, r.status)
     }
     if (ruta === '/api/eventos') {
       // SSE: emite `actividad` solo cuando cambia el estado de algún personaje (cada 2 s).
