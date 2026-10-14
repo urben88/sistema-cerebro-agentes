@@ -47,9 +47,11 @@ try {
 
   // Latidos del hub (una sola lectura): sirven para el modo y para los subagentes.
   let latidos = []
+  let usoModelos = {}
   try {
     const rl0 = await fetch(`${HUB}/api/latidos`, { signal: AbortSignal.timeout(500) }).then((r) => r.json())
     latidos = rl0.latidos || []
+    usoModelos = rl0.usoModelos || {}
   } catch { /* hub apagado */ }
 
   // Modo: cerebro solo si la sesión se arrancó con `--agent cerebro` (campo agent del
@@ -112,6 +114,16 @@ try {
       partes.push(seg)
     }
   } catch { /* hub apagado: sin subagentes */ }
+
+  // Consumo de la sesión por modelo: subagentes lanzados (Haiku / Sonnet). Es un conteo de
+  // lanzamientos, no de tokens.
+  try {
+    const u = usoModelos[datos.session_id] || null
+    if (u) {
+      const trozos = [["haiku", u.haiku], ["sonnet", u.sonnet], ["opus", u.opus]].filter(([, n]) => n > 0).map(([m, n]) => `${m}×${n}`)
+      if (trozos.length) partes.push(`Σ ${trozos.join(" ")}`)
+    }
+  } catch { /* sin conteo */ }
 
   // Estado real para el panel: contexto, ventanas de 5 h/7 d y coste que da Claude
   // en vivo. Best effort y corto: si el hub no está, la barra no se bloquea.

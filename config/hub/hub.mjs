@@ -170,17 +170,56 @@ vigilante.arrancar(60 * 1000)
 const LATIDO_TTL = 3 * 60 * 1000
 const latidos = new Map()
 
+// Tareas de subagentes anunciadas por el mod (agent.spawn) antes o después del latido.
+const TAREA_TTL = 2 * 60 * 1000
+const tareasPendientes = new Map()
+const normDir = (r) => String(r || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+
+// Lanzamientos de subagentes por modelo y sesión (haiku / sonnet / otro). Es un conteo
+// de lanzamientos, no de tokens. Se acota a las 50 sesiones más recientes.
+const usoPorSesion = new Map()
+const familiaModelo = (m) => { const s = String(m || "").toLowerCase(); return s.includes("haiku") ? "haiku" : s.includes("sonnet") ? "sonnet" : s.includes("opus") ? "opus" : s ? "otro" : "desconocido" }
+function contarUso(sesion, modelo) {
+  const k = String(sesion || "anon")
+  const u = usoPorSesion.get(k) || { haiku: 0, sonnet: 0, opus: 0, otro: 0, desconocido: 0 }
+  u[familiaModelo(modelo)]++
+  usoPorSesion.delete(k); usoPorSesion.set(k, u)
+  while (usoPorSesion.size > 50) usoPorSesion.delete(usoPorSesion.keys().next().value)
+}
+
+function tareaPendiente(cwd, agente) {
+  const clave = normDir(cwd) + "|" + agente
+  const p = tareasPendientes.get(clave)
+  return p && Date.now() - p.ts < TAREA_TTL ? p.tarea : null
+}
+
+function anunciarTarea(b) {
+  const agente = String(b.agente || "")
+  if (!agente) return
+  const tarea = String(b.tarea || "").replace(/\s+/g, ' ').trim().slice(0, 200)
+  if (!tarea) return
+  tareasPendientes.set(normDir(b.cwd) + "|" + agente, { tarea, ts: Date.now() })
+  // Si el latido del subagente ya existe sin tarea, se la ponemos.
+  for (const l of latidos.values()) {
+    if (l.agente === agente && normDir(l.cwd) === normDir(b.cwd) && !l.tarea) l.tarea = tarea
+  }
+}
+
 function registrarLatido(b) {
   const ahora = Date.now()
-  const clave = `${b.sesion || 'anon'}:${b.agente || 'cerebro'}`
+  const clave = `${b.sesion || "anon"}:${b.agente || "cerebro"}`
   const previo = latidos.get(clave)
+  const agente = b.agente || previo?.agente || "cerebro"
+  const cwd = b.cwd || previo?.cwd || process.cwd()
+  const modelo = b.modelo || previo?.modelo || null
+  if (b.evento === "SubagentStart") contarUso(b.sesion, modelo)
   latidos.set(clave, {
-    cwd: b.cwd || previo?.cwd || process.cwd(),
+    cwd,
     sesion: b.sesion || previo?.sesion || null,
-    evento: b.evento || previo?.evento || 'desconocido',
-    agente: b.agente || previo?.agente || 'cerebro',
-    tarea: b.tarea || null,
-    modelo: b.modelo || previo?.modelo || null,
+    evento: b.evento || previo?.evento || "desconocido",
+    agente,
+    tarea: b.tarea || (agente !== "cerebro" ? (previo?.tarea || tareaPendiente(cwd, agente)) : null) || null,
+    modelo,
     esfuerzo: b.esfuerzo || previo?.esfuerzo || null,
     transcript: b.transcript || previo?.transcript || null,
     ts: ahora,
@@ -487,9 +526,14 @@ const servidor = http.createServer(async (req, res) => {
       registrarLatido(b)
       return enviarJson(res, { ok: true })
     }
+    if (ruta === '/api/tarea-subagente' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      anunciarTarea(b)
+      return enviarJson(res, { ok: true })
+    }
     if (ruta === '/api/latidos') {
       // Latidos vivos (Claude y subagentes): los usa la barra de estado y el panel.
-      return enviarJson(res, { ok: true, latidos: latidosActivos() })
+      return enviarJson(res, { ok: true, latidos: latidosActivos(), usoModelos: Object.fromEntries(usoPorSesion) })
     }
     if (ruta === '/api/claude/estado' && req.method === 'POST') {
       const b = await cuerpoJson(req)

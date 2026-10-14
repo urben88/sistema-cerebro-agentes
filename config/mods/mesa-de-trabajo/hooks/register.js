@@ -183,11 +183,22 @@ export function register(on) {
     try {
       if (!e.fork) {
         const modelo = await modeloDeSubagente($, e.subagentType, e.cwd)
+        // Encargo del subagente: se anuncia al hub para que la barra no muestre «?».
+        const tarea = [e.description, e.prompt, e.task, e.input?.description, e.input?.prompt].find((v) => typeof v === 'string' && v.trim()) || null
+        if (tarea && e.subagentType) {
+          try {
+            await $.http.fetch(`${HUB}/api/tarea-subagente`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ cwd: e.cwd || null, agente: e.subagentType, tarea }),
+            })
+          } catch { /* hub apagado */ }
+        }
         await registrarEnHub($, {
           origen: 'mod:mesa-de-trabajo',
           severidad: 'info',
           mensaje: `Subagente ${e.subagentType} → ${modelo || e.model || 'por defecto'}`,
-          contexto: { tipo: e.subagentType, modeloPedido: e.model || null, modeloForzado: modelo, padre: e.parentModel, fork: e.fork },
+          contexto: { tipo: e.subagentType, modeloPedido: e.model || null, modeloForzado: modelo, padre: e.parentModel, fork: e.fork, claves: Object.keys(e || {}), conTarea: !!tarea },
         })
         if (modelo) return next({ ...e, model: modelo })
       }
