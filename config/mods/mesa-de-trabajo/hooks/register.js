@@ -139,9 +139,37 @@ function formatearErrores(l) {
   return `Últimos errores (${errores.length}):\n${lineas.join('\n')}\n\nInforme completo: http://127.0.0.1:4597 (pestaña Errores) o \`hub/errores.mjs --exportar\`.`
 }
 
+/** Subagentes de Claude en marcha (latidos vivos del hub), del más reciente al más antiguo. */
+function subagentesVivos(l) {
+  return (l.latidos || [])
+    .filter((x) => x.agente && x.agente !== "cerebro" && x.evento !== "SubagentStop")
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0))
+}
+
+function formatearAgentes(l) {
+  const subs = subagentesVivos(l)
+  if (!subs.length) return 'No hay subagentes de Claude en marcha ahora mismo.'
+  const filas = subs.map((x, i) => {
+    const etiqueta = [x.modelo, x.esfuerzo ? nombreEsfuerzo(x.esfuerzo) : null].filter(Boolean).join('·')
+    return `${i + 1}. ${x.agente}${etiqueta ? ` (${etiqueta})` : ''} · ${minutos(x.desde || x.ts, Date.now())}${x.tarea ? ` · «${recortar(x.tarea, 80)}»` : ''}`
+  })
+  return [`Subagentes en marcha (${subs.length}):`, ...filas, '', 'Detalle: /agentes <número>'].join('\n')
+}
+
+function formatearDetalleAgente(x, vivo) {
+  const etiqueta = [x.modelo, x.esfuerzo ? nombreEsfuerzo(x.esfuerzo) : null].filter(Boolean).join('·')
+  const cab = [`${x.agente}${etiqueta ? ` (${etiqueta})` : ''} · ${minutos(x.desde || x.ts, Date.now())}`]
+  if (x.tarea) cab.push(`Tarea: ${recortar(x.tarea, 200)}`)
+  const eventos = (vivo?.eventos || []).filter((ev) => ev.tipo === 'herramienta' || ev.tipo === 'subtarea' || ev.tipo === 'texto').slice(-8)
+  if (!eventos.length) return [...cab, '', 'Sin actividad recogida todavía.'].join('\n')
+  const lineas = eventos.map((ev) => ev.tipo === 'herramienta' ? `- ${ev.tool}: ${recortar(ev.entrada, 100)}` : ev.tipo === 'subtarea' ? `- subtarea: ${recortar(ev.texto || ev.entrada || '', 100)}` : `- dice: ${recortar(ev.texto, 100)}`)
+  return [...cab, '', 'Actividad reciente de la sesión que lo lanzó (el pensamiento no es legible):', ...lineas].join('\n')
+}
+
 export function register(on) {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'trabajos', description: 'Ver los trabajos de OpenCode en vivo (Cerebro Hub)' })
+    await $.command.register({ name: 'agentes', description: 'Ver los subagentes en marcha y su actividad (Cerebro Hub): /agentes o /agentes <n>' })
     await $.command.register({ name: 'errores', description: 'Ver los últimos errores registrados (Cerebro Hub)' })
     await $.command.register({ name: 'parar-todo', description: 'Parar TODOS los trabajos de OpenCode en segundo plano', immediate: true })
     // La banda se refresca sola (los datos vienen del hub).
@@ -154,6 +182,21 @@ export function register(on) {
       return { text: formatearTrabajos(await pedirJson($, '/api/vigilante')) }
     } catch {
       return { text: 'El Cerebro Hub no responde (127.0.0.1:4597). Arráncalo o revisa `hub.ps1 status`.' }
+    }
+  })
+
+  on("command.run", { command: "agentes" }, async ($, e) => {
+    try {
+      const l = await pedirJson($, "/api/latidos")
+      const n = parseInt(String(e.args || "").trim(), 10)
+      if (!Number.isFinite(n)) return { text: formatearAgentes(l) }
+      const x = subagentesVivos(l)[n - 1]
+      if (!x) return { text: `No hay un subagente número ${n}. ${formatearAgentes(l)}` }
+      let vivo = null
+      if (x.sesion) { try { vivo = (await pedirJson($, `/api/vivo/agente?sesion=${encodeURIComponent(x.sesion)}`)).vivo } catch { /* sin vista viva */ } }
+      return { text: formatearDetalleAgente(x, vivo) }
+    } catch {
+      return { text: "El Cerebro Hub no responde (127.0.0.1:4597). Arráncalo o revisa `hub.ps1 status`." }
     }
   })
 
@@ -184,7 +227,7 @@ export function register(on) {
       if (!e.fork) {
         const modelo = await modeloDeSubagente($, e.subagentType, e.cwd)
         // Encargo del subagente: se anuncia al hub para que la barra no muestre «?».
-        const tarea = [e.description, e.prompt, e.task, e.input?.description, e.input?.prompt].find((v) => typeof v === 'string' && v.trim()) || null
+        const tarea = [e.description, e.prompt].find((v) => typeof v === 'string' && v.trim()) || null
         if (tarea && e.subagentType) {
           try {
             await $.http.fetch(`${HUB}/api/tarea-subagente`, {

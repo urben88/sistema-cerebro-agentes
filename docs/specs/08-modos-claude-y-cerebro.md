@@ -12,7 +12,8 @@ El reparto de tareas entre modelos/esfuerzos lo decide **Laya** (triaje local), 
 - Hecho: R1, R2, R3 y R4 (CLAUDE.md global reescrito; session-start neutral; triaje registrado a nivel de usuario; `triaje_decidir` con `solo_claude` que traduce a Haiku/Sonnet + tabla de reserva en CLAUDE.md regla 10). R5 en parte (modo, esfuerzo y limites; falta consumo por modelo). R8 cubierto.
 - Probado: triaje real con Laya (revisar diff -> analista Haiku medium; README -> redactor Haiku low; refactor -> hilo principal Sonnet medium). verificar 65/65.
 - Hecho tambien: R5 (contador `Σ haiku×N sonnet×M` = subagentes lanzados por modelo en la sesion, NO tokens) y R6 (el mod anuncia la tarea al hub en `agent.spawn`; el hub la asocia al latido). Probado con eventos simulados. El campo real que trae el encargo en `agent.spawn` no esta confirmado: el mod registra las `claves` del evento en el log del hub para comprobarlo.
-- Pendiente: R7 (`/agentes`) y comprobar CA1/CA2/CA5 en sesiones reales.
+- Hecho: R7 (`/agentes` lista y `/agentes <n>` da el detalle: modelo, esfuerzo, tarea y actividad reciente de la sesion que lo lanzo; el transcript es el del hilo, no el del subagente). Probado con `claude -p "/agentes"` contra el hub. Confirmado en los tipos del mod: `agent.spawn` trae `description` y `prompt`; `command.run` trae `args`.
+- Pendiente: comprobar CA1/CA2/CA5 en sesiones reales (modo normal sin `opencode_*`, etiqueta CEREBRO con `--agent cerebro`, tarea visible).
 
 ## Requisitos
 1. **R1 · Activación exacta del cerebro.** El modo cerebro solo arranca con `claude --agent cerebro` o `@cerebro` escrito literalmente. Se eliminan del `CLAUDE.md` global y de `session-start.mjs` las frases que lo sugieren por lenguaje natural («modo cerebro», «usa el agente cerebro», «delega en OpenCode») y toda sugerencia proactiva. En modo normal no se menciona ni se busca el cerebro.
