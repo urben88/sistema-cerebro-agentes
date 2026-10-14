@@ -44,7 +44,30 @@ try {
   const pct = Math.floor(datos.context_window?.used_percentage ?? 0)
   const modelo = datos.model?.display_name || 'Claude'
   const dir = datos.workspace?.current_dir || datos.cwd || ''
-  const partes = [`🧠 ${modelo} ${pct}%`, `📁 ${path.basename(dir || '.')}`]
+
+  // Latidos del hub (una sola lectura): sirven para el modo y para los subagentes.
+  let latidos = []
+  try {
+    const rl0 = await fetch(`${HUB}/api/latidos`, { signal: AbortSignal.timeout(500) }).then((r) => r.json())
+    latidos = rl0.latidos || []
+  } catch { /* hub apagado */ }
+
+  // Modo: cerebro solo si la sesión se arrancó con `--agent cerebro` (campo agent del
+  // JSON de la barra, o el agente de los latidos de esta misma sesión). Si no, normal.
+  const agenteSesion = datos.agent?.name || latidos.find((l) => l.sesion && l.sesion === datos.session_id && l.agente)?.agente || ''
+  const modoCerebro = String(agenteSesion).toLowerCase() === 'cerebro'
+  const esfuerzo0 = datos.effort?.level ? nombreEsfuerzo(datos.effort.level) : ''
+  const partes = [
+    modoCerebro ? '🧠 CEREBRO' : '💬 normal',
+    `${modelo}${esfuerzo0 ? `·${esfuerzo0}` : ''} ${pct}%`,
+    `📁 ${path.basename(dir || '.')}`,
+  ]
+  const lim = datos.rate_limits || {}
+  const p5 = lim.five_hour?.used_percentage
+  const p7 = lim.seven_day?.used_percentage
+  if (typeof p5 === 'number' || typeof p7 === 'number') {
+    partes.push(`⏱ ${typeof p5 === 'number' ? `5h ${Math.round(p5)}%` : ''}${typeof p5 === 'number' && typeof p7 === 'number' ? ' · ' : ''}${typeof p7 === 'number' ? `7d ${Math.round(p7)}%` : ''}`)
+  }
 
   try {
     const oc = crearOpenCode({ systemDir: __dirname })
@@ -71,8 +94,7 @@ try {
   // Subagentes de Claude en marcha (latidos vivos del hub, solo de este proyecto):
   // hasta 3 con modelo · esfuerzo y tiempo de cada uno; con terminal ancha, la tarea.
   try {
-    const rl = await fetch(`${HUB}/api/latidos`, { signal: AbortSignal.timeout(500) }).then((r) => r.json())
-    const subs = (rl.latidos || [])
+    const subs = latidos
       .filter((l) => l.agente && l.agente !== 'cerebro' && l.evento !== 'SubagentStop' && norm(l.cwd) === norm(dir))
       // Primero los que tienen modelo conocido (explorador, planificador…), luego el resto.
       .sort((a, b) => Number(!!b.modelo) - Number(!!a.modelo) || (b.ts || 0) - (a.ts || 0))
