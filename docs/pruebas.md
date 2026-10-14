@@ -105,6 +105,22 @@ tope de 50 completados), el merge por relectura (dos escritores secuenciales) y 
 concurrencia/profundidad.
 `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
 
+## Aprobaciones por niveles (spec 10 · R4)
+
+```bash
+node scripts/test-aprobaciones.mjs
+```
+
+Prueba sin dependencias (directorios temporales, nunca toca `hub-data` real): comprueba que
+`reglas-peligro.json` es JSON válido y todos sus regex compilan; que la clasificación evalúa
+hardline → peligroso → seguro (y lo desconocido cae en peligroso «sin regla»); que `decision()`
+aprueba lo seguro, pregunta lo peligroso y **rechaza el hardline siempre** (aunque esté en el
+allowlist o el modo sea `abierto`); que `una_vez` no persiste y `sesion`/`siempre` sí; que el merge
+por relectura respeta una entrada añadida o revocada a mano entre dos `registrar`; la cola de
+pendientes (encolar/listar/resolver) con tipo e id validados (un id con `../` se rechaza); y que un
+`aprobaciones.json` corrupto se tolera y se reescribe válido.
+`verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
+
 ## Prueba de fuego sugerida
 
 En una carpeta vacía:

@@ -243,6 +243,13 @@ else
   test_item 1 'Pruebas del ledger de trabajos (reconciliación, atasco, retención)' 'Ejecuta: node scripts/test-ledger.mjs'
 fi
 
+step 'Aprobaciones por niveles (R4 · spec 10)'
+if node "$REPO_ROOT/scripts/test-aprobaciones.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de aprobaciones (niveles, allowlist con merge, pendientes)'
+else
+  test_item 1 'Pruebas de aprobaciones (niveles, allowlist con merge, pendientes)' 'Ejecuta: node scripts/test-aprobaciones.mjs'
+fi
+
 if [ "$SMOKE" -eq 1 ]; then
   step 'Smoke test del MCP (arranque real por stdio)'
   if [ "$ASK" -eq 1 ]; then

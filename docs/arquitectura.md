@@ -86,6 +86,12 @@ Al arrancar y cada 60 s el hub **reconcilia** con `leerJobs()` (no existe `openc
 
 Concurrencia y profundidad (`maxConcurrentes`, por defecto 3): el hub **mide y avisa** —cuenta los jobs `en_curso` y el máximo de jobs simultáneos sobre el mismo directorio— pero no impone nada. La imposición (**por defecto 3 en segundo plano y profundidad 1**) es **consigna del cerebro**, no un mecanismo del hub.
 
+## Aprobaciones por niveles (spec 10 · R4)
+
+El hub **clasifica** pero **no aprueba**. `config/hub/lib/aprobaciones.mjs` lee `config/hub/lib/reglas-peligro.json` (listas regex `hardline | peligroso | seguro`) y evalúa en ese orden: lo que no casa nada es `peligroso` por prudencia (motivo `sin regla`). `POST /api/aprobaciones/clasificar` `{comando|texto, sessionId}` devuelve `{nivel, motivo, accion}` (`rechazar|preguntar|aprobar`); el **cerebro resuelve** el `input_required` (rechaza hardline siempre, decide lo peligroso, aprueba lo seguro) con un alcance `una_vez | sesion | siempre`.
+
+El allowlist es **propio del hub** (`hub-data/aprobaciones.json` `{siempre, sesion}`; `una_vez` no persiste), escrito con `tmp`+`rename` y *read-merge-write*: se relee el disco y solo se añade la entrada nueva, así lo revocado/añadido a mano no se pierde. El allowlist **nunca** salva un `hardline`. Modo en `hub-data/config.json` → `aprobaciones.modo`: `manual` (defecto), `inteligente` (hoy ≡ manual) y `abierto` (solo bloquea hardline). La cola de pendientes vive en `hub-data/pendientes/{memoria,skills}/<id>.json` (`{id, resumen, origen, creado, payload}`) y se opera por `GET/POST /api/pendientes` y `POST /api/pendientes/resolver`. Defensa en profundidad: los patrones `hardline` van además como `deny` de `bash` en el frontmatter de `config/opencode/agents/{implementador,debugger,testeador,cerebro-oc}.md`, y el panel (`config/hub/panel`) muestra modo, reglas activas, allowlist y pendientes.
+
 ## Evolución
 
 `VERSION`, `CHANGELOG.md` y tags; los cambios se hacen en este repositorio y se despliegan con `scripts/actualizar`. Decisiones y contexto en [contexto-y-decisiones.md](contexto-y-decisiones.md).

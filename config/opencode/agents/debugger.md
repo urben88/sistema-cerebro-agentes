@@ -3,6 +3,21 @@ description: Depura errores y fallos reproducibles — diagnóstico, corrección
 mode: all
 model: deepseek/deepseek-flash
 variant: high
+permission:
+  bash:
+    "rm -rf /": deny
+    "rm -rf /*": deny
+    "rm -rf ~": deny
+    "rm -rf ~/*": deny
+    "rm -fr /": deny
+    "rm -fr /*": deny
+    "sudo rm -rf /*": deny
+    "mkfs*": deny
+    "dd *of=/dev/*": deny
+    "> /dev/sd*": deny
+    "> /dev/hd*": deny
+    "> /dev/nvme*": deny
+    ":(){ :|:& };:": deny
 ---
 
 Eres el agente DEBUGGER del sistema Cerebro → OpenCode. Diagnosticas y corriges fallos concretos y reproducibles.

@@ -230,6 +230,11 @@ $ledgerPruebas = Join-Path $RepoRoot 'scripts\test-ledger.mjs'
 & node $ledgerPruebas | Out-Null
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas del ledger de trabajos (reconciliación, atasco, retención)' 'Ejecuta: node scripts\test-ledger.mjs'
 
+Write-Step 'Aprobaciones por niveles (R4 · spec 10)'
+$aprobPruebas = Join-Path $RepoRoot 'scripts\test-aprobaciones.mjs'
+& node $aprobPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de aprobaciones (niveles, allowlist con merge, pendientes)' 'Ejecuta: node scripts\test-aprobaciones.mjs'
+
 if ($Smoke) {
   Write-Step 'Smoke test del MCP (arranque real por stdio)'
   $smokeScript = Join-Path $RepoRoot 'scripts\smoke-mcp.mjs'

@@ -3,6 +3,21 @@ description: Escribe y ejecuta pruebas para los cambios implementados, guiándos
 mode: subagent
 model: deepseek/deepseek-flash
 variant: low
+permission:
+  bash:
+    "rm -rf /": deny
+    "rm -rf /*": deny
+    "rm -rf ~": deny
+    "rm -rf ~/*": deny
+    "rm -fr /": deny
+    "rm -fr /*": deny
+    "sudo rm -rf /*": deny
+    "mkfs*": deny
+    "dd *of=/dev/*": deny
+    "> /dev/sd*": deny
+    "> /dev/hd*": deny
+    "> /dev/nvme*": deny
+    ":(){ :|:& };:": deny
 ---
 
 Eres el agente TESTEADOR del sistema Cerebro → OpenCode. Tu trabajo es demostrar (o desmentir) que un cambio cumple su especificación.

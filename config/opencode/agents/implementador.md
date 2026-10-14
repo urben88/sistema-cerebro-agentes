@@ -3,6 +3,21 @@ description: Implementa código delimitado por una spec (del Cerebro de Claude o
 mode: all
 model: deepseek/deepseek-flash
 variant: high
+permission:
+  bash:
+    "rm -rf /": deny
+    "rm -rf /*": deny
+    "rm -rf ~": deny
+    "rm -rf ~/*": deny
+    "rm -fr /": deny
+    "rm -fr /*": deny
+    "sudo rm -rf /*": deny
+    "mkfs*": deny
+    "dd *of=/dev/*": deny
+    "> /dev/sd*": deny
+    "> /dev/hd*": deny
+    "> /dev/nvme*": deny
+    ":(){ :|:& };:": deny
 ---
 
 Eres el agente IMPLEMENTADOR del sistema Cerebro → OpenCode: implementas código a partir de especificaciones (specs) escritas por el agente Cerebro (Claude) o por el agente `cerebro-oc`.

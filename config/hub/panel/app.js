@@ -270,6 +270,7 @@ const estado = {
   vigilante: null,
   gastoEquipo: null,
   claudeEstados: [],
+  aprobaciones: null,
   salaAbierta: null,
   desplegadas: new Set(),
   plegar: true,
@@ -1200,6 +1201,85 @@ function erroresDemo() {
   }
 }
 
+// R4 · aprobaciones: modo, reglas activas, allowlist propio y pendientes.
+function pintarAprobaciones(d) {
+  const datos = d || {}
+  const contModo = vaciar($('aprobacionesModo'))
+  const cardModo = h('div', { clase: 'agente' })
+  const cabModo = h('div')
+  cabModo.append(h('span', { clase: `badge ${datos.modo === 'abierto' ? 'ambar' : 'azul'}`, texto: `modo: ${datos.modo || 'manual'}` }))
+  cardModo.append(cabModo)
+  const notaModo = datos.modo === 'abierto' ? 'Solo bloquea hardline; lo peligroso se aprueba (decisión explícita del usuario).'
+    : datos.modo === 'inteligente' ? 'Reservado para R8; hoy equivale a manual.'
+      : 'Manual: lo peligroso pregunta; lo seguro se aprueba. El allowlist nunca salva un hardline.'
+  cardModo.append(h('div', { clase: 'desc', texto: notaModo }))
+  contModo.append(cardModo)
+
+  // Reglas activas: conteos + lista de hardline y peligroso (seguro solo el conteo).
+  const reglas = datos.reglas || {}
+  const conteos = reglas.conteos || {}
+  const contReglas = vaciar($('aprobacionesReglas'))
+  for (const [nivel, clase] of [['hardline', 'rojo'], ['peligroso', 'ambar'], ['seguro', 'verde']]) {
+    const lista = reglas[nivel] || []
+    const c = h('div', { clase: 'agente' })
+    const cab = h('div')
+    cab.append(h('span', { clase: `badge ${clase}`, texto: nivel }))
+    cab.append(h('span', { clase: 'chip', texto: `${conteos[nivel] != null ? conteos[nivel] : lista.length}` }))
+    c.append(cab)
+    if (nivel !== 'seguro') {
+      for (const r of lista) c.append(h('div', { clase: 'desc tenue', texto: `${r.patron} · ${r.motivo || ''}` }))
+    }
+    contReglas.append(c)
+  }
+
+  // Allowlist propio (hub-data/aprobaciones.json): entradas "siempre" y por sesión.
+  const al = datos.allowlist || {}
+  const siempre = al.siempre || []
+  const sesiones = Object.keys(al.sesion || {})
+  const totalSesion = sesiones.reduce((n, s) => n + (al.sesion[s] || []).length, 0)
+  const contAl = vaciar($('aprobacionesAllowlist'))
+  const cAl = h('div', { clase: 'agente' })
+  cAl.append(h('div', {}, h('span', { clase: 'nombre', texto: 'Allowlist' }), h('span', { clase: 'chip', texto: `siempre ${siempre.length} · sesión ${totalSesion}` })))
+  if (!siempre.length && !totalSesion) cAl.append(h('div', { clase: 'desc tenue', texto: 'Vacío: todo lo peligroso pregunta.' }))
+  for (const p of siempre) cAl.append(h('div', { clase: 'desc', texto: p }))
+  contAl.append(cAl)
+
+  // Pendientes (memoria y skills) en cola para revisar fuera de banda.
+  const contPend = vaciar($('aprobacionesPendientes'))
+  const pend = datos.pendientes || []
+  if (!pend.length) {
+    contPend.append(h('p', { clase: 'tenue', texto: 'Sin pendientes en cola.' }))
+  } else {
+    for (const p of pend) {
+      const c = h('div', { clase: 'agente' })
+      const cab = h('div')
+      cab.append(h('span', { clase: 'badge azul', texto: p.tipo }))
+      cab.append(h('span', { clase: 'nombre', texto: p.resumen || p.id }))
+      c.append(cab)
+      const ts = p.creado ? Date.parse(p.creado) : null
+      c.append(h('div', { clase: 'desc tenue', texto: `${p.origen || '—'} · ${hace(ts)}` }))
+      contPend.append(c)
+    }
+  }
+}
+
+function aprobacionesDemo() {
+  return {
+    modo: 'manual',
+    reglas: {
+      conteos: { hardline: 6, peligroso: 7, seguro: 3 },
+      hardline: [{ patron: '\\brm\\s+…(?:/|~|\\$HOME)…', motivo: 'borrado recursivo de la raíz o del directorio personal' }, { patron: '\\bmkfs…', motivo: 'formateo de disco' }],
+      peligroso: [{ patron: '\\bgit\\s+push\\b…--force', motivo: 'git push forzado' }, { patron: '\\brm\\s+…-[a-zA-Z]*r', motivo: 'borrado recursivo' }],
+      seguro: [],
+    },
+    allowlist: { siempre: ['npm run build'], sesion: { 'demo-ses': ['git push origin main'] } },
+    pendientes: [
+      { tipo: 'skills', id: 'demo-skill', resumen: 'Skill propuesto: resumir-bitacora', origen: 'cerebro', creado: new Date(Date.now() - 8 * 60000).toISOString(), payload: null },
+      { tipo: 'memoria', id: 'demo-mem', resumen: 'Consolidar ESTADO.md del proyecto demo', origen: 'hub', creado: new Date(Date.now() - 32 * 60000).toISOString(), payload: null },
+    ],
+  }
+}
+
 const PESTANAS = [
   ['oficina', 'Oficina'],
   ['organizacion', 'Organización'],
@@ -1210,6 +1290,7 @@ const PESTANAS = [
   ['datos', 'Datos'],
   ['mcps', 'MCPs'],
   ['hallazgos', 'Hallazgos'],
+  ['aprobaciones', 'Aprobaciones'],
   ['errores', 'Errores'],
 ]
 
@@ -1390,7 +1471,7 @@ async function refrescarLigero() {
 
 async function refrescarPesado() {
   try {
-    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs] = await Promise.all([
+    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs, aprob] = await Promise.all([
       fetch('/api/gasto').then((r) => r.json()),
       fetch('/api/ventana').then((r) => r.json()),
       fetch('/api/laya').then((r) => r.json()),
@@ -1399,6 +1480,7 @@ async function refrescarPesado() {
       fetch('/api/hallazgos').then((r) => r.json()),
       fetch('/api/gasto/equipo').then((r) => r.json()).catch(() => null),
       fetch('/api/logs?limite=80').then((r) => r.json()).catch(() => null),
+      fetch('/api/aprobaciones').then((r) => r.json()).catch(() => null),
     ])
     pintarGasto(gasto)
     pintarVentana(ventana)
@@ -1408,6 +1490,8 @@ async function refrescarPesado() {
     pintarErrores(estado.demo ? erroresDemo() : (logs || { errores: [] }))
     estado.gastoEquipo = equipo
     pintarReparto(equipo)
+    estado.aprobaciones = aprob
+    pintarAprobaciones(estado.demo ? aprobacionesDemo() : aprob)
   } catch { /* nada */ }
 }
 

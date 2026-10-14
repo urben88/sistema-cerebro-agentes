@@ -30,6 +30,7 @@ import { clasificarAlerta } from './lib/errores.mjs'
 import { crearVivo } from './lib/vivo.mjs'
 import { crearLogErrores } from './lib/errores-log.mjs'
 import { crearLedger, ESTADOS as ESTADOS_LEDGER } from './lib/ledger.mjs'
+import { crearAprobaciones } from './lib/aprobaciones.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HOME = os.homedir()
@@ -59,14 +60,23 @@ const CONFIG_DEFECTO = {
   horasMaxJob: 24,
   temporalDias: 14,
   autolimpiarHoras: 6,
+  // R4 · aprobaciones por niveles: el hub clasifica; el cerebro decide.
+  aprobaciones: { modo: 'manual' },
 }
 
 function cargarConfig() {
   const archivo = path.join(DATA_DIR, 'config.json')
-  try { return { ...CONFIG_DEFECTO, ...JSON.parse(fs.readFileSync(archivo, 'utf8')) } }
+  // Merge superficial + uno profundo para `aprobaciones` (objeto anidado, R4).
+  const fusionar = (usuario) => {
+    const base = { ...CONFIG_DEFECTO, ...(usuario && typeof usuario === 'object' ? usuario : {}) }
+    const ap = usuario && typeof usuario.aprobaciones === 'object' ? usuario.aprobaciones : {}
+    base.aprobaciones = { ...CONFIG_DEFECTO.aprobaciones, ...ap }
+    return base
+  }
+  try { return fusionar(JSON.parse(fs.readFileSync(archivo, 'utf8'))) }
   catch {
     try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(archivo, JSON.stringify(CONFIG_DEFECTO, null, 2) + '\n') } catch { /* sin datos */ }
-    return { ...CONFIG_DEFECTO }
+    return fusionar(null)
   }
 }
 
@@ -131,6 +141,13 @@ function cargarReglas() {
 }
 const reglas = cargarReglas()
 const triaje = crearTriaje({ reglas, logDecisiones: path.join(LOGS_DIR, 'decisiones.jsonl') })
+
+// ----------------------------------------------------------------- aprobaciones (R4 · spec 10)
+// El hub CLASIFICA comandos/peticiones y mantiene su propio allowlist; no aprueba nada
+// (resuelve el cerebro vía MCP). Reglas en `lib/reglas-peligro.json`, allowlist en
+// `hub-data/aprobaciones.json` (tmp+rename con read-merge-write) y cola de pendientes
+// en `hub-data/pendientes/`.
+const aprobaciones = crearAprobaciones({ dataDir: DATA_DIR, config })
 
 // ---------------------------------------------------------------- hallazgos (buscar antes de crear)
 const HALLAZGOS_JSONL = path.join(DATA_DIR, 'hallazgos.jsonl')
@@ -547,6 +564,35 @@ const servidor = http.createServer(async (req, res) => {
     if (ruta === '/api/hallazgos/estado' && req.method === 'POST') {
       const b = await cuerpoJson(req)
       const r = cambiarEstadoHallazgo(String(b.id || ''), String(b.estado || ''))
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/aprobaciones/clasificar' && req.method === 'POST') {
+      // R4.2 · el hub clasifica (hardline|peligroso|seguro + motivo + acción); no aprueba.
+      const b = await cuerpoJson(req)
+      const texto = b.comando ?? b.texto
+      if (typeof texto !== 'string' || !texto.trim()) return enviarJson(res, { ok: false, error: 'faltan comando o texto' }, 400)
+      return enviarJson(res, { ok: true, ...aprobaciones.decision(texto, { sessionId: b.sessionId || null }) })
+    }
+    if (ruta === '/api/aprobaciones/registrar' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.comando !== 'string' || !b.comando.trim()) return enviarJson(res, { ok: false, error: 'falta comando' }, 400)
+      const r = aprobaciones.registrar(b.comando, b.alcance, b.sessionId || null)
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/aprobaciones' && req.method === 'GET') {
+      return enviarJson(res, { ok: true, ...aprobaciones.estado() })
+    }
+    if (ruta === '/api/pendientes' && req.method === 'GET') {
+      return enviarJson(res, { ok: true, pendientes: aprobaciones.listarPendientes() })
+    }
+    if (ruta === '/api/pendientes' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      const r = aprobaciones.encolar(b.tipo, { resumen: b.resumen, origen: b.origen, payload: b.payload })
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/pendientes/resolver' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      const r = aprobaciones.resolverPendiente(String(b.tipo || ''), String(b.id || ''))
       return enviarJson(res, r, r.ok ? 200 : 400)
     }
     if (ruta === '/api/proyectos') return enviarJson(res, { ok: true, proyectos: memoria.proyectos() })

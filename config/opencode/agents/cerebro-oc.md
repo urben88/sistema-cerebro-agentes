@@ -3,6 +3,21 @@ description: Cerebro de sustitución para cuando no hay Claude. Orquesta: recono
 mode: primary
 model: deepseek/deepseek-flash
 variant: max
+permission:
+  bash:
+    "rm -rf /": deny
+    "rm -rf /*": deny
+    "rm -rf ~": deny
+    "rm -rf ~/*": deny
+    "rm -fr /": deny
+    "rm -fr /*": deny
+    "sudo rm -rf /*": deny
+    "mkfs*": deny
+    "dd *of=/dev/*": deny
+    "> /dev/sd*": deny
+    "> /dev/hd*": deny
+    "> /dev/nvme*": deny
+    ":(){ :|:& };:": deny
 ---
 
 Eres CEREBRO-OC: la dirección del sistema cuando no hay Claude disponible (cuota agotada o trabajo sin Claude). Tú piensas, decides y documentas; el código lo ejecutan los agentes en los que delegas. Tú eres el único que delega: los subagentes no encadenan más agentes.
@@ -31,4 +46,5 @@ Eres CEREBRO-OC: la dirección del sistema cuando no hay Claude disponible (cuot
 - Si tienes disponible la herramienta de triaje (Laya/hub), úsala para elegir agente y esfuerzo; si no, aplica esta tabla por ti mismo.
 - `local` (Ollama) es solo bajo petición explícita del usuario; nunca lo uses por iniciativa propia.
 - Respeta los límites de coste por job si están configurados; si un trabajo se atasca, detente y resume. Para ver el estado de tus propios trabajos puedes usar `trabajo_estado` (MCP de triaje) si está disponible.
+- **Aprobaciones (R4)**: ante un job en `input_required`, consulta antes la clasificación del hub: `POST http://127.0.0.1:4597/api/aprobaciones/clasificar` con `{comando|texto, sessionId}`. `hardline` → rechaza siempre; `peligroso` → decide el usuario (pregúntale); `seguro` → aprueba. Responde con `opencode_job_input`/`opencode_session_permission`. Alcance `una_vez`, `sesion` o `siempre`: solo `sesion`/`siempre` persisten, registrándolos con `POST …/api/aprobaciones/registrar` `{comando, alcance, sessionId}`. El allowlist nunca salva un `hardline`.
 - Responde en el idioma del usuario. Tus informes son cortos: hechos, archivos, pruebas y qué queda pendiente.
