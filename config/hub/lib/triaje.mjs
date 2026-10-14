@@ -10,9 +10,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-const CATALOGO_AGENTES = ['implementador', 'debugger', 'revisor', 'testeador', 'explorador-ds', 'redactor-ds', 'local', 'cerebro', 'arquitecto']
+const CATALOGO_AGENTES = ['implementador', 'debugger', 'revisor', 'testeador', 'explorador-ds', 'redactor-ds', 'local', 'local-codigo', 'cerebro', 'arquitecto']
 
-export function crearTriaje({ url = process.env.LAYA_URL || 'http://127.0.0.1:8000', reglas = {}, logDecisiones = null } = {}) {
+/**
+ * `resolver(agente)` (L4 · spec 12): respaldo de salud por agente. Si el agente elegido está
+ * degradado, devuelve `{agente, degradado:true, motivo}` con el sustituto; si toca prueba,
+ * `{agente, prueba:true}`. Omitido, el triaje no cambia nada.
+ */
+export function crearTriaje({ url = process.env.LAYA_URL || 'http://127.0.0.1:8000', reglas = {}, logDecisiones = null, resolver = null } = {}) {
   let cacheEstado = { ts: 0, ok: false }
 
   async function disponible() {
@@ -23,12 +28,28 @@ export function crearTriaje({ url = process.env.LAYA_URL || 'http://127.0.0.1:80
     return ok
   }
 
+  /** L1 · ¿el encargo es «acotado»? (usa palabras que lo delimitan y ninguna que lo agrande). */
+  function esAcotado(t, acotado) {
+    const incluye = (acotado?.incluye || []).map((k) => String(k).toLowerCase())
+    const excluye = (acotado?.excluye || []).map((k) => String(k).toLowerCase())
+    return incluye.some((k) => t.includes(k)) && !excluye.some((k) => t.includes(k))
+  }
+
   function clasificarPorReglas(tarea) {
     const t = String(tarea || '').toLowerCase()
-    for (const r of reglas.reglas || []) {
-      if ((r.claves || []).some((k) => t.includes(k))) {
-        return { capa: r.capa, agente: r.agente, esfuerzo: r.esfuerzo, escalar: false, riesgo: false, confianza: 0.6, fuente: 'reglas', motivo: r.motivo || 'coincidencia de palabras clave' }
-      }
+    const lista = reglas.reglas || []
+    const casa = (r) => (r.claves || []).some((k) => t.includes(k))
+    // L1 · una regla con `agenteAcotado` (código acotado → agente local) manda sobre las reglas
+    // normales posteriores (p. ej. la de tests) cuando el encargo está delimitado. Depuración,
+    // revisión y arquitectura (`prioridad`) no cambian aunque el texto sea acotado.
+    const acotada = lista.find((r) => r.agenteAcotado && casa(r) && esAcotado(t, r.acotado))
+    for (const r of lista) {
+      if (!casa(r)) continue
+      const elegida = acotada && !r.prioridad ? acotada : r
+      const acotado = elegida === acotada
+      const agente = acotado ? (elegida.agenteAcotado || elegida.agente) : elegida.agente
+      const motivo = (elegida.motivo || 'coincidencia de palabras clave') + (acotado ? ' (encargo acotado)' : '')
+      return { capa: elegida.capa, agente, esfuerzo: elegida.esfuerzo, escalar: false, riesgo: false, confianza: 0.6, fuente: 'reglas', motivo }
     }
     const d = reglas.porDefecto || { capa: 'claude', agente: 'cerebro', esfuerzo: 'medium' }
     return { capa: d.capa, agente: d.agente, esfuerzo: d.esfuerzo ?? null, escalar: false, riesgo: false, confianza: 0.4, fuente: 'reglas', motivo: d.motivo || 'sin coincidencia clara: decide el cerebro' }
@@ -144,28 +165,46 @@ export function crearTriaje({ url = process.env.LAYA_URL || 'http://127.0.0.1:80
     } catch { /* nada */ }
   }
 
+  /** L4 · aplica el respaldo de salud a la decisión final y explica la degradación en `motivo`. */
+  function conRespaldo(decision) {
+    if (!resolver || !decision?.agente) return decision
+    let r = null
+    try { r = resolver(decision.agente) } catch { return decision }
+    if (!r || !r.agente || r.agente === decision.agente) {
+      const salida = { ...decision, degradado: false }
+      if (r?.prueba) salida.prueba = true
+      if (r?.motivo) salida.motivo = decision.motivo ? `${decision.motivo} · ${r.motivo}` : r.motivo
+      return salida
+    }
+    return {
+      ...decision,
+      agente: r.agente,
+      agenteOriginal: decision.agente,
+      degradado: true,
+      motivo: r.motivo || `${decision.agente} degradado a ${r.agente}`,
+    }
+  }
+
   async function decidir({ tarea, contexto = '' } = {}) {
     const respaldo = clasificarPorReglas(tarea)
+    let eleccion = respaldo
     if (await disponible()) {
       try {
         const d = await consultarLaya(tarea, contexto)
         if (d) {
           if (d.confianza < (reglas.confianzaMinima ?? 0.6)) {
-            const combinada = { ...respaldo, fuente: 'laya+reglas', motivo: `Laya dudó (p=${d.confianza.toFixed(2)}); se aplica la regla: ${respaldo.motivo}`, sugerencia: { agente: d.agente, esfuerzo: d.esfuerzo, escalar: d.escalar, riesgo: d.riesgo } }
-            registrar({ tarea, ...combinada })
-            return combinada
+            eleccion = { ...respaldo, fuente: 'laya+reglas', motivo: `Laya dudó (p=${d.confianza.toFixed(2)}); se aplica la regla: ${respaldo.motivo}`, sugerencia: { agente: d.agente, esfuerzo: d.esfuerzo, escalar: d.escalar, riesgo: d.riesgo } }
+          } else {
+            eleccion = d
           }
-          registrar({ tarea, ...d })
-          return d
         }
       } catch (e) {
-        const conError = { ...respaldo, motivo: `${respaldo.motivo} (Laya no respondió: ${String(e?.message || e).slice(0, 120)})` }
-        registrar({ tarea, ...conError })
-        return conError
+        eleccion = { ...respaldo, motivo: `${respaldo.motivo} (Laya no respondió: ${String(e?.message || e).slice(0, 120)})` }
       }
     }
-    registrar({ tarea, ...respaldo })
-    return respaldo
+    const final = conRespaldo(eleccion)
+    registrar({ tarea, ...final })
+    return final
   }
 
   return { decidir, disponible, clasificarPorReglas }

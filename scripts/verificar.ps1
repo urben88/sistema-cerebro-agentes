@@ -255,6 +255,11 @@ $metricasPruebas = Join-Path $RepoRoot 'scripts\test-metricas.mjs'
 & node $metricasPruebas | Out-Null
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de métricas (JSONL, saneo, rotación, poda, job idempotente)' 'Ejecuta: node scripts\test-metricas.mjs'
 
+Write-Step 'Agente local-codigo y su respaldo (spec 12)'
+$saludPruebas = Join-Path $RepoRoot 'scripts\test-salud-agentes.mjs'
+& node $saludPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de salud de agentes (degradación, reintento, código acotado)' 'Ejecuta: node scripts\test-salud-agentes.mjs'
+
 if ($Smoke) {
   Write-Step 'Smoke test del MCP (arranque real por stdio)'
   $smokeScript = Join-Path $RepoRoot 'scripts\smoke-mcp.mjs'

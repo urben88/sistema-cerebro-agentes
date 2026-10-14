@@ -3,6 +3,17 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado semántico (MAJOR.MINOR.PATCH).
 
+## [0.6.0] - 2026-10-14
+
+### Añadido (spec 12 · agente local `local-codigo` y respaldo automático)
+
+- **L1 · Catálogo y reglas**: `local-codigo` entra en `CATALOGO_AGENTES` y en `presupuestos` (coste 0); en `reglas.json` la regla de `implementador` elige `local-codigo` cuando el encargo es **acotado** (archivo/función/test/spec/criterio y sin arquitectura/migración/refactor global/varios módulos/todo el), y depuración, revisión y arquitectura (`prioridad`) no cambian.
+- **L2/L3 · Salud por agente** (`lib/salud-agentes.mjs`): `crearSaludAgentes({ledger, reglas})` calcula sobre los últimos N trabajos terminales (excluye `cancelado`) la tasa de fallo (`fallido`+`atascado`) y los fallos seguidos; `resolver` degrada al sustituto configurado en `reglas.json` → `respaldo`, permite **una prueba** (`prueba:true`) tras el enfriamiento y se limpia solo con un acierto. Todo se deriva del ledger (sin fichero propio): sobrevive a reinicios.
+- **L4 · Triaje**: `triaje.decidir` (Laya o reglas) aplica `resolver()` a la decisión final, lo explica en `motivo` («local-codigo degradado a implementador: 3 de 5 fallaron») y lo registra en `decisiones.jsonl` con `degradado`.
+- **L5 · API y panel**: `GET /api/agentes/salud` devuelve `{agentes:[{agente, muestras, tasaFallo, fallosSeguidos, degradado, proximaPrueba}]}` y la pestaña «Triaje·Laya» muestra una línea por agente con respaldo («local-codigo · 4/6 OK · activo» o «degradado hasta HH:MM»).
+- **L6 · Guía a los cerebros**: `cerebro` y `cerebro-oc` usan `local-codigo` para código acotado y bien especificado antes que `implementador` (spec con archivos, cambio exacto y comando de comprobación; verificación siempre con tests/`revisor`) y aceptan la degradación sin discutir.
+- **L7 · Docs y pruebas**: `docs/arquitectura.md` y `docs/pruebas.md` actualizados, y `scripts/test-salud-agentes.mjs` enganchado en `verificar.sh/.ps1`.
+
 ## [0.5.0] - 2026-10-14
 
 ### Añadido (spec 11 · métricas de uso)

@@ -221,6 +221,22 @@ un `aviso` a `logErrores`. `verificar.sh` / `verificar.ps1` la ejecutan como un 
 Formato de cada evento y qué **no** se guarda: ver
 [arquitectura.md](arquitectura.md#métricas-de-uso-spec-11).
 
+## Agente local-codigo y su respaldo (spec 12 · L1–L5)
+
+```bash
+node scripts/test-salud-agentes.mjs
+```
+
+Prueba sin dependencias (ledger falso en memoria y reloj inyectado; nunca toca `hub-data`
+real): comprueba que sin historial `resolver('local-codigo')` devuelve el agente original; que
+3 fallos seguidos lo degradan a `implementador` (con el motivo «…: 3 de 3 fallaron»); que pasado
+el enfriamiento permite **una prueba** (`prueba:true`), que un acierto limpia el contador y que
+un fallo reabre el enfriamiento; que los `cancelado` no cuentan; que un encargo acotado («crea
+la función X en el archivo Y con test») enruta a `local-codigo` mientras depuración, revisión y
+arquitectura no cambian; y que `decidir` aplica el respaldo, lo explica en `motivo` y lo registra
+en `decisiones.jsonl` con `degradado`. La respuesta de `GET /api/agentes/salud` y la línea del
+panel se comprueban a mano. `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
+
 ## Prueba de fuego sugerida
 
 En una carpeta vacía:

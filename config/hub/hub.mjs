@@ -36,6 +36,7 @@ import { crearLanzador } from './lib/lanzador.mjs'
 import { crearCron, parsearSchedule } from './lib/cron.mjs'
 import { crearCompresion } from './lib/compresion.mjs'
 import { crearMetricas } from './lib/metricas.mjs'
+import { crearSaludAgentes } from './lib/salud-agentes.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HOME = os.homedir()
@@ -179,7 +180,10 @@ function cargarReglas() {
   return leer(path.join(DATA_DIR, 'reglas.json')) || leer(path.join(__dirname, 'reglas.json')) || { reglas: [], porDefecto: {} }
 }
 const reglas = cargarReglas()
-const triaje = crearTriaje({ reglas, logDecisiones: path.join(LOGS_DIR, 'decisiones.jsonl') })
+// L4 (spec 12) · el respaldo de salud se engancha al triaje cuando el ledger ya existe
+// (más abajo); hasta entonces `resolver` no cambia nada.
+let saludResolver = (agente) => ({ agente, degradado: false })
+const triaje = crearTriaje({ reglas, logDecisiones: path.join(LOGS_DIR, 'decisiones.jsonl'), resolver: (agente) => saludResolver(agente) })
 
 // ----------------------------------------------------------------- aprobaciones (R4/R8 · spec 10)
 // El hub CLASIFICA comandos/peticiones, aplica las reglas duras del guardián (R8) y mantiene
@@ -465,6 +469,10 @@ const ledger = crearLedger({
 })
 
 let ultimoAvisoConcurrencia = 0
+
+// L2/L3/L4 (spec 12) · salud por agente derivada del ledger; el triaje la consulta.
+const salud = crearSaludAgentes({ ledger, reglas })
+saludResolver = (agente) => salud.resolver(agente)
 
 /** Estados del ledger que disparan el evento `job` (spec 11 · M2). */
 const ESTADOS_METRICA_JOB = new Set(['completado', 'fallido', 'cancelado', 'atascado'])
@@ -1157,6 +1165,15 @@ const servidor = http.createServer(async (req, res) => {
     if (ruta === '/api/ventana') return enviarJson(res, { ok: true, ...(await ventana.calcular()) })
     if (ruta === '/api/reglas') return enviarJson(res, { ok: true, reglas })
     if (ruta === '/api/laya') return enviarJson(res, { ok: true, url: process.env.LAYA_URL || 'http://127.0.0.1:8000', disponible: await triaje.disponible() })
+    if (ruta === '/api/agentes/salud' && req.method === 'GET') {
+      // L5 (spec 12) · salud por agente con respaldo: muestras, tasa, fallos seguidos y si
+      // está degradado (con la hora de la próxima prueba). El panel lo pinta en «Triaje·Laya».
+      const agentes = Object.keys(reglas.respaldo || {}).map((ag) => {
+        const e = salud.estado(ag)
+        return { agente: ag, muestras: e.muestras, tasaFallo: e.tasaFallo, fallosSeguidos: e.fallosSeguidos, degradado: e.degradado, enPrueba: Boolean(e.enPrueba), proximaPrueba: e.proximaPrueba }
+      })
+      return enviarJson(res, { ok: true, agentes })
+    }
     if (ruta === '/api/triaje' && req.method === 'POST') {
       const b = await cuerpoJson(req)
       if (!b.tarea) return enviarJson(res, { ok: false, error: 'falta tarea' }, 400)

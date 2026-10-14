@@ -25,9 +25,9 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
 └───────────────┬─────────────────────────────────────────────────────────────────────┘
                 │ (nativo, en el host: trabaja sobre tus carpetas)
                 ▼
-        opencode-mcp → servidor OpenCode V1 → agentes DeepSeek por esfuerzo:
+        opencode-mcp → servidor OpenCode V1 → agentes por esfuerzo:
         planificador · implementador · debugger · revisor · testeador ·
-        explorador-ds · redactor-ds · local
+        explorador-ds · redactor-ds · local · local-codigo (Ornith 9B local, gratis)
 ```
 
 ## Responsabilidades
@@ -44,7 +44,7 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
 
 | Componente | Dónde vive | Lo despliega |
 |---|---|---|
-| Agentes de OpenCode (9, por esfuerzo) | `~/.config/opencode/agents/` | `install.ps1` / `install.sh` |
+| Agentes de OpenCode (10, por esfuerzo) | `~/.config/opencode/agents/` | `install.ps1` / `install.sh` |
 | Agente `cerebro` + 7 subagentes (MCPs inline) | `~/.claude/agents/` | ídem |
 | Barra de estado de Claude (modelo · contexto · trabajo OpenCode) | `~/.sistema-cerebro-agentes/hub/estado-linea.mjs` + `settings.json` | ídem |
 | Rol Cerebro + skill `delegar-a-opencode` | `~/.claude/CLAUDE.md` (bloque) y `~/.claude/skills/` | ídem |
@@ -140,6 +140,12 @@ Saneado (M1): se descartan las claves `prompt`, `texto`, `respuesta` y `contenid
 | `cron` | al ejecutar un job programado (M4) | `id, agente?, estado, coste?` |
 
 El evento `job` es **idempotente por `jobId`**: `registrar` rehidrata del disco los `jobId` ya registrados al arrancar, de modo que un reinicio del hub no duplica el evento de un trabajo que ya terminó. API (M5): `GET /api/metricas?tipo=&desde=&limite=` (máx. 1000), `GET /api/metricas/exportar` (JSONL completo, rotado + actual, con `Content-Disposition`) y `GET /api/metricas/resumen` (solo conteos: `{eventos, desde, hasta, bytes, porTipo}`); `GET/POST /api/metricas/activas` lee/cambia el interruptor. El panel (M7) muestra una tarjeta pequeña «Métricas» en la pestaña «Datos»: interruptor, tamaño, nº de eventos y botón «Exportar .jsonl», sin gráficas.
+
+## Agente `local-codigo` y degradación automática (spec 12)
+
+`config/hub/lib/salud-agentes.mjs` deriva del **ledger** la salud de cada agente con respaldo configurado en `reglas.json` → `respaldo` (`local-codigo` → `implementador` por defecto). Sobre sus últimos `ventana` (6) trabajos **terminales** (excluye `cancelado`) calcula la tasa de fallo (`fallido` + `atascado`) y los fallos seguidos; con ≥ `minimoMuestras` (3) y (tasa > `maxTasaFallo`, 0.5, o fallos seguidos ≥ `maxFallosSeguidos`, 2) `resolver('local-codigo')` lo **degrada** a `implementador` (`{agente, degradado:true, motivo}` — «local-codigo degradado a implementador: 3 de 5 fallaron»). Pasado `enfriamientoMin` (60) desde el último fallo devuelve el original **a modo de prueba** (`prueba:true`); un acierto limpia el contador y un fallo reinicia el enfriamiento. Sin fichero propio: **todo se deriva del ledger**, así que sobrevive a reinicios.
+
+El triaje (`lib/triaje.mjs`) aplica ese `resolver()` a la decisión final —tanto por Laya como por reglas— y lo explica en `motivo`; `logs/decisiones.jsonl` incluye `degradado`. En `reglas.json`, la regla de `implementador` elige `local-codigo` cuando el encargo es **acotado** (contiene `archivo`/`fichero`/`función`/`test`/`spec`/`criterio` y no `arquitectura`/`migración`/`refactor global`/`varios módulos`/`todo el`); depuración, revisión y arquitectura (`prioridad`) no cambian. `GET /api/agentes/salud` devuelve `{agentes:[{agente, muestras, tasaFallo, fallosSeguidos, degradado, proximaPrueba}]}` y el panel lo muestra en «Triaje·Laya» («local-codigo · 4/6 OK · activo» o «degradado hasta HH:MM»).
 
 ## Evolución
 

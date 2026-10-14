@@ -1148,6 +1148,25 @@ function pintarTriaje(laya, dec) {
   }
 }
 
+function pintarSaludAgentes(datos) {
+  const cont = vaciar($('saludAgentes'))
+  const lista = (datos && datos.agentes) || []
+  if (!lista.length) { cont.append(h('p', { clase: 'tenue', texto: 'Sin agentes con respaldo configurado.' })); return }
+  for (const a of lista) {
+    const ok = Math.max(0, Math.round((a.muestras || 0) * (1 - (a.tasaFallo || 0))))
+    const est = a.degradado && a.proximaPrueba
+      ? `degradado hasta ${new Date(a.proximaPrueba).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+      : 'activo'
+    const card = h('div', { clase: 'agente' })
+    const cab = h('div')
+    cab.append(h('span', { clase: 'nombre', texto: a.agente }))
+    cab.append(h('span', { clase: `badge ${a.degradado ? 'ambar' : 'verde'}`, texto: est }))
+    cab.append(h('span', { clase: 'chip', texto: `${ok}/${a.muestras || 0} OK` }))
+    card.append(cab)
+    cont.append(card)
+  }
+}
+
 function pintarMcps(m) {
   const cont = vaciar($('mcps'))
   const lista = m?.mcps || []
@@ -1708,7 +1727,7 @@ async function refrescarLigero() {
 
 async function refrescarPesado() {
   try {
-    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs, aprob, skillsPend, skillsUso, cronDatos, metricasRes, metricasAct] = await Promise.all([
+    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs, aprob, skillsPend, skillsUso, cronDatos, metricasRes, metricasAct, agentesSalud] = await Promise.all([
       fetch('/api/gasto').then((r) => r.json()),
       fetch('/api/ventana').then((r) => r.json()),
       fetch('/api/laya').then((r) => r.json()),
@@ -1723,10 +1742,12 @@ async function refrescarPesado() {
       fetch('/api/cron').then((r) => r.json()).catch(() => null),
       fetch('/api/metricas/resumen').then((r) => r.json()).catch(() => null),
       fetch('/api/metricas/activas').then((r) => r.json()).catch(() => null),
+      fetch('/api/agentes/salud').then((r) => r.json()).catch(() => null),
     ])
     pintarGasto(gasto)
     pintarVentana(ventana)
     pintarTriaje(laya, dec)
+    pintarSaludAgentes(estado.demo ? { agentes: [{ agente: 'local-codigo', muestras: 6, tasaFallo: 0.33, fallosSeguidos: 0, degradado: false, proximaPrueba: null }] } : agentesSalud)
     pintarMcps(mcps)
     pintarHallazgos(hallazgos)
     pintarErrores(estado.demo ? erroresDemo() : (logs || { errores: [] }))
