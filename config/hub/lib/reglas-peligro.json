@@ -1,0 +1,28 @@
+{
+  "descripcion": "Patrones de aprobación por niveles (R4 · spec 10). Los patrones son expresiones regulares (strings, sin delimitadores). Se evalúan en orden: hardline → peligroso → seguro; lo que no casa nada es peligroso por prudencia (motivo «sin regla»).",
+  "hardline": [
+    { "patron": "\\brm\\s+(?:-[a-zA-Z]+\\s+)+(?:/|~|\\$HOME|\\$\\{HOME\\})(?:\\s|/|\\*|$)", "motivo": "borrado recursivo de la raíz o del directorio personal" },
+    { "patron": "\\bmkfs(?:\\.[a-z0-9]+)?\\b|\\bmformat\\b|\\bformat\\s+[a-z]:", "motivo": "formateo de disco" },
+    { "patron": ":\\s*\\(\\s*\\)\\s*\\{\\s*:\\s*\\|\\s*:\\s*&\\s*\\}\\s*;\\s*:", "motivo": "fork bomb" },
+    { "patron": "\\bdd\\b[^\\n]*\\bof=/dev/", "motivo": "escritura directa a un dispositivo con dd" },
+    { "patron": "of=/dev/(?:sd|hd|vd|nvme|mmcblk|disk)", "motivo": "escritura directa a un dispositivo" },
+    { "patron": "(?:>|>>|\\btee\\b)\\s*/dev/(?:sd|hd|vd|nvme|mmcblk|disk)", "motivo": "redirección de escritura a un dispositivo" }
+  ],
+  "peligroso": [
+    { "patron": "(?:>|>>|\\btee\\b|\\bcp\\b|\\bmv\\b|\\brm\\b|\\bchmod\\b|\\bchown\\b)[^\\n]*\\.ssh(?:/|\\b)", "motivo": "escritura o cambio de permisos en ~/.ssh" },
+    { "patron": "(?:>|>>|\\btee\\b|\\bcp\\b|\\bmv\\b|\\brm\\b)[^\\n]*\\.env\\b", "motivo": "escritura en un fichero .env" },
+    { "patron": "(?:>|>>|\\btee\\b|\\bcp\\b|\\bmv\\b)[^\\n]*(?:\\.(?:bashrc|zshrc|bash_profile|zprofile|profile)\\b|\\$PROFILE\\b)", "motivo": "escritura en un perfil de shell" },
+    { "patron": "\\bgit\\s+push\\b[^\\n]*(?:--force\\b|-f\\b)", "motivo": "git push forzado (reescribe el historial remoto)" },
+    { "patron": "\\bgit\\s+reset\\s+--hard\\b", "motivo": "git reset --hard (descarta cambios locales)" },
+    { "patron": "\\brm\\s+(?:-[a-zA-Z]+\\s+)*-[a-zA-Z]*r", "motivo": "borrado recursivo" },
+    { "patron": "\\b(?:curl|wget)\\b[^\\n]*\\|\\s*(?:sudo\\s+)?(?:ba|z)?sh\\b", "motivo": "descarga y ejecución directa (curl|wget … | sh)" },
+    { "patron": "\\bfind\\b[^\\n]*\\s-(?:delete|exec|execdir|ok|okdir|fprint\\w*|fls)\\b", "motivo": "find con borrado o ejecución" },
+    { "patron": "(?<![0-9&>])>{1,2}\\s*(?!/dev/null\\b|&)\\S", "motivo": "redirección que escribe en un fichero" },
+    { "patron": "\\btee\\b|\\bsort\\b[^\\n]*\\s-o\\b", "motivo": "escritura en fichero (tee / sort -o)" }
+  ],
+  "seguro": [
+    { "patron": "^\\s*(?:ls|cat|head|tail|grep|rg|find|stat|wc|pwd|echo|printf|which|whoami|date|env|printenv|file|tree|du|df|sort|uniq|cut|tr|diff|less|more|nl|realpath|dirname|basename|id|uname|hostname|sleep|true|false|test|jq)\\b", "motivo": "lectura, listado o comando de solo consulta" },
+    { "patron": "\\bgit\\s+(?:status|diff|log|show|branch|remote|fetch|rev-parse|describe|blame|shortlog|tag|stash\\s+list)\\b", "motivo": "consulta de git de solo lectura" },
+    { "patron": "\\b(?:node\\s+--test|npm\\s+(?:run\\s+)?test|npx\\s+\\S*test|pytest|go\\s+test|cargo\\s+test|vitest|jest)\\b", "motivo": "ejecución de pruebas" }
+  ]
+}

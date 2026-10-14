@@ -149,7 +149,7 @@ if ($hubOk) {
   Test-Item $latidosOk 'GET /api/latidos responde (subagentes en vivo)' 'Revisa hub.mjs / latido.mjs'
   Test-Item (Test-Path -LiteralPath (Join-Path $sysDir 'hub\errores.mjs')) 'CLI de errores instalada (hub/errores.mjs)' 'Ejecuta install.ps1'
 }
-foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'estado.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'hallazgos.mjs')) {
+foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'estado.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'hallazgos.mjs', 'buscar.mjs')) {
   Test-Item (Test-Path -LiteralPath (Join-Path $sysDir "hooks\$f")) "Hook $f instalado" 'Ejecuta install.ps1'
 }
 $hookLatido = Join-Path $sysDir 'hooks\latido.mjs'
@@ -214,6 +214,41 @@ Test-Item (Test-Path -LiteralPath (Join-Path $UserHome '.local\bin\cerebro.cmd')
 $mcpList = (& claude mcp list 2>&1 | Out-String)
 $globalLine = ($mcpList -split "`n" | Where-Object { $_ -match '^\s*opencode:' } | Select-Object -First 1)
 Test-Item (-not $globalLine) 'MCP no registrado globalmente (solo dentro del agente)' 'Retiralo: claude mcp remove opencode --scope user'
+
+Write-Step 'Búsqueda de memoria (R1 · spec 10)'
+$buscarPruebas = Join-Path $RepoRoot 'scripts\test-buscar.mjs'
+& node $buscarPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de búsqueda (FTS5, o fallback si no hay FTS5)' 'Ejecuta: node scripts\test-buscar.mjs'
+
+Write-Step 'Nudges de memoria (R2 · spec 10)'
+$nudgesPruebas = Join-Path $RepoRoot 'scripts\test-nudges.mjs'
+& node $nudgesPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de nudges y límites de memoria' 'Ejecuta: node scripts\test-nudges.mjs'
+
+Write-Step 'Ledger de trabajos (R3 · spec 10)'
+$ledgerPruebas = Join-Path $RepoRoot 'scripts\test-ledger.mjs'
+& node $ledgerPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas del ledger de trabajos (reconciliación, atasco, retención)' 'Ejecuta: node scripts\test-ledger.mjs'
+
+Write-Step 'Aprobaciones por niveles (R4 · spec 10)'
+$aprobPruebas = Join-Path $RepoRoot 'scripts\test-aprobaciones.mjs'
+& node $aprobPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de aprobaciones (niveles, allowlist con merge, pendientes)' 'Ejecuta: node scripts\test-aprobaciones.mjs'
+
+Write-Step 'Skills autogenerados (R5 · spec 10)'
+$skillsPruebas = Join-Path $RepoRoot 'scripts\test-skills.mjs'
+& node $skillsPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de skills (linter, guard, propuesta→aprobación, uso)' 'Ejecuta: node scripts\test-skills.mjs'
+
+Write-Step 'Cron y tareas programadas (R6 · spec 10)'
+$cronPruebas = Join-Path $RepoRoot 'scripts\test-cron.mjs'
+& node $cronPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de cron (parser, siguiente, claim, preflight, reintentos)' 'Ejecuta: node scripts\test-cron.mjs'
+
+Write-Step 'Resumen propio de contexto (R7 · spec 10)'
+$compresionPruebas = Join-Path $RepoRoot 'scripts\test-compresion.mjs'
+& node $compresionPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de compresión (troceo, poda, verbatim, fallback, episódica)' 'Ejecuta: node scripts\test-compresion.mjs'
 
 if ($Smoke) {
   Write-Step 'Smoke test del MCP (arranque real por stdio)'

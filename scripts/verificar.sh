@@ -166,7 +166,7 @@ if [ -f "$HOOK_LATIDO" ]; then
 else
   test_item 1 'Hook latido no instalado' 'Ejecuta install.sh'
 fi
-for f in session-start.mjs pre-compact.mjs session-end.mjs cerrar-trabajos.mjs estado.mjs latido.mjs aviso-contexto.mjs hallazgos.mjs; do
+for f in session-start.mjs pre-compact.mjs session-end.mjs cerrar-trabajos.mjs estado.mjs latido.mjs aviso-contexto.mjs hallazgos.mjs buscar.mjs; do
   [ -f "$HOME/.sistema-cerebro-agentes/hooks/$f" ] && test_item 0 "Hook $f instalado" || test_item 1 "Hook $f no instalado" 'Ejecuta install.sh'
 done
 TRIAJE="$HOME/.sistema-cerebro-agentes/mcp/triaje-mcp.mjs"
@@ -220,6 +220,55 @@ if grep -q 'mesa-de-trabajo' "$HOME/.claude/settings.json" 2>/dev/null; then
   test_item 0 'Mod cargado en settings (CLAUDE_CODE_PLUGIN_DIRS)'
 else
   test_item 1 'Mod no cargado en settings' 'Ejecuta install.sh'
+fi
+
+step 'Búsqueda de memoria (R1 · spec 10)'
+if node "$REPO_ROOT/scripts/test-buscar.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de búsqueda (FTS5, o fallback si no hay FTS5)'
+else
+  test_item 1 'Pruebas de búsqueda (FTS5, o fallback si no hay FTS5)' 'Ejecuta: node scripts/test-buscar.mjs'
+fi
+
+step 'Nudges de memoria (R2 · spec 10)'
+if node "$REPO_ROOT/scripts/test-nudges.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de nudges y límites de memoria'
+else
+  test_item 1 'Pruebas de nudges y límites de memoria' 'Ejecuta: node scripts/test-nudges.mjs'
+fi
+
+step 'Ledger de trabajos (R3 · spec 10)'
+if node "$REPO_ROOT/scripts/test-ledger.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas del ledger de trabajos (reconciliación, atasco, retención)'
+else
+  test_item 1 'Pruebas del ledger de trabajos (reconciliación, atasco, retención)' 'Ejecuta: node scripts/test-ledger.mjs'
+fi
+
+step 'Aprobaciones por niveles (R4 · spec 10)'
+if node "$REPO_ROOT/scripts/test-aprobaciones.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de aprobaciones (niveles, allowlist con merge, pendientes)'
+else
+  test_item 1 'Pruebas de aprobaciones (niveles, allowlist con merge, pendientes)' 'Ejecuta: node scripts/test-aprobaciones.mjs'
+fi
+
+step 'Skills autogenerados (R5 · spec 10)'
+if node "$REPO_ROOT/scripts/test-skills.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de skills (linter, guard, propuesta→aprobación, uso)'
+else
+  test_item 1 'Pruebas de skills (linter, guard, propuesta→aprobación, uso)' 'Ejecuta: node scripts/test-skills.mjs'
+fi
+
+step 'Cron y tareas programadas (R6 · spec 10)'
+if node "$REPO_ROOT/scripts/test-cron.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de cron (parser, siguiente, claim, preflight, reintentos)'
+else
+  test_item 1 'Pruebas de cron (parser, siguiente, claim, preflight, reintentos)' 'Ejecuta: node scripts/test-cron.mjs'
+fi
+
+step 'Resumen propio de contexto (R7 · spec 10)'
+if node "$REPO_ROOT/scripts/test-compresion.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de compresión (troceo, poda, verbatim, fallback, episódica)'
+else
+  test_item 1 'Pruebas de compresión (troceo, poda, verbatim, fallback, episódica)' 'Ejecuta: node scripts/test-compresion.mjs'
 fi
 
 if [ "$SMOKE" -eq 1 ]; then

@@ -43,6 +43,23 @@ export function crearVigilante({ leerJobs, config, registrar }) {
     })
   }
 
+  /**
+   * Inyecta una alerta externa (p. ej. del ledger de trabajos, R3) con el mismo
+   * enfriamiento y el mismo registro que las que detecta el propio vigilante.
+   * Devuelve `false` si el enfriamiento la descarta.
+   */
+  function agregar(a) {
+    if (!a || !a.jobId) return false
+    const ahora = Date.now()
+    const clave = `${a.tipo || 'aviso'}:${a.jobId}`
+    if (ahora - (enfriamiento.get(clave) || 0) < (config.minutosEnfriamiento || 30) * MIN) return false
+    enfriamiento.set(clave, ahora)
+    const completa = { ...a, cuando: ahora }
+    alertas = [completa, ...alertas].slice(0, 50)
+    if (registrar) registrar(completa)
+    return true
+  }
+
   function arrancar(intervaloMs = 60 * 1000) {
     revisar({ silencioso: true })
     const timer = setInterval(() => revisar(), intervaloMs)
@@ -50,5 +67,5 @@ export function crearVigilante({ leerJobs, config, registrar }) {
     return timer
   }
 
-  return { revisar, arrancar, alertas: () => alertas, limpiar: () => { alertas = [] } }
+  return { revisar, arrancar, alertas: () => alertas, limpiar: () => { alertas = [] }, agregar }
 }

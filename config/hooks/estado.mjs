@@ -43,6 +43,11 @@ try {
     if (!archivo) { console.error('Falta --archivo'); process.exit(1) }
     const contenido = fs.readFileSync(archivo, 'utf8')
     const j = await llamar('/api/memoria/estado', { cwd, contenido })
+    // R2 · el cuerpo supera el límite: el hub lo rechaza con lo guardado hoy.
+    if (!j.ok && j.motivo === 'excede') {
+      console.error(`El ESTADO.md supera el límite de ${j.limite} caracteres de cuerpo (guardado hoy: ${j.actuales}). Consolida moviendo lo cerrado a la bitácora (node estado.mjs --bitacora "título") y vuelve a intentarlo.`)
+      process.exit(1)
+    }
     if (!j.ok) { console.error(`Error: ${j.error}`); process.exit(1) }
     console.log(`ESTADO.md actualizado para ${j.proyecto.nombre} (${j.proyecto.slug}).`)
   } else if (args.includes('--bitacora')) {

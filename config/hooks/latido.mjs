@@ -12,16 +12,137 @@
  * R2 · informa del modelo si puede: primero del payload del hook (`model`/`model.id`/
  * `display_name`); si no, lo deduce de la cola del transcript (último mensaje
  * `assistant`), leyendo solo el final del archivo y con tope de 1 s.
+ *
+ * R2 · nudges de memoria (patrón inspirado en NousResearch/hermes-agent (MIT),
+ * reimplementado): SOLO en `UserPromptSubmit` emite un `additionalContext` cuando
+ * pasan `nudge_intervalo` turnos sin escritura de memoria; en los otros eventos no
+ * devuelve nada. El contador lo posee el hook en `hub-data/estado-nudges.json`, con
+ * una clave POR SESIÓN Y PROYECTO (`<slug>:<sesión>`; tmp+rename y read-merge-write
+ * que relee el fichero justo antes de escribir y conserva las claves ajenas). El
+ * reset lo marca el mtime de `ESTADO.md`. Se podan las entradas con más de 14 días
+ * sin actividad (`visto`) y se limita el fichero a 200 entradas.
  */
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { reportarError } from './reportar.mjs'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
 const EVENTOS = new Set(['UserPromptSubmit', 'Stop', 'SubagentStart', 'SubagentStop'])
 const TAM_COLA_TRANSCRIPT = 64 * 1024
 const TOPE_MODELO_MS = 1000
+// R2 · nudges: rutas y valores (los mismos que resuelven los demás hooks).
+const SYSTEM_DIR = process.env.SISTEMA_CEREBRO_DIR || path.join(os.homedir(), '.sistema-cerebro-agentes')
+const DATA_DIR = process.env.HUB_DATA_DIR || path.join(SYSTEM_DIR, 'hub-data')
+const MEMORIA_DIR = process.env.HUB_MEMORIA_DIR || path.join(DATA_DIR, 'memoria')
+const ESTADO_NUDGES = path.join(DATA_DIR, 'estado-nudges.json')
+const NUDGE_DEFECTO = 10
+const NUDGE_TTL_MS = 14 * 24 * 60 * 60 * 1000 // 14 días sin actividad → poda
+const NUDGE_MAX_ENTRADAS = 200
+const TEXTO_NUDGE = [
+  'Si en esta conversación hay decisiones, convenciones o preferencias que sobrevivan a la sesión, guárdalas en memoria:',
+  'la tarea en curso va a ESTADO.md y las convenciones del proyecto a CONTEXTO-REPO.md (cada hecho, a un solo destino).',
+  'No guardes progreso trivial, volcados de datos, logs de trabajo ya acabado ni TODOs temporales.',
+  'Si no hay nada, no hagas nada.',
+].join(' ')
+
+const normalizar = (r) => String(r || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+
+/** Lee un JSON tolerando archivo ausente o corrupto (siempre un objeto). */
+function leerJson(archivo) {
+  try {
+    const datos = JSON.parse(fs.readFileSync(archivo, 'utf8'))
+    return datos && typeof datos === 'object' ? datos : {}
+  } catch { return {} }
+}
+
+/** Slug del proyecto cuyo `ruta` de `proyectos.json` coincide con el cwd (o null). */
+function slugDelProyecto(cwd) {
+  const reg = leerJson(path.join(MEMORIA_DIR, 'proyectos.json'))
+  const n = normalizar(cwd)
+  for (const [slug, p] of Object.entries(reg)) {
+    if (normalizar(p?.ruta) === n) return slug
+  }
+  return null
+}
+
+/** Intervalo de nudges: `hub-data/reglas.json` → `../hub/reglas.json` → 10. El valor
+ *  se trunca (Math.floor) ANTES de validar `>= 1`: 0.5 → 0 → defecto 10. Si
+ *  `hub-data/reglas.json` existe pero sin `nudge_intervalo`, se consulta el del hub. */
+function intervaloNudge() {
+  const local = leerJson(path.join(DATA_DIR, 'reglas.json'))
+  const bruto = local.nudge_intervalo ?? leerJson(path.join(__dirname, '..', 'hub', 'reglas.json'))?.nudge_intervalo
+  const n = Math.floor(Number(bruto))
+  return Number.isFinite(n) && n >= 1 ? n : NUDGE_DEFECTO
+}
+
+/** Poda el contador: descarta entradas con más de 14 días sin actividad (campo
+ *  `visto`, en ms) y recorta a 200, conservando las de `visto` más reciente. */
+function podarNudges(todos, ahora) {
+  const vivas = Object.entries(todos)
+    .filter(([, v]) => v && typeof v === 'object')
+    .filter(([, v]) => ahora - (Number(v.visto) || 0) <= NUDGE_TTL_MS)
+    .sort((a, b) => (Number(b[1].visto) || 0) - (Number(a[1].visto) || 0))
+    .slice(0, NUDGE_MAX_ENTRADAS)
+  return Object.fromEntries(vivas)
+}
+
+/** Read-merge-write bajo `clave`: RELEE el fichero justo antes de escribir, conserva
+ *  las claves ajenas y poda; escritura atómica tmp+rename con relectura de control. */
+function guardarNudges(clave, entrada) {
+  const ahora = Date.now()
+  const todos = podarNudges(leerJson(ESTADO_NUDGES), ahora) // relee justo antes de escribir
+  todos[clave] = entrada
+  const texto = JSON.stringify(podarNudges(todos, ahora), null, 2) + '\n'
+  const escribir = () => {
+    const tmp = `${ESTADO_NUDGES}.tmp-${process.pid}-${Date.now()}`
+    try {
+      fs.mkdirSync(path.dirname(ESTADO_NUDGES), { recursive: true })
+      fs.writeFileSync(tmp, texto, 'utf8')
+      fs.renameSync(tmp, ESTADO_NUDGES)
+    } catch {
+      // Docker Desktop sobre bind mounts: el rename puede no garantizarse.
+      try { fs.writeFileSync(ESTADO_NUDGES, texto, 'utf8') } catch { /* sin persistencia */ }
+      try { fs.unlinkSync(tmp) } catch { /* nada */ }
+    }
+  }
+  escribir()
+  try {
+    if (fs.readFileSync(ESTADO_NUDGES, 'utf8') !== texto) escribir()
+  } catch { escribir() }
+}
+
+/**
+ * Decide y persiste el contador de (proyecto, sesión). Devuelve el texto del nudge si
+ * toca (turno N, y no otra vez hasta N más), o `null`. Sin proyecto → sin nudge.
+ */
+function nudgeSiToca(cwd, sesion) {
+  const slug = slugDelProyecto(cwd)
+  if (!slug) return null
+  const clave = `${slug}:${sesion || 'sin-sesion'}`
+  const intervalo = intervaloNudge()
+
+  let mtime = 0
+  try { mtime = fs.statSync(path.join(MEMORIA_DIR, 'proyectos', slug, 'ESTADO.md')).mtimeMs } catch { mtime = 0 }
+
+  const todos = leerJson(ESTADO_NUDGES)
+  const previo = todos[clave] && typeof todos[clave] === 'object' ? todos[clave] : {}
+  let turnos = Number(previo.turnos) || 0
+  let ultimoAviso = Number(previo.ultimoAviso) || 0
+
+  // Reset al detectar escritura de memoria en este proyecto (cambia el mtime de
+  // ESTADO.md); cada sesión compara con el mtime guardado en su propia entrada.
+  if (mtime !== (Number(previo.mtime) || 0)) { turnos = 0; ultimoAviso = 0 }
+  turnos += 1
+
+  let texto = null
+  if (turnos - ultimoAviso >= intervalo) { ultimoAviso = turnos; texto = TEXTO_NUDGE }
+
+  try { guardarNudges(clave, { turnos, ultimoAviso, mtime, visto: Date.now() }) } catch { /* sin persistencia: mejor no avisar de más */ }
+  return texto
+}
 
 /** Modelo declarado directamente en el payload del hook (string u objeto). */
 function modeloDelPayload(d) {
@@ -141,6 +262,18 @@ try {
         signal: AbortSignal.timeout(600),
       })
     } catch { /* hub apagado o lento: se ignora */ }
+
+    // R2 · el nudge viaja SOLO como additionalContext de UserPromptSubmit; en el
+    // resto de eventos el hook no devuelve nada (siguen alimentando el panel).
+    if (evento === 'UserPromptSubmit') {
+      let nudge = null
+      try { nudge = nudgeSiToca(cuerpo.cwd, cuerpo.sesion) } catch { nudge = null }
+      if (nudge) {
+        console.log(JSON.stringify({
+          hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: nudge },
+        }))
+      }
+    }
   }
   process.exit(0)
 } catch (e) {

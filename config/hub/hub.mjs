@@ -19,6 +19,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { crearMemoria } from './lib/memoria.mjs'
+import { crearBuscar } from './lib/buscar.mjs'
 import { crearOpenCode } from './lib/opencode.mjs'
 import { crearVigilante } from './lib/vigilante.mjs'
 import { crearOrganizacion } from './lib/organizacion.mjs'
@@ -28,6 +29,12 @@ import { crearActividad } from './lib/actividad.mjs'
 import { clasificarAlerta } from './lib/errores.mjs'
 import { crearVivo } from './lib/vivo.mjs'
 import { crearLogErrores } from './lib/errores-log.mjs'
+import { crearLedger, ESTADOS as ESTADOS_LEDGER } from './lib/ledger.mjs'
+import { crearAprobaciones } from './lib/aprobaciones.mjs'
+import { crearSkills } from './lib/skills.mjs'
+import { crearLanzador } from './lib/lanzador.mjs'
+import { crearCron, parsearSchedule } from './lib/cron.mjs'
+import { crearCompresion } from './lib/compresion.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HOME = os.homedir()
@@ -39,6 +46,8 @@ const PANEL_DIR = path.join(__dirname, 'panel')
 const PLANTILLAS_DIR = path.join(__dirname, 'plantillas')
 const OPENCODE_DIR = process.env.OPENCODE_DIR || path.join(HOME, '.config', 'opencode')
 const CLAUDE_DIR = process.env.CLAUDE_DIR || path.join(HOME, '.claude')
+// R5 · skills autogenerados: misma carpeta que indexa la búsqueda (tipo=skill).
+const SKILLS_DIR = path.join(CLAUDE_DIR, 'skills')
 const AUTH_JSON = process.env.OPENCODE_AUTH || path.join(HOME, '.local', 'share', 'opencode', 'auth.json')
 const OPENCODE_HOST = process.env.OPENCODE_HOST || null
 const MAX_CUERPO = 1024 * 1024
@@ -48,19 +57,33 @@ const MAX_CUERPO = 1024 * 1024
 const CONFIG_DEFECTO = {
   puerto: 4597,
   minutosAtasco: 12,
+  // R3 · umbrales del ledger de trabajos (configurables en hub-data/config.json).
+  minutosAtascoHerramienta: null, // null = hereda minutosAtasco (spec 10, R3.4)
+  minutosGraciaAtasco: 2,
+  maxConcurrentes: 3,
   minutosPermiso: 20,
   minutosEnfriamiento: 30,
   horasMaxJob: 24,
   temporalDias: 14,
   autolimpiarHoras: 6,
+  // R4/R8 · aprobaciones por niveles: el hub clasifica y aplica reglas duras; el cerebro
+  // resuelve (lo peligroso lo evalúa el guardián en modo `inteligente`).
+  aprobaciones: { modo: 'manual' },
 }
 
 function cargarConfig() {
   const archivo = path.join(DATA_DIR, 'config.json')
-  try { return { ...CONFIG_DEFECTO, ...JSON.parse(fs.readFileSync(archivo, 'utf8')) } }
+  // Merge superficial + uno profundo para `aprobaciones` (objeto anidado, R4).
+  const fusionar = (usuario) => {
+    const base = { ...CONFIG_DEFECTO, ...(usuario && typeof usuario === 'object' ? usuario : {}) }
+    const ap = usuario && typeof usuario.aprobaciones === 'object' ? usuario.aprobaciones : {}
+    base.aprobaciones = { ...CONFIG_DEFECTO.aprobaciones, ...ap }
+    return base
+  }
+  try { return fusionar(JSON.parse(fs.readFileSync(archivo, 'utf8'))) }
   catch {
     try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(archivo, JSON.stringify(CONFIG_DEFECTO, null, 2) + '\n') } catch { /* sin datos */ }
-    return { ...CONFIG_DEFECTO }
+    return fusionar(null)
   }
 }
 
@@ -83,6 +106,27 @@ fs.mkdirSync(LOGS_DIR, { recursive: true })
 const memoria = crearMemoria(MEMORIA_DIR, { temporalDias: config.temporalDias, plantillasDir: PLANTILLAS_DIR })
 memoria.inicializar()
 
+// --------------------------------------------------------- búsqueda (R1 · spec 10)
+// Índice FTS5 (`node:sqlite`) con fallback lineal si no hay FTS5 o HUB_BUSCAR_FALLBACK=1.
+const buscar = crearBuscar({
+  dataDir: DATA_DIR,
+  memoriaDir: MEMORIA_DIR,
+  skillsDir: SKILLS_DIR,
+  logsDir: LOGS_DIR,
+})
+
+// `node hub.mjs --reindexar` reconstruye el índice completo y sale con código 0.
+if (process.argv.includes('--reindexar')) {
+  try {
+    const r = buscar.reindexar()
+    console.log(`Reindexado (${r.modo}): ${r.documentos} documento(s)${r.motivo ? ` · ${r.motivo}` : ''}`)
+    process.exit(r.ok ? 0 : 1)
+  } catch (e) {
+    console.error(`Error al reindexar: ${e?.message || e}`)
+    process.exit(1)
+  }
+}
+
 // Registro central de errores: lo alimentan el hub, el colector, los hooks, el MCP
 // y el panel; se lee desde /api/logs y se exporta para pasárselo a una IA.
 const logErrores = crearLogErrores({ dirLogs: LOGS_DIR })
@@ -104,6 +148,47 @@ function cargarReglas() {
 }
 const reglas = cargarReglas()
 const triaje = crearTriaje({ reglas, logDecisiones: path.join(LOGS_DIR, 'decisiones.jsonl') })
+
+// ----------------------------------------------------------------- aprobaciones (R4/R8 · spec 10)
+// El hub CLASIFICA comandos/peticiones, aplica las reglas duras del guardián (R8) y mantiene
+// su propio allowlist; no aprueba por sí mismo (resuelve el cerebro vía MCP). Reglas en
+// `lib/reglas-peligro.json`, allowlist y circuit-breaker en `hub-data/aprobaciones.json`
+// (tmp+rename con read-merge-write), veredictos en `hub-data/guardian.jsonl` y cola de
+// pendientes en `hub-data/pendientes/`.
+const aprobaciones = crearAprobaciones({ dataDir: DATA_DIR, config })
+
+// ----------------------------------------------------------------- skills (R5 · spec 10)
+// Propuesta → pendiente → aprobación (nunca existe sin aprobar). Linter+guard en
+// `config/hooks/skill-lint.mjs`, contador de uso en `hub-data/skills.usage.json` y
+// detección de duplicados con `buscar` (tipo=skill, R1).
+const skills = crearSkills({ dataDir: DATA_DIR, skillsDir: SKILLS_DIR, aprobaciones, buscar })
+
+// ----------------------------------------------------------------- cron (R6 · spec 10)
+// Planificador persistente (`hub-data/cron/jobs.json`): el hub reclama cada job vencido con
+// un claim de TTL y lo lanza por la API V1 con `config/hub/lib/lanzador.mjs` (R0). Los avisos
+// (fallos, reintentos) quedan en `hub-data/cron/avisos.json` para la barra del panel. El tope
+// de coste sale de `reglas.json` (`presupuestos[agente]`).
+const lanzador = crearLanzador({ systemDir: SYSTEM_DIR, host: OPENCODE_HOST })
+const cron = crearCron({ dataDir: DATA_DIR, lanzador, reglas })
+try { cron.recuperar() } catch { /* nada */ } // recupera claims caducados al arrancar (R6.6)
+function cicloCron() {
+  try {
+    const p = cron.tick()
+    if (p && typeof p.catch === 'function') {
+      p.catch((e) => { try { logErrores.registrar({ origen: 'cron', severidad: 'aviso', mensaje: `Ciclo del cron falló: ${e?.message || e}` }) } catch { /* nada */ } })
+    }
+  } catch (e) {
+    try { logErrores.registrar({ origen: 'cron', severidad: 'aviso', mensaje: `Ciclo del cron falló: ${e?.message || e}` }) } catch { /* nada */ }
+  }
+}
+setInterval(cicloCron, 30 * 1000).unref?.()
+
+// ------------------------------------------------- compresión de bitácora (R7 · spec 10)
+// Resumen propio de contexto: cuando BITACORA.md supera `bitacora_max_chars`
+// (reglas.json; 60 000 por defecto) se archiva lo intermedio en BITACORA-archivo/ y
+// se deja un resumen (redactor-ds por la API V1, fallback determinista). Máx. una
+// compresión por proyecto y día. Reindexa en `buscar` (R1) tras comprimir.
+const compresion = crearCompresion({ memoria, lanzador, reglas, buscar })
 
 // ---------------------------------------------------------------- hallazgos (buscar antes de crear)
 const HALLAZGOS_JSONL = path.join(DATA_DIR, 'hallazgos.jsonl')
@@ -311,6 +396,67 @@ function difundirSSE(evento, datos) {
 const vivo = crearVivo({ oc, dirDatos: DATA_DIR, emitir: (ev) => difundirSSE('trabajo', ev), latidos: () => latidosActivos(), registrarLog: (d) => logErrores.registrarYLog(d), intervaloMs: 4000 })
 vivo.arrancar()
 
+// ------------------------------------------------------- ledger de trabajos (R3 · spec 10)
+// Registro durable del hub (`hub-data/trabajos.json`) que sobrevive a los reinicios: se
+// reconcilia con `leerJobs()` (no con opencode_job_list), re-engancha lo vivo a `vivo.mjs`,
+// marca `desconocido` lo desaparecido y detecta atascos por progreso. NUNCA toca los
+// ficheros de job del MCP. Los avisos de atasco reutilizan el mecanismo del vigilante.
+// Limpieza de arranque: `tmp` huérfanos de una escritura atómica interrumpida (> 1 h).
+try {
+  const HORA = 60 * 60 * 1000
+  for (const n of fs.readdirSync(DATA_DIR)) {
+    if (!/^trabajos\.json\.tmp-/.test(n)) continue
+    try { if (Date.now() - fs.statSync(path.join(DATA_DIR, n)).mtimeMs > HORA) fs.unlinkSync(path.join(DATA_DIR, n)) } catch { /* nada */ }
+  }
+} catch { /* hub-data todavía no existe */ }
+
+const ledger = crearLedger({
+  dirDatos: DATA_DIR,
+  minutosAtasco: config.minutosAtasco,
+  minutosAtascoHerramienta: config.minutosAtascoHerramienta,
+  minutosGraciaAtasco: config.minutosGraciaAtasco,
+  maxConcurrentes: config.maxConcurrentes,
+  horasMaxJob: config.horasMaxJob,
+  avisar: (a) => { try { vigilante.agregar(a) } catch { /* nada */ } },
+  anotarBitacora: (dir, titulo, texto) => {
+    // Solo si el proyecto ya está registrado: no creamos proyectos por un job huérfano.
+    try {
+      if (!memoria.buscarProyecto(dir)) return
+      const p = memoria.agregarBitacora(dir, titulo, texto)
+      if (p?.slug) indexarProyectoSilencioso(p.slug) // como el resto de escrituras de memoria
+    } catch { /* nada */ }
+  },
+  // Sondeo por job: un job fuera del top-N de `leerJobs()` no es «desaparecido».
+  existeJob: (jobId) => oc.existeJob(jobId),
+  log: (d) => { try { logErrores.registrar(d) } catch { /* nada */ } },
+})
+
+let ultimoAvisoConcurrencia = 0
+function cicloLedger() {
+  try {
+    // top-80 por `updatedAt` para no parsear todo el histórico; un job vivo pero viejo
+    // quedará fuera y el ledger lo confirma con `existeJob` (no lo marca `desconocido`).
+    const jobs = oc.leerJobs(80)
+    const informe = ledger.reconciliar(jobs)
+    // Re-engancha a la vista viva lo que sigue vivo (recolectar ya cachea 15 s por job).
+    for (const jobId of informe.reEnganchados) { try { vivo.recolectar(jobId) } catch { /* nada */ } }
+    // Atasco por progreso: `updatedAt` del job + eventos con `ts` de vivo.mjs.
+    const eventos = {}
+    for (const e of ledger.leer()) eventos[e.jobId] = (vivo.detalle(e.jobId).eventos || [])
+    ledger.revisarAtascos({ jobs, eventos })
+    // Concurrencia: el hub solo mide y avisa (con freno para no inundar el registro).
+    const m = ledger.medir()
+    if (m.aviso && Date.now() - ultimoAvisoConcurrencia > 10 * 60 * 1000) {
+      ultimoAvisoConcurrencia = Date.now()
+      logErrores.registrar({ origen: 'ledger', severidad: 'aviso', mensaje: m.mensaje, contexto: { enCurso: m.enCurso, maxConcurrentes: m.maxConcurrentes, profundidad: m.profundidad } })
+    }
+  } catch (e) {
+    try { logErrores.registrar({ origen: 'ledger', severidad: 'aviso', mensaje: `Ciclo del ledger falló: ${e?.message || e}` }) } catch { /* nada */ }
+  }
+}
+cicloLedger() // reconciliación al arrancar (R3.3)
+setInterval(cicloLedger, 60 * 1000).unref?.()
+
 // ----------------------------------------------------------------- gasto
 
 let cacheGasto = { ts: 0, datos: null }
@@ -403,6 +549,26 @@ async function cuerpoJson(req) {
 
 // ----------------------------------------------------------------- servidor
 
+/** Indexa un proyecto tras escribir memoria: best-effort, pero deja rastro en el log de errores. */
+function indexarProyectoSilencioso(slug) {
+  try {
+    const r = buscar.indexarProyecto(slug)
+    if (r && r.ok === false) {
+      logErrores.registrar({ origen: 'buscar', severidad: 'aviso', mensaje: `Indexado de «${slug}» falló: ${r.error || 'error desconocido'}`, contexto: { proyecto: slug } })
+    }
+  } catch (e) {
+    logErrores.registrar({ origen: 'buscar', severidad: 'aviso', mensaje: `Indexado de «${slug}» lanzó excepción: ${e?.message || e}`, contexto: { proyecto: slug } })
+  }
+}
+
+// Reindexado incremental al arrancar (R1.4): no bloquea el arranque si falla.
+try {
+  const r = buscar.indexarTodo()
+  if (r && r.ok === false) logErrores.registrar({ origen: 'buscar', severidad: 'aviso', mensaje: `Indexado inicial falló: ${r.error || 'error desconocido'}` })
+} catch (e) {
+  logErrores.registrar({ origen: 'buscar', severidad: 'aviso', mensaje: `Indexado inicial lanzó excepción: ${e?.message || e}` })
+}
+
 const servidor = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://127.0.0.1')
   const ruta = u.pathname
@@ -441,6 +607,126 @@ const servidor = http.createServer(async (req, res) => {
       const r = cambiarEstadoHallazgo(String(b.id || ''), String(b.estado || ''))
       return enviarJson(res, r, r.ok ? 200 : 400)
     }
+    if (ruta === '/api/aprobaciones/clasificar' && req.method === 'POST') {
+      // R4.2 · el hub clasifica (hardline|peligroso|seguro + motivo + acción); no aprueba.
+      const b = await cuerpoJson(req)
+      const texto = b.comando ?? b.texto
+      if (typeof texto !== 'string' || !texto.trim()) return enviarJson(res, { ok: false, error: 'faltan comando o texto' }, 400)
+      return enviarJson(res, { ok: true, ...aprobaciones.decision(texto, { sessionId: b.sessionId || null }) })
+    }
+    if (ruta === '/api/aprobaciones/registrar' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.comando !== 'string' || !b.comando.trim()) return enviarJson(res, { ok: false, error: 'falta comando' }, 400)
+      const r = aprobaciones.registrar(b.comando, b.alcance, b.sessionId || null)
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    // R8 · el cerebro reporta aquí el veredicto del guardián; el hub aplica reglas duras.
+    if (ruta === '/api/aprobaciones/veredicto' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.comando !== 'string' || !b.comando.trim()) return enviarJson(res, { ok: false, error: 'falta comando' }, 400)
+      const r = aprobaciones.registrarVeredicto({ comando: b.comando, veredicto: b.veredicto, sessionId: b.sessionId || null, motivo: b.motivo })
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/aprobaciones/circuito/reiniciar' && req.method === 'POST') {
+      const r = aprobaciones.reiniciarCircuito()
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/aprobaciones' && req.method === 'GET') {
+      return enviarJson(res, { ok: true, ...aprobaciones.estado() })
+    }
+    if (ruta === '/api/pendientes' && req.method === 'GET') {
+      return enviarJson(res, { ok: true, pendientes: aprobaciones.listarPendientes() })
+    }
+    if (ruta === '/api/pendientes' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      const r = aprobaciones.encolar(b.tipo, { resumen: b.resumen, origen: b.origen, payload: b.payload })
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/pendientes/resolver' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      const r = aprobaciones.resolverPendiente(String(b.tipo || ''), String(b.id || ''))
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    // ------------------------------------------------ skills (R5 · spec 10)
+    if (ruta === '/api/skills/proponer' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.nombre !== 'string' || !b.nombre.trim()) return enviarJson(res, { ok: false, error: 'falta nombre' }, 400)
+      if (typeof b.descripcion !== 'string' || !b.descripcion.trim()) return enviarJson(res, { ok: false, error: 'falta descripcion' }, 400)
+      if (typeof b.cuerpo !== 'string' || !b.cuerpo.trim()) return enviarJson(res, { ok: false, error: 'falta cuerpo' }, 400)
+      const r = skills.proponer({ nombre: b.nombre, descripcion: b.descripcion, cuerpo: b.cuerpo, origen: b.origen, referencias: b.referencias })
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/skills/pendientes' && req.method === 'GET') {
+      return enviarJson(res, { ok: true, pendientes: skills.pendientes() })
+    }
+    if (ruta === '/api/skills/aprobar' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.id !== 'string' || !b.id.trim()) return enviarJson(res, { ok: false, error: 'falta id' }, 400)
+      const r = skills.aprobar(String(b.id))
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/skills/rechazar' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.id !== 'string' || !b.id.trim()) return enviarJson(res, { ok: false, error: 'falta id' }, 400)
+      const r = skills.rechazar(String(b.id))
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/skills/uso' && req.method === 'GET') {
+      return enviarJson(res, { ok: true, uso: skills.leerUso(), candidatos: skills.candidatosArchivo() })
+    }
+    if (ruta === '/api/skills/uso' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.nombre !== 'string' || !b.nombre.trim()) return enviarJson(res, { ok: false, error: 'falta nombre' }, 400)
+      const tipo = typeof b.tipo === 'string' && b.tipo.trim() ? b.tipo : 'uso'
+      const r = skills.registrarUso(String(b.nombre), tipo, b.veces)
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/skills/archivo' && req.method === 'GET') {
+      const dias = u.searchParams.get('dias') || 60
+      return enviarJson(res, { ok: true, candidatos: skills.candidatosArchivo(dias) })
+    }
+    // ------------------------------------------------ cron (R6 · spec 10)
+    if (ruta === '/api/cron' && req.method === 'GET') {
+      // Jobs programados + avisos (fallos y reintentos) para la barra del panel.
+      return enviarJson(res, { ok: true, jobs: cron.listar(), avisos: cron.avisos() })
+    }
+    if (ruta === '/api/cron' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.prompt !== 'string' || !b.prompt.trim()) return enviarJson(res, { ok: false, error: 'falta prompt' }, 400)
+      let schedule = b.schedule
+      if (!schedule && typeof b.cuando === 'string') {
+        const p = parsearSchedule(b.cuando)
+        if (!p.ok) return enviarJson(res, { ok: false, error: p.error, ejemplo: p.ejemplo }, 400)
+        schedule = p.schedule
+      }
+      if (!schedule) {
+        return enviarJson(res, { ok: false, error: 'falta cuando o schedule', ejemplo: 'p. ej. «laborables 9:00», «cada 30m» o «0 9 * * 1-5»' }, 400)
+      }
+      const agente = b.agente || (b.destino && b.destino.agente)
+      const directory = b.directory != null ? b.directory : (b.destino && b.destino.directory)
+      const r = cron.crear({
+        nombre: b.nombre,
+        schedule,
+        destino: { agente, directory },
+        prompt: b.prompt,
+        aprobado_usuario: b.aprobado_usuario === true,
+      })
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if ((ruta === '/api/cron/pausar' || ruta === '/api/cron/reanudar' || ruta === '/api/cron/borrar') && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.id !== 'string' || !b.id.trim()) return enviarJson(res, { ok: false, error: 'falta id' }, 400)
+      const r = ruta.endsWith('/pausar') ? cron.pausar(String(b.id))
+        : ruta.endsWith('/reanudar') ? cron.reanudar(String(b.id))
+          : cron.borrar(String(b.id))
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/cron/ejecutar' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.id !== 'string' || !b.id.trim()) return enviarJson(res, { ok: false, error: 'falta id' }, 400)
+      const r = await cron.ejecutar(String(b.id))
+      return enviarJson(res, { ok: r.ok, resultado: r, jobs: cron.listar(), avisos: cron.avisos() }, r.ok ? 200 : 400)
+    }
     if (ruta === '/api/proyectos') return enviarJson(res, { ok: true, proyectos: memoria.proyectos() })
     if (ruta === '/api/memoria/proyecto') {
       const cwd = u.searchParams.get('cwd') || '.'
@@ -450,34 +736,112 @@ const servidor = http.createServer(async (req, res) => {
         ok: true, proyecto: p,
         estado: memoria.leerEstado(p.slug), contexto: memoria.leerContexto(p.slug),
         bitacora: (memoria.leerBitacora(p.slug) || '').slice(-4000),
+        bitacoraTamano: (memoria.leerBitacora(p.slug) || '').length,
       })
     }
     if (ruta === '/api/memoria/estado' && req.method === 'POST') {
       const b = await cuerpoJson(req)
       if (!b.cwd || typeof b.contenido !== 'string') return enviarJson(res, { ok: false, error: 'faltan cwd o contenido' }, 400)
-      return enviarJson(res, { ok: true, proyecto: memoria.escribirEstado(b.cwd, b.contenido) })
+      const p = memoria.escribirEstado(b.cwd, b.contenido)
+      // R2 · el cuerpo supera el límite: 422 con lo guardado hoy para consolidar.
+      if (p.excede) {
+        const actual = memoria.buscarProyecto(b.cwd)
+        return enviarJson(res, {
+          ok: false, motivo: 'excede', limite: p.limite, actuales: p.actuales,
+          contenidoActual: actual ? (memoria.leerEstado(actual.slug) || '') : '',
+        }, 422)
+      }
+      indexarProyectoSilencioso(p.slug)
+      return enviarJson(res, { ok: true, proyecto: p })
     }
     if (ruta === '/api/memoria/contexto' && req.method === 'POST') {
       const b = await cuerpoJson(req)
       if (!b.cwd || typeof b.contenido !== 'string') return enviarJson(res, { ok: false, error: 'faltan cwd o contenido' }, 400)
-      return enviarJson(res, { ok: true, proyecto: memoria.escribirContexto(b.cwd, b.contenido) })
+      const p = memoria.escribirContexto(b.cwd, b.contenido)
+      // R2 · mismo contrato de exceso que ESTADO.md.
+      if (p.excede) {
+        const actual = memoria.buscarProyecto(b.cwd)
+        return enviarJson(res, {
+          ok: false, motivo: 'excede', limite: p.limite, actuales: p.actuales,
+          contenidoActual: actual ? (memoria.leerContexto(actual.slug) || '') : '',
+        }, 422)
+      }
+      indexarProyectoSilencioso(p.slug)
+      return enviarJson(res, { ok: true, proyecto: p })
     }
     if (ruta === '/api/memoria/bitacora' && req.method === 'POST') {
       const b = await cuerpoJson(req)
       if (!b.cwd || !b.titulo) return enviarJson(res, { ok: false, error: 'faltan cwd o titulo' }, 400)
-      return enviarJson(res, { ok: true, proyecto: memoria.agregarBitacora(b.cwd, b.titulo, b.texto || '') })
+      const p = memoria.agregarBitacora(b.cwd, b.titulo, b.texto || '')
+      indexarProyectoSilencioso(p.slug)
+      // R7 · gancho opcional: si la bitácora supera el umbral, comprime en segundo plano
+      // sin bloquear la respuesta y sin romper nunca la escritura.
+      try {
+        if (compresion.necesitaComprimir(p.slug)) {
+          const prom = compresion.comprimir(p.slug)
+          if (prom && typeof prom.catch === 'function') {
+            prom.catch((e) => { try { logErrores.registrar({ origen: 'compresion', severidad: 'aviso', mensaje: `Compresión de «${p.slug}» falló: ${e?.message || e}` }) } catch { /* nada */ } })
+          }
+        }
+      } catch { /* la compresión nunca rompe la escritura de la bitácora */ }
+      return enviarJson(res, { ok: true, proyecto: p })
+    }
+    if (ruta === '/api/memoria/comprimir' && req.method === 'POST') {
+      // R7 · compresión manual/forzada. El proyecto admite slug o cwd; un slug con
+      // traversal (`..`) se rechaza con 400.
+      const b = await cuerpoJson(req)
+      const proyecto = b.proyecto ?? b.slug ?? b.cwd
+      if (typeof proyecto !== 'string' || !proyecto.trim()) {
+        return enviarJson(res, { ok: false, error: 'falta proyecto' }, 400)
+      }
+      const r = await compresion.comprimir(proyecto, { forzar: b.forzar === true })
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/memoria/compresion' && req.method === 'GET') {
+      // R7 · estado de compresión del proyecto (tamaño de bitácora, umbral, última).
+      const proyecto = u.searchParams.get('proyecto') || u.searchParams.get('cwd')
+      if (!proyecto) return enviarJson(res, { ok: false, error: 'falta proyecto' }, 400)
+      const r = compresion.estado(proyecto)
+      return enviarJson(res, r, r.ok ? 200 : 400)
     }
     if (ruta === '/api/memoria/checkpoint' && req.method === 'POST') {
       const b = await cuerpoJson(req)
       if (!b.cwd) return enviarJson(res, { ok: false, error: 'falta cwd' }, 400)
       const r = memoria.checkpoint(b.cwd, b.motivo || 'manual', b.nota || '')
       memoria.agregarBitacora(b.cwd, `Checkpoint (${b.motivo || 'manual'})`, b.nota || '')
+      indexarProyectoSilencioso(r.proyecto.slug)
       return enviarJson(res, { ok: true, proyecto: r.proyecto, archivo: r.archivo })
+    }
+    if (ruta === '/api/buscar') {
+      // R1 · búsqueda de sesiones y bitácoras. Solo GET; `q` es obligatoria.
+      if (req.method !== 'GET') return enviarJson(res, { ok: false, error: 'método no permitido; usa GET' }, 405)
+      const q = u.searchParams.get('q')
+      if (!q || !q.trim()) return enviarJson(res, { ok: false, error: 'falta q' }, 400)
+      const tipo = u.searchParams.get('tipo') || null
+      if (tipo && !buscar.tipos.includes(tipo)) {
+        return enviarJson(res, { ok: false, error: `tipo inválido; válidos: ${buscar.tipos.join(', ')}` }, 400)
+      }
+      const r = buscar.buscar(q, {
+        proyecto: u.searchParams.get('proyecto') || null,
+        limite: u.searchParams.get('limite') || 10,
+        tipo,
+      })
+      return enviarJson(res, { ok: true, modo: r.modo, aviso: r.aviso || null, resultados: r.resultados })
     }
     if (ruta === '/api/vigilante') {
       // R6 · las alertas del vigilante se muestran con el mismo clasificador que los errores.
       const alertas = vigilante.alertas().map((a) => ({ ...a, info: clasificarAlerta(a) }))
       return enviarJson(res, { ok: true, alertas, trabajos: oc.leerJobs(40) })
+    }
+    if (ruta === '/api/trabajos/ledger' && req.method === 'GET') {
+      // R3.5 · lista del ledger durable (filtro ?estado=) + medición de concurrencia.
+      // Va ANTES de la ruta genérica /api/trabajos/<jobId>.
+      const estado = u.searchParams.get('estado') || null
+      if (estado && !ESTADOS_LEDGER.includes(estado)) {
+        return enviarJson(res, { ok: false, error: `estado inválido; válidos: ${ESTADOS_LEDGER.join(', ')}` }, 400)
+      }
+      const trabajos = ledger.listar({ estado })
+      return enviarJson(res, { ok: true, total: trabajos.length, trabajos, medicion: ledger.medir() })
     }
     if (ruta.startsWith('/api/trabajos/') && req.method === 'GET') {
       // R7 · detalle vivo de un trabajo (lo usa el panel lateral). Incluye lo que

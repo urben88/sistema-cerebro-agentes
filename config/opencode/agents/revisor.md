@@ -7,6 +7,21 @@ permissions:
   - action: edit
     resource: "*"
     effect: deny
+permission:
+  bash:
+    "rm -rf /": deny
+    "rm -rf /*": deny
+    "rm -rf ~": deny
+    "rm -rf ~/*": deny
+    "rm -fr /": deny
+    "rm -fr /*": deny
+    "sudo rm -rf /*": deny
+    "mkfs*": deny
+    "dd *of=/dev/*": deny
+    "> /dev/sd*": deny
+    "> /dev/hd*": deny
+    "> /dev/nvme*": deny
+    ":(){ :|:& };:": deny
 ---
 
 Eres el agente REVISOR del sistema Cerebro → OpenCode. Revisas cambios de código contra la especificación (spec) correspondiente.

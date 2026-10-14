@@ -270,6 +270,7 @@ const estado = {
   vigilante: null,
   gastoEquipo: null,
   claudeEstados: [],
+  aprobaciones: null,
   salaAbierta: null,
   desplegadas: new Set(),
   plegar: true,
@@ -984,6 +985,27 @@ async function verProyecto(ruta) {
     $('modalTitulo').textContent = `Proyecto · ${r.proyecto.nombre}`
     $('modalSub').textContent = r.proyecto.ruta
     $('modalCuerpo').textContent = `## ESTADO.md\n\n${r.estado || '(vacío)'}\n\n## CONTEXTO-REPO.md\n\n${r.contexto || '(pendiente)'}\n\n## Última bitácora\n\n${(r.bitacora || '(vacía)').slice(-2000)}`
+    // R7 · tamaño de la bitácora y compresión manual del proyecto.
+    const acc = $('modalAcciones')
+    if (acc) {
+      vaciar(acc)
+      acc.append(h('span', { clase: 'tenue', texto: `Bitácora: ${fmt(r.bitacoraTamano || 0)} caracteres` }))
+      const boton = h('button', { clase: 'boton mini', type: 'button', texto: 'Comprimir ahora' })
+      boton.addEventListener('click', async () => {
+        boton.disabled = true
+        boton.textContent = 'Comprimiendo…'
+        try {
+          const rr = await fetch('/api/memoria/comprimir', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ proyecto: r.proyecto.ruta, forzar: true }),
+          }).then((x) => x.json())
+          boton.textContent = rr.ok
+            ? (rr.omitido ? `Sin cambios (${rr.omitido})` : `Comprimido (${rr.modo}, ${rr.archivado} apuntes)`)
+            : `Error: ${rr.error || 'no se pudo comprimir'}`
+        } catch { boton.textContent = 'Error de red' }
+      })
+      acc.append(boton)
+    }
     $('modal').classList.remove('oculto')
   } catch { /* nada */ }
 }
@@ -1160,6 +1182,69 @@ function pintarHallazgos(hh) {
 
 // Registro de errores: lista completa (mensaje, stack y contexto) para revisar o
 // exportar. Cada capa (hub, trabajos, hooks, MCP, panel) reporta a /api/log.
+// R6 · cron: lista de jobs programados (con siguiente ejecución y estado), botones
+// ejecutar/pausar/reanudar/borrar y los avisos del planificador (fallos, preflight, reintentos).
+function pintarProgramadas(datos) {
+  const d = datos || {}
+  const cont = vaciar($('cronJobs'))
+  const jobs = d.jobs || []
+  if (!jobs.length) {
+    cont.append(h('p', { clase: 'tenue', texto: 'Sin tareas programadas. Créalas con POST /api/cron (o pídeselas al cerebro).' }))
+  } else {
+    for (const j of jobs) {
+      const c = h('div', { clase: 'agente' })
+      const cab = h('div')
+      const clase = j.estado === 'activo' ? 'verde' : j.estado === 'fallido' ? 'rojo' : j.estado === 'pausado' ? 'ambar' : 'azul'
+      cab.append(h('span', { clase: `badge ${clase}`, texto: j.estado || '—' }))
+      cab.append(h('span', { clase: 'nombre', texto: j.nombre || j.id }))
+      c.append(cab)
+      const programacion = !j.schedule ? '—'
+        : j.schedule.kind === 'cron' ? `cron «${j.schedule.expr}»`
+          : j.schedule.kind === 'interval' ? `cada ${j.schedule.minutos} min`
+            : `una vez · ${j.schedule.ejecutar_en}`
+      c.append(h('div', { clase: 'desc', texto: `${(j.destino && j.destino.agente) || '—'} · ${programacion}` }))
+      c.append(h('div', {
+        clase: 'desc tenue',
+        texto: `siguiente: ${j.siguiente ? new Date(j.siguiente).toLocaleString() : '—'} · reintentos: ${j.reintentos || 0}${j.motivo ? ` · ${j.motivo}` : ''}`,
+      }))
+      const accion = (ruta, texto, peligro) => {
+        const b = h('button', { clase: `boton mini${peligro ? ' peligro' : ''}`, type: 'button', texto })
+        b.addEventListener('click', async () => {
+          try {
+            await fetch(ruta, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: j.id }) })
+            refrescarPesado()
+          } catch { /* nada */ }
+        })
+        return b
+      }
+      const fila = h('div', { clase: 'desc' })
+      fila.append(accion('/api/cron/ejecutar', 'Ejecutar'))
+      fila.append(accion(j.estado === 'pausado' ? '/api/cron/reanudar' : '/api/cron/pausar', j.estado === 'pausado' ? 'Reanudar' : 'Pausar'))
+      fila.append(accion('/api/cron/borrar', 'Borrar', true))
+      c.append(fila)
+      cont.append(c)
+    }
+  }
+
+  const contA = vaciar($('cronAvisos'))
+  const avisos = d.avisos || []
+  if (!avisos.length) {
+    contA.append(h('p', { clase: 'tenue', texto: 'Sin avisos.' }))
+  } else {
+    for (const a of avisos.slice(-20).reverse()) {
+      const c = h('div', { clase: 'agente' })
+      const clase = a.tipo === 'fallido' ? 'rojo' : a.tipo === 'fail_closed' ? 'ambar' : 'azul'
+      const cab = h('div')
+      cab.append(h('span', { clase: `badge ${clase}`, texto: a.tipo || 'aviso' }))
+      const ts = a.fecha ? Date.parse(a.fecha) : null
+      cab.append(h('span', { clase: 'desc tenue', texto: ts ? hace(ts) : '' }))
+      c.append(cab)
+      c.append(h('div', { clase: 'desc', texto: a.mensaje || '' }))
+      contA.append(c)
+    }
+  }
+}
+
 function pintarErrores(datos) {
   const cont = vaciar($('errores'))
   const errores = (datos && datos.errores) || []
@@ -1200,6 +1285,206 @@ function erroresDemo() {
   }
 }
 
+// R4 · aprobaciones: modo, reglas activas, allowlist propio y pendientes.
+function pintarAprobaciones(d) {
+  const datos = d || {}
+  const contModo = vaciar($('aprobacionesModo'))
+  const cardModo = h('div', { clase: 'agente' })
+  const cabModo = h('div')
+  cabModo.append(h('span', { clase: `badge ${datos.modo === 'abierto' ? 'ambar' : 'azul'}`, texto: `modo: ${datos.modo || 'manual'}` }))
+  if (datos.modoEfectivo && datos.modoEfectivo !== datos.modo) cabModo.append(h('span', { clase: 'chip', texto: `efectivo: ${datos.modoEfectivo}` }))
+  cardModo.append(cabModo)
+  const notaModo = datos.modo === 'abierto' ? 'Solo bloquea hardline; lo peligroso se aprueba (decisión explícita del usuario).'
+    : datos.modo === 'inteligente' ? 'Inteligente: lo peligroso lo evalúa el guardián; 3 denegaciones seguidas pasan a manual.'
+      : 'Manual: lo peligroso pregunta; lo seguro se aprueba. El allowlist nunca salva un hardline.'
+  cardModo.append(h('div', { clase: 'desc', texto: notaModo }))
+  contModo.append(cardModo)
+
+  // R8 · guardián: circuit-breaker, últimos veredictos y reinicio del circuito.
+  pintarGuardian(datos.guardian || {})
+
+  // Reglas activas: conteos + lista de hardline y peligroso (seguro solo el conteo).
+  const reglas = datos.reglas || {}
+  const conteos = reglas.conteos || {}
+  const contReglas = vaciar($('aprobacionesReglas'))
+  for (const [nivel, clase] of [['hardline', 'rojo'], ['peligroso', 'ambar'], ['seguro', 'verde']]) {
+    const lista = reglas[nivel] || []
+    const c = h('div', { clase: 'agente' })
+    const cab = h('div')
+    cab.append(h('span', { clase: `badge ${clase}`, texto: nivel }))
+    cab.append(h('span', { clase: 'chip', texto: `${conteos[nivel] != null ? conteos[nivel] : lista.length}` }))
+    c.append(cab)
+    if (nivel !== 'seguro') {
+      for (const r of lista) c.append(h('div', { clase: 'desc tenue', texto: `${r.patron} · ${r.motivo || ''}` }))
+    }
+    contReglas.append(c)
+  }
+
+  // Allowlist propio (hub-data/aprobaciones.json): entradas "siempre" y por sesión.
+  const al = datos.allowlist || {}
+  const siempre = al.siempre || []
+  const sesiones = Object.keys(al.sesion || {})
+  const totalSesion = sesiones.reduce((n, s) => n + (al.sesion[s] || []).length, 0)
+  const contAl = vaciar($('aprobacionesAllowlist'))
+  const cAl = h('div', { clase: 'agente' })
+  cAl.append(h('div', {}, h('span', { clase: 'nombre', texto: 'Allowlist' }), h('span', { clase: 'chip', texto: `siempre ${siempre.length} · sesión ${totalSesion}` })))
+  if (!siempre.length && !totalSesion) cAl.append(h('div', { clase: 'desc tenue', texto: 'Vacío: todo lo peligroso pregunta.' }))
+  for (const p of siempre) cAl.append(h('div', { clase: 'desc', texto: p }))
+  contAl.append(cAl)
+
+  // Pendientes (memoria y skills) en cola para revisar fuera de banda.
+  const contPend = vaciar($('aprobacionesPendientes'))
+  const pend = datos.pendientes || []
+  if (!pend.length) {
+    contPend.append(h('p', { clase: 'tenue', texto: 'Sin pendientes en cola.' }))
+  } else {
+    for (const p of pend) {
+      const c = h('div', { clase: 'agente' })
+      const cab = h('div')
+      cab.append(h('span', { clase: 'badge azul', texto: p.tipo }))
+      cab.append(h('span', { clase: 'nombre', texto: p.resumen || p.id }))
+      c.append(cab)
+      const ts = p.creado ? Date.parse(p.creado) : null
+      c.append(h('div', { clase: 'desc tenue', texto: `${p.origen || '—'} · ${hace(ts)}` }))
+      contPend.append(c)
+    }
+  }
+}
+
+// R8 · guardián: estado del circuit-breaker, últimos veredictos y botón de reinicio.
+function pintarGuardian(g) {
+  const cont = vaciar($('aprobacionesGuardian'))
+  if (!cont) return
+  const circuito = (g && g.circuito) || {}
+  const card = h('div', { clase: 'agente' })
+  const cab = h('div')
+  cab.append(h('span', { clase: `badge ${circuito.abierto ? 'rojo' : 'verde'}`, texto: circuito.abierto ? 'circuito: abierto' : 'circuito: cerrado' }))
+  cab.append(h('span', { clase: 'chip', texto: `denegaciones seguidas: ${circuito.denegacionesSeguidas || 0}` }))
+  card.append(cab)
+  card.append(h('div', { clase: 'desc', texto: circuito.abierto
+    ? `Modo efectivo manual hasta que el usuario lo reinicie${circuito.desde ? ` (desde ${hace(Date.parse(circuito.desde))})` : ''}.`
+    : 'Lo peligroso lo evalúa el guardián (modo inteligente); ante duda, al usuario.' }))
+  const btn = h('button', { clase: 'boton mini', type: 'button', texto: 'Reiniciar circuito' })
+  btn.addEventListener('click', async () => {
+    try {
+      await fetch('/api/aprobaciones/circuito/reiniciar', { method: 'POST' })
+      refrescarPesado()
+    } catch { /* nada */ }
+  })
+  const fila = h('div', { clase: 'desc' })
+  fila.append(btn)
+  card.append(fila)
+  cont.append(card)
+
+  const veredictos = (g && g.veredictos) || []
+  if (!veredictos.length) {
+    cont.append(h('div', { clase: 'desc tenue', texto: 'Sin veredictos del guardián todavía.' }))
+  } else {
+    const lista = h('div', { clase: 'agente' })
+    lista.append(h('div', {}, h('span', { clase: 'nombre', texto: 'Últimos veredictos' }), h('span', { clase: 'chip', texto: `${veredictos.length}` })))
+    for (const v of [...veredictos].reverse()) {
+      const clase = v.veredicto === 'APROBAR' ? 'verde' : v.veredicto === 'DENEGAR' ? 'rojo' : 'ambar'
+      const fila2 = h('div', { clase: 'desc' })
+      fila2.append(h('span', { clase: `badge ${clase}`, texto: `${v.veredicto || '?'}→${v.accionFinal || '?'}` }))
+      const resumen = String(v.comando || '').replace(/\s+/g, ' ').slice(0, 120)
+      fila2.append(h('span', { texto: ` ${v.nivel || '?'} · ${resumen}${v.ts ? ` · ${hace(Date.parse(v.ts))}` : ''}` }))
+      lista.append(fila2)
+    }
+    cont.append(lista)
+  }
+}
+
+// R5 · skills: pendientes con Aprobar/Rechazar y tabla de uso (contador).
+function pintarSkills(datos, usoDatos) {
+  const contPend = vaciar($('skillsPendientes'))
+  const pend = (datos && datos.pendientes) || []
+  if (!pend.length) {
+    contPend.append(h('p', { clase: 'tenue', texto: 'Sin skills propuestos pendientes.' }))
+  } else {
+    for (const p of pend) {
+      const c = h('div', { clase: 'agente' })
+      const nombre = (p.payload && p.payload.nombre) || p.id
+      const cab = h('div')
+      cab.append(h('span', { clase: 'badge azul', texto: 'skill' }))
+      cab.append(h('span', { clase: 'nombre', texto: nombre }))
+      c.append(cab)
+      c.append(h('div', { clase: 'desc', texto: (p.payload && p.payload.descripcion) || p.resumen || '' }))
+      const ts = p.creado ? Date.parse(p.creado) : null
+      c.append(h('div', { clase: 'desc tenue', texto: `${p.origen || '—'} · ${hace(ts)}` }))
+      const fila = h('div', { clase: 'desc' })
+      const aprobar = h('button', { clase: 'boton mini', type: 'button', texto: 'Aprobar' })
+      aprobar.addEventListener('click', async () => {
+        try {
+          await fetch('/api/skills/aprobar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) })
+          refrescarPesado()
+        } catch { /* nada */ }
+      })
+      const rechazar = h('button', { clase: 'boton mini peligro', type: 'button', texto: 'Rechazar' })
+      rechazar.addEventListener('click', async () => {
+        try {
+          await fetch('/api/skills/rechazar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) })
+          refrescarPesado()
+        } catch { /* nada */ }
+      })
+      fila.append(aprobar)
+      fila.append(rechazar)
+      c.append(fila)
+      contPend.append(c)
+    }
+  }
+
+  const contUso = vaciar($('skillsUso'))
+  const uso = (usoDatos && usoDatos.uso) || {}
+  const candidatos = new Set(((usoDatos && usoDatos.candidatos) || []).map((x) => x.nombre))
+  const entradas = Object.entries(uso).sort((a, b) => (b[1].uso || 0) - (a[1].uso || 0))
+  if (!entradas.length) {
+    contUso.append(h('p', { clase: 'tenue', texto: 'Sin uso registrado todavía.' }))
+  } else {
+    const tabla = h('table')
+    tabla.append(h('thead', {}, h('tr', {},
+      h('th', { texto: 'Skill' }), h('th', { texto: 'Uso' }), h('th', { texto: 'Visto' }),
+      h('th', { texto: 'Parcheado' }), h('th', { texto: 'Último uso' }), h('th', { texto: '' }))))
+    const tb = h('tbody')
+    for (const [nombre, u] of entradas) {
+      const ultimo = u.ultimo_uso ? Date.parse(u.ultimo_uso) : null
+      tb.append(h('tr', {},
+        h('td', { texto: nombre }),
+        h('td', { texto: String(u.uso || 0) }),
+        h('td', { texto: String(u.visto || 0) }),
+        h('td', { texto: String(u.parcheado || 0) }),
+        h('td', { texto: ultimo ? hace(ultimo) : '—' }),
+        h('td', { texto: candidatos.has(nombre) ? 'candidato a archivar' : '' })))
+    }
+    tabla.append(tb)
+    contUso.append(tabla)
+  }
+}
+
+function aprobacionesDemo() {
+  return {
+    modo: 'inteligente',
+    modoEfectivo: 'manual',
+    reglas: {
+      conteos: { hardline: 6, peligroso: 9, seguro: 3 },
+      hardline: [{ patron: '\\brm\\s+…(?:/|~|\\$HOME)…', motivo: 'borrado recursivo de la raíz o del directorio personal' }, { patron: '\\bmkfs…', motivo: 'formateo de disco' }],
+      peligroso: [{ patron: '\\bgit\\s+push\\b…--force', motivo: 'git push forzado' }, { patron: '\\brm\\s+…-[a-zA-Z]*r', motivo: 'borrado recursivo' }],
+      seguro: [],
+    },
+    allowlist: { siempre: ['npm run build'], sesion: { 'demo-ses': ['git push origin main'] } },
+    guardian: {
+      circuito: { denegacionesSeguidas: 3, abierto: true, desde: new Date(Date.now() - 12 * 60000).toISOString() },
+      veredictos: [
+        { ts: new Date(Date.now() - 12 * 60000).toISOString(), nivel: 'peligroso', veredicto: 'DENEGAR', accionFinal: 'rechazar', motivo: 'borrado recursivo fuera del proyecto', comando: 'rm -rf C:/Users/otro/proyecto' },
+        { ts: new Date(Date.now() - 20 * 60000).toISOString(), nivel: 'peligroso', veredicto: 'ESCALAR', accionFinal: 'preguntar', motivo: 'contexto insuficiente', comando: 'git reset --hard origin/main' },
+      ],
+    },
+    pendientes: [
+      { tipo: 'skills', id: 'demo-skill', resumen: 'Skill propuesto: resumir-bitacora', origen: 'cerebro', creado: new Date(Date.now() - 8 * 60000).toISOString(), payload: null },
+      { tipo: 'memoria', id: 'demo-mem', resumen: 'Consolidar ESTADO.md del proyecto demo', origen: 'hub', creado: new Date(Date.now() - 32 * 60000).toISOString(), payload: null },
+    ],
+  }
+}
+
 const PESTANAS = [
   ['oficina', 'Oficina'],
   ['organizacion', 'Organización'],
@@ -1210,6 +1495,8 @@ const PESTANAS = [
   ['datos', 'Datos'],
   ['mcps', 'MCPs'],
   ['hallazgos', 'Hallazgos'],
+  ['aprobaciones', 'Aprobaciones'],
+  ['programadas', 'Programadas'],
   ['errores', 'Errores'],
 ]
 
@@ -1390,7 +1677,7 @@ async function refrescarLigero() {
 
 async function refrescarPesado() {
   try {
-    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs] = await Promise.all([
+    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs, aprob, skillsPend, skillsUso, cronDatos] = await Promise.all([
       fetch('/api/gasto').then((r) => r.json()),
       fetch('/api/ventana').then((r) => r.json()),
       fetch('/api/laya').then((r) => r.json()),
@@ -1399,6 +1686,10 @@ async function refrescarPesado() {
       fetch('/api/hallazgos').then((r) => r.json()),
       fetch('/api/gasto/equipo').then((r) => r.json()).catch(() => null),
       fetch('/api/logs?limite=80').then((r) => r.json()).catch(() => null),
+      fetch('/api/aprobaciones').then((r) => r.json()).catch(() => null),
+      fetch('/api/skills/pendientes').then((r) => r.json()).catch(() => null),
+      fetch('/api/skills/uso').then((r) => r.json()).catch(() => null),
+      fetch('/api/cron').then((r) => r.json()).catch(() => null),
     ])
     pintarGasto(gasto)
     pintarVentana(ventana)
@@ -1408,6 +1699,10 @@ async function refrescarPesado() {
     pintarErrores(estado.demo ? erroresDemo() : (logs || { errores: [] }))
     estado.gastoEquipo = equipo
     pintarReparto(equipo)
+    estado.aprobaciones = aprob
+    pintarAprobaciones(estado.demo ? aprobacionesDemo() : aprob)
+    pintarSkills(estado.demo ? { pendientes: [] } : skillsPend, estado.demo ? { uso: {}, candidatos: [] } : skillsUso)
+    pintarProgramadas(estado.demo ? { jobs: [], avisos: [] } : cronDatos)
   } catch { /* nada */ }
 }
 

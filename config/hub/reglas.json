@@ -3,6 +3,8 @@
   "descripcion": "Reglas de reparto del Cerebro Hub: respaldo del triaje con Laya y guía para los agentes. Editable desde el panel (se copia a la carpeta de datos).",
   "confianzaMinima": 0.6,
   "paraleloMax": 2,
+  "nudge_intervalo": 10,
+  "bitacora_max_chars": 60000,
   "presupuestos": {
     "explorador-ds": 0.2,
     "redactor-ds": 0.2,

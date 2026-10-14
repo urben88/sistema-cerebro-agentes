@@ -3,6 +3,20 @@ description: Agente local gratuito (Ollama/Qwen3.5 9B, 16k). Solo bajo petición
 mode: all
 model: ollama/hf.co/bartowski/Qwen_Qwen3.5-9B-GGUF:IQ4_XS
 permission:
+  bash:
+    "rm -rf /": deny
+    "rm -rf /*": deny
+    "rm -rf ~": deny
+    "rm -rf ~/*": deny
+    "rm -fr /": deny
+    "rm -fr /*": deny
+    "sudo rm -rf /*": deny
+    "mkfs*": deny
+    "dd *of=/dev/*": deny
+    "> /dev/sd*": deny
+    "> /dev/hd*": deny
+    "> /dev/nvme*": deny
+    ":(){ :|:& };:": deny
   "skill": deny
   "playwright_*": deny
   "ssh_*": deny

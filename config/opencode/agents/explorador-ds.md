@@ -7,6 +7,21 @@ permissions:
   - action: edit
     resource: "*"
     effect: deny
+permission:
+  bash:
+    "rm -rf /": deny
+    "rm -rf /*": deny
+    "rm -rf ~": deny
+    "rm -rf ~/*": deny
+    "rm -fr /": deny
+    "rm -fr /*": deny
+    "sudo rm -rf /*": deny
+    "mkfs*": deny
+    "dd *of=/dev/*": deny
+    "> /dev/sd*": deny
+    "> /dev/hd*": deny
+    "> /dev/nvme*": deny
+    ":(){ :|:& };:": deny
 ---
 
 Eres el agente EXPLORADOR-DS del sistema Cerebro → OpenCode. Reduces el trabajo preparatorio: buscas, lees y resumes para que otro decida. No escribes ni modificas nada.

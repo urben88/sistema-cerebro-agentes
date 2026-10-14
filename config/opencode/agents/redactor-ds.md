@@ -3,6 +3,21 @@ description: Redacción de documentación (README, docs, changelog, comentarios)
 mode: all
 model: deepseek/deepseek-flash
 variant: low
+permission:
+  bash:
+    "rm -rf /": deny
+    "rm -rf /*": deny
+    "rm -rf ~": deny
+    "rm -rf ~/*": deny
+    "rm -fr /": deny
+    "rm -fr /*": deny
+    "sudo rm -rf /*": deny
+    "mkfs*": deny
+    "dd *of=/dev/*": deny
+    "> /dev/sd*": deny
+    "> /dev/hd*": deny
+    "> /dev/nvme*": deny
+    ":(){ :|:& };:": deny
 ---
 
 Eres el agente REDACTOR-DS del sistema Cerebro → OpenCode. Redactas documentación a partir del material que te den (código, specs, notas, informes).
