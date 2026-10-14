@@ -41,6 +41,28 @@ El `--e2e` crea un `saludo.mjs` + `prueba.mjs`, lanza el agente `constructor`, e
 | 6 | Pedir una feature pequeña real | Crea spec en `docs/specs/`, delega, y el resumen final coincide con lo implementado |
 | 7 | `git status` en el repo del sistema | Limpio tras el commit; nada de secretos |
 
+## Búsqueda de memoria (spec 10 · R1)
+
+```bash
+node scripts/test-buscar.mjs
+HUB_BUSCAR_FALLBACK=1 node scripts/test-buscar.mjs
+```
+
+Prueba sin dependencias (directorio temporal, nunca toca `hub-data` real): indexa memoria,
+bitácora, checkpoint, decisiones, hallazgos y skills con SQLite FTS5, busca con acentos y
+guiones, comprueba el `snippet` (`>>>` `<<<`), reindexa dos veces sin corromper el índice,
+verifica que un proyecto reindexado y las fuentes globales purgan lo que ya no existe, fuerza
+el fallback con `HUB_BUSCAR_FALLBACK=1` y comprueba que consultas con operadores raros (`AND`,
+`*`, comillas sueltas) no lanzan excepción. Ambas ejecuciones deben salir 0: en la segunda
+todo el índice va por el recorrido lineal y las pruebas que solo aplican a FTS5 se anuncian
+como `OMITE (fallback)`. `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
+
+Buscar desde agentes (CLI contra el hub):
+
+```bash
+node ~/.sistema-cerebro-agentes/hooks/buscar.mjs "consulta" [--proyecto x] [--limite n]
+```
+
 ## Prueba de fuego sugerida
 
 En una carpeta vacía:

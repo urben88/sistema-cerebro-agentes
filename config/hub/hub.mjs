@@ -19,6 +19,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { crearMemoria } from './lib/memoria.mjs'
+import { crearBuscar } from './lib/buscar.mjs'
 import { crearOpenCode } from './lib/opencode.mjs'
 import { crearVigilante } from './lib/vigilante.mjs'
 import { crearOrganizacion } from './lib/organizacion.mjs'
@@ -82,6 +83,27 @@ fs.mkdirSync(LOGS_DIR, { recursive: true })
 
 const memoria = crearMemoria(MEMORIA_DIR, { temporalDias: config.temporalDias, plantillasDir: PLANTILLAS_DIR })
 memoria.inicializar()
+
+// --------------------------------------------------------- búsqueda (R1 · spec 10)
+// Índice FTS5 (`node:sqlite`) con fallback lineal si no hay FTS5 o HUB_BUSCAR_FALLBACK=1.
+const buscar = crearBuscar({
+  dataDir: DATA_DIR,
+  memoriaDir: MEMORIA_DIR,
+  skillsDir: path.join(CLAUDE_DIR, 'skills'),
+  logsDir: LOGS_DIR,
+})
+
+// `node hub.mjs --reindexar` reconstruye el índice completo y sale con código 0.
+if (process.argv.includes('--reindexar')) {
+  try {
+    const r = buscar.reindexar()
+    console.log(`Reindexado (${r.modo}): ${r.documentos} documento(s)${r.motivo ? ` · ${r.motivo}` : ''}`)
+    process.exit(r.ok ? 0 : 1)
+  } catch (e) {
+    console.error(`Error al reindexar: ${e?.message || e}`)
+    process.exit(1)
+  }
+}
 
 // Registro central de errores: lo alimentan el hub, el colector, los hooks, el MCP
 // y el panel; se lee desde /api/logs y se exporta para pasárselo a una IA.
@@ -403,6 +425,26 @@ async function cuerpoJson(req) {
 
 // ----------------------------------------------------------------- servidor
 
+/** Indexa un proyecto tras escribir memoria: best-effort, pero deja rastro en el log de errores. */
+function indexarProyectoSilencioso(slug) {
+  try {
+    const r = buscar.indexarProyecto(slug)
+    if (r && r.ok === false) {
+      logErrores.registrar({ origen: 'buscar', severidad: 'aviso', mensaje: `Indexado de «${slug}» falló: ${r.error || 'error desconocido'}`, contexto: { proyecto: slug } })
+    }
+  } catch (e) {
+    logErrores.registrar({ origen: 'buscar', severidad: 'aviso', mensaje: `Indexado de «${slug}» lanzó excepción: ${e?.message || e}`, contexto: { proyecto: slug } })
+  }
+}
+
+// Reindexado incremental al arrancar (R1.4): no bloquea el arranque si falla.
+try {
+  const r = buscar.indexarTodo()
+  if (r && r.ok === false) logErrores.registrar({ origen: 'buscar', severidad: 'aviso', mensaje: `Indexado inicial falló: ${r.error || 'error desconocido'}` })
+} catch (e) {
+  logErrores.registrar({ origen: 'buscar', severidad: 'aviso', mensaje: `Indexado inicial lanzó excepción: ${e?.message || e}` })
+}
+
 const servidor = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://127.0.0.1')
   const ruta = u.pathname
@@ -455,24 +497,47 @@ const servidor = http.createServer(async (req, res) => {
     if (ruta === '/api/memoria/estado' && req.method === 'POST') {
       const b = await cuerpoJson(req)
       if (!b.cwd || typeof b.contenido !== 'string') return enviarJson(res, { ok: false, error: 'faltan cwd o contenido' }, 400)
-      return enviarJson(res, { ok: true, proyecto: memoria.escribirEstado(b.cwd, b.contenido) })
+      const p = memoria.escribirEstado(b.cwd, b.contenido)
+      indexarProyectoSilencioso(p.slug)
+      return enviarJson(res, { ok: true, proyecto: p })
     }
     if (ruta === '/api/memoria/contexto' && req.method === 'POST') {
       const b = await cuerpoJson(req)
       if (!b.cwd || typeof b.contenido !== 'string') return enviarJson(res, { ok: false, error: 'faltan cwd o contenido' }, 400)
-      return enviarJson(res, { ok: true, proyecto: memoria.escribirContexto(b.cwd, b.contenido) })
+      const p = memoria.escribirContexto(b.cwd, b.contenido)
+      indexarProyectoSilencioso(p.slug)
+      return enviarJson(res, { ok: true, proyecto: p })
     }
     if (ruta === '/api/memoria/bitacora' && req.method === 'POST') {
       const b = await cuerpoJson(req)
       if (!b.cwd || !b.titulo) return enviarJson(res, { ok: false, error: 'faltan cwd o titulo' }, 400)
-      return enviarJson(res, { ok: true, proyecto: memoria.agregarBitacora(b.cwd, b.titulo, b.texto || '') })
+      const p = memoria.agregarBitacora(b.cwd, b.titulo, b.texto || '')
+      indexarProyectoSilencioso(p.slug)
+      return enviarJson(res, { ok: true, proyecto: p })
     }
     if (ruta === '/api/memoria/checkpoint' && req.method === 'POST') {
       const b = await cuerpoJson(req)
       if (!b.cwd) return enviarJson(res, { ok: false, error: 'falta cwd' }, 400)
       const r = memoria.checkpoint(b.cwd, b.motivo || 'manual', b.nota || '')
       memoria.agregarBitacora(b.cwd, `Checkpoint (${b.motivo || 'manual'})`, b.nota || '')
+      indexarProyectoSilencioso(r.proyecto.slug)
       return enviarJson(res, { ok: true, proyecto: r.proyecto, archivo: r.archivo })
+    }
+    if (ruta === '/api/buscar') {
+      // R1 · búsqueda de sesiones y bitácoras. Solo GET; `q` es obligatoria.
+      if (req.method !== 'GET') return enviarJson(res, { ok: false, error: 'método no permitido; usa GET' }, 405)
+      const q = u.searchParams.get('q')
+      if (!q || !q.trim()) return enviarJson(res, { ok: false, error: 'falta q' }, 400)
+      const tipo = u.searchParams.get('tipo') || null
+      if (tipo && !buscar.tipos.includes(tipo)) {
+        return enviarJson(res, { ok: false, error: `tipo inválido; válidos: ${buscar.tipos.join(', ')}` }, 400)
+      }
+      const r = buscar.buscar(q, {
+        proyecto: u.searchParams.get('proyecto') || null,
+        limite: u.searchParams.get('limite') || 10,
+        tipo,
+      })
+      return enviarJson(res, { ok: true, modo: r.modo, aviso: r.aviso || null, resultados: r.resultados })
     }
     if (ruta === '/api/vigilante') {
       // R6 · las alertas del vigilante se muestran con el mismo clasificador que los errores.

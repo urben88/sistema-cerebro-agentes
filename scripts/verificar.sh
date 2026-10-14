@@ -166,7 +166,7 @@ if [ -f "$HOOK_LATIDO" ]; then
 else
   test_item 1 'Hook latido no instalado' 'Ejecuta install.sh'
 fi
-for f in session-start.mjs pre-compact.mjs session-end.mjs cerrar-trabajos.mjs estado.mjs latido.mjs aviso-contexto.mjs hallazgos.mjs; do
+for f in session-start.mjs pre-compact.mjs session-end.mjs cerrar-trabajos.mjs estado.mjs latido.mjs aviso-contexto.mjs hallazgos.mjs buscar.mjs; do
   [ -f "$HOME/.sistema-cerebro-agentes/hooks/$f" ] && test_item 0 "Hook $f instalado" || test_item 1 "Hook $f no instalado" 'Ejecuta install.sh'
 done
 TRIAJE="$HOME/.sistema-cerebro-agentes/mcp/triaje-mcp.mjs"
@@ -220,6 +220,13 @@ if grep -q 'mesa-de-trabajo' "$HOME/.claude/settings.json" 2>/dev/null; then
   test_item 0 'Mod cargado en settings (CLAUDE_CODE_PLUGIN_DIRS)'
 else
   test_item 1 'Mod no cargado en settings' 'Ejecuta install.sh'
+fi
+
+step 'Búsqueda de memoria (R1 · spec 10)'
+if node "$REPO_ROOT/scripts/test-buscar.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de búsqueda (FTS5, o fallback si no hay FTS5)'
+else
+  test_item 1 'Pruebas de búsqueda (FTS5, o fallback si no hay FTS5)' 'Ejecuta: node scripts/test-buscar.mjs'
 fi
 
 if [ "$SMOKE" -eq 1 ]; then

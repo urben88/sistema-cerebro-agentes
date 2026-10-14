@@ -149,7 +149,7 @@ if ($hubOk) {
   Test-Item $latidosOk 'GET /api/latidos responde (subagentes en vivo)' 'Revisa hub.mjs / latido.mjs'
   Test-Item (Test-Path -LiteralPath (Join-Path $sysDir 'hub\errores.mjs')) 'CLI de errores instalada (hub/errores.mjs)' 'Ejecuta install.ps1'
 }
-foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'estado.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'hallazgos.mjs')) {
+foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'estado.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'hallazgos.mjs', 'buscar.mjs')) {
   Test-Item (Test-Path -LiteralPath (Join-Path $sysDir "hooks\$f")) "Hook $f instalado" 'Ejecuta install.ps1'
 }
 $hookLatido = Join-Path $sysDir 'hooks\latido.mjs'
@@ -214,6 +214,11 @@ Test-Item (Test-Path -LiteralPath (Join-Path $UserHome '.local\bin\cerebro.cmd')
 $mcpList = (& claude mcp list 2>&1 | Out-String)
 $globalLine = ($mcpList -split "`n" | Where-Object { $_ -match '^\s*opencode:' } | Select-Object -First 1)
 Test-Item (-not $globalLine) 'MCP no registrado globalmente (solo dentro del agente)' 'Retiralo: claude mcp remove opencode --scope user'
+
+Write-Step 'Búsqueda de memoria (R1 · spec 10)'
+$buscarPruebas = Join-Path $RepoRoot 'scripts\test-buscar.mjs'
+& node $buscarPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de búsqueda (FTS5, o fallback si no hay FTS5)' 'Ejecuta: node scripts\test-buscar.mjs'
 
 if ($Smoke) {
   Write-Step 'Smoke test del MCP (arranque real por stdio)'
