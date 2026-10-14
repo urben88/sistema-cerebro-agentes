@@ -30,5 +30,7 @@ if (-not $env:OPENCODE_DEFAULT_PROVIDER) { $env:OPENCODE_DEFAULT_PROVIDER = 'dee
 if (-not $env:OPENCODE_DEFAULT_MODEL)    { $env:OPENCODE_DEFAULT_MODEL = 'deepseek-flash' }
 Remove-Item Env:OPENCODE_AUTO_SERVE -ErrorAction SilentlyContinue
 
-& npx -y opencode-mcp
+# Version fijada (probada): una actualizacion inesperada no rompe el flujo. Para subirla a proposito: OPENCODE_MCP_VERSION.
+$ver = if ($env:OPENCODE_MCP_VERSION) { $env:OPENCODE_MCP_VERSION } else { '3.0.0' }
+& npx -y "opencode-mcp@$ver"
 exit $LASTEXITCODE

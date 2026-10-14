@@ -64,7 +64,7 @@ bash install.sh
 | Claude Code no lista el agente `cerebro` | El directorio `~/.claude/agents/` no existía al arrancar | Reinicia Claude Code (después, los cambios se detectan en caliente) |
 | El servidor local no responde (`UNREACHABLE`) | Servidor V1 caído | Relánzalo: `servidor.ps1` (Windows) / `bash servidor.sh` (macOS/Linux) y reintenta |
 | Quiero ver o parar el servidor | — | `servidor.ps1 -Status` / `-Stop`, o `bash servidor.sh --status` / `--stop` |
-| `claude mcp list` dice que opencode no conecta | Node desactualizado o npx sin red la primera vez | Comprueba Node ≥ 22; ejecuta `npx -y opencode-mcp` una vez a mano para forzar la descarga |
+| `claude mcp list` dice que opencode no conecta | Node desactualizado o npx sin red la primera vez | Comprueba Node ≥ 22; ejecuta `npx -y opencode-mcp@3.0.0` una vez a mano para forzar la descarga |
 | Un trabajo queda en `input_required` | OpenCode pide un permiso o lanza una pregunta | El Cerebro lo resuelve con `opencode_job_input`; si no, responde tú en el chat de Claude Code |
 | Se quedó algo trabajando en segundo plano y no quiero gastar | Al cerrar Claude normalmente se cancela solo (hook de cierre) | `cerebro-parar` para todos; `cerebro-parar --seco` para verlo antes; o «para todo» en el chat del Cerebro |
 | Las manos fallan con error de proveedor | Proveedor desconectado | `opencode auth login` → DeepSeek (o el que uses) |
@@ -74,3 +74,15 @@ bash install.sh
 | No veo la barra de estado de Claude | El instalador no la registra si ya tienes una `statusLine` propia | Quita la tuya de `~/.claude/settings.json` si prefieres la del sistema; el indicador es opcional |
 | Quiero ver los trabajos recientes | — | En Claude Code pídelo (el Cerebro usa `trabajo_estado`), o miráis juntos `~/.local/state/opencode-mcp/tasks` |
 | Conflictos raros con la TUI a la vez | Dos servidores OpenCode compartiendo almacenamiento (incidencia conocida de opencode-mcp) | Cierra uno de los dos mientras trabajas; si es habitual, pasad a servidor único persistente (ver arquitectura) |
+
+## Herramientas opcionales (no las instala el sistema)
+
+### Visor de sesiones y subagentes: claude-code-history-viewer
+Aplicación de escritorio (MIT) para navegar el historial de Claude Code y de OpenCode, con analíticas de subagentes y coste. Útil cuando quieres abrir una conversación completa, cosa que `/agentes` no hace.
+
+1. Descarga el `.exe` o el `.zip` portable (x64) desde https://github.com/jhlee0409/claude-code-history-viewer/releases
+2. Ábrelo: lee `~/.claude/projects/` y `~/.local/share/opencode/` sin configurar nada.
+3. Ojo: en algunas fuentes permite renombrar o borrar sesiones. Úsalo para leer.
+
+### Versión del puente OpenCode
+El lanzador fija `opencode-mcp@3.0.0` (probado con el smoke test). Para probar otra: `OPENCODE_MCP_VERSION=3.1.0` en el entorno, `verificar.ps1 -Smoke` y, si pasa, cambia el valor por defecto en `config/mcp/launcher.ps1` y `launcher.sh`.

@@ -21,4 +21,5 @@ export OPENCODE_DEFAULT_PROVIDER="${OPENCODE_DEFAULT_PROVIDER:-deepseek}"
 export OPENCODE_DEFAULT_MODEL="${OPENCODE_DEFAULT_MODEL:-deepseek-flash}"
 unset OPENCODE_AUTO_SERVE
 
-exec npx -y opencode-mcp
+# Version fijada (probada): una actualizacion inesperada no rompe el flujo. Para subirla a proposito: OPENCODE_MCP_VERSION.
+exec npx -y "opencode-mcp@${OPENCODE_MCP_VERSION:-3.0.0}"
