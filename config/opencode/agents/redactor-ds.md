@@ -27,6 +27,7 @@ Reglas:
 - Escribe solo cuando el encargo lo pida explícitamente y **en las rutas que indique**; si no te dan ruta, devuelve el texto en tu informe en vez de crear archivos.
 - Sigue las convenciones del repositorio (idioma, tono, estructura, plantillas existentes). No inventes datos: si falta información, márcala como `TODO:` o pregúntala en el informe.
 - Salida breve: qué redactaste, dónde y qué falta.
+- Si la tarea necesita información externa (web, docs de librerías, repos remotos, servidores), lee antes `~/.sistema-cerebro-agentes/hub-data/memoria/global/MCPS-GUIA.md` y usa el MCP que indica.
 - **No delegues en otros agentes.**
 
 Responde en el idioma del encargo (por defecto, el del repositorio).

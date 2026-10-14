@@ -3,6 +3,16 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado semántico (MAJOR.MINOR.PATCH).
 
+## [0.7.0] - 2026-10-14
+
+### Añadido (spec 13 · guía de uso de MCPs)
+
+- **N1 · Plantilla de guía** (`config/hub/plantillas/mcps-guia.md`, ≤ 4000 caracteres): en español, con la tabla «Si necesitas X → usa Y» (docs de librería → `context7`; web/JS → `playwright` o `claude-in-chrome`; búsqueda → `web-search`; repo/PR/issue → `github`; servidor → `ssh`; OpenCode → `opencode`/`triaje`), una ficha por MCP (`Úsalo cuando`, `No lo uses para`, ejemplo y herramientas reales) y 3 reglas finales.
+- **N2 · Copia sin pisar** (`config/hub/mcps.mjs`): copia la plantilla a `hub-data/memoria/global/MCPS-GUIA.md` **solo si no existe** (lo editado por el usuario se conserva); `--forzar-guia` la regenera. `MCPS.md` y `mcps.json` se generan exactamente igual. El instalador deja la plantilla en `~/.sistema-cerebro-agentes/hub/plantillas/`.
+- **N3 · Contexto para Claude**: `session-start.mjs` añade al briefing un resumen ≤ 1200 caracteres de la guía (tabla + reglas, vía `config/hooks/mcps-guia.mjs`); `CLAUDE.md`, `cerebro`, `explorador` y `analista` apuntan a `MCPS-GUIA.md`.
+- **N4 · Contexto para OpenCode**: una línea en `explorador-ds`, `implementador`, `debugger`, `redactor-ds`, `revisor` y `cerebro-oc` para leer `MCPS-GUIA.md` antes de buscar datos externos (`local-codigo` no).
+- **N5 · Pruebas y docs**: `scripts/test-mcps-guia.mjs` (enganchado en `verificar.sh/.ps1`) comprueba que la copia no pisa la guía editada, que `--forzar-guia` la regenera, que `MCPS.md` es idéntico con y sin guía y que el resumen respeta el tope; `docs/arquitectura.md` y `docs/pruebas.md` actualizados.
+
 ## [0.6.0] - 2026-10-14
 
 ### Añadido (spec 12 · agente local `local-codigo` y respaldo automático)

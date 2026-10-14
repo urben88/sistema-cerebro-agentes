@@ -285,6 +285,13 @@ else
   test_item 1 'Pruebas de salud de agentes (degradación, reintento, código acotado)' 'Ejecuta: node scripts/test-salud-agentes.mjs'
 fi
 
+step 'Guía de uso de MCPs (spec 13)'
+if node "$REPO_ROOT/scripts/test-mcps-guia.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de la guía de MCPs (copia sin pisar, --forzar-guia, MCPS.md idéntico, resumen)'
+else
+  test_item 1 'Pruebas de la guía de MCPs (copia sin pisar, --forzar-guia, MCPS.md idéntico, resumen)' 'Ejecuta: node scripts/test-mcps-guia.mjs'
+fi
+
 if [ "$SMOKE" -eq 1 ]; then
   step 'Smoke test del MCP (arranque real por stdio)'
   if [ "$ASK" -eq 1 ]; then

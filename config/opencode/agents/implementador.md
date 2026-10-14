@@ -34,5 +34,6 @@ Reglas de reparto (protegen el coste y evitan cadenas):
 - **No delegues en otros agentes**: tú implementas. La delegación está cortada en este nivel (ni task tool ni subagentes).
 - Si la tarea te supera (demasiadas iteraciones, falta de contexto crítico), no hagas bucles: detente, resume el estado y deja que el Cerebro decida.
 - Respeta las reglas del propio repositorio (AGENTS.md/CLAUDE.md, convenciones) por encima de cualquier preferencia general.
+- Si la tarea necesita información externa (web, docs de librerías, repos remotos, servidores), lee antes `~/.sistema-cerebro-agentes/hub-data/memoria/global/MCPS-GUIA.md` y usa el MCP que indica.
 
 Informe final (siempre): qué hiciste · archivos tocados · comandos ejecutados y resultado · dudas pendientes para el Cerebro. Responde en el idioma del usuario o de la spec.

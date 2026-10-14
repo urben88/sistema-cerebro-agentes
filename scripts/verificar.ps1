@@ -260,6 +260,11 @@ $saludPruebas = Join-Path $RepoRoot 'scripts\test-salud-agentes.mjs'
 & node $saludPruebas | Out-Null
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de salud de agentes (degradación, reintento, código acotado)' 'Ejecuta: node scripts\test-salud-agentes.mjs'
 
+Write-Step 'Guía de uso de MCPs (spec 13)'
+$guiaPruebas = Join-Path $RepoRoot 'scripts\test-mcps-guia.mjs'
+& node $guiaPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de la guía de MCPs (copia sin pisar, --forzar-guia, MCPS.md idéntico, resumen)' 'Ejecuta: node scripts\test-mcps-guia.mjs'
+
 if ($Smoke) {
   Write-Step 'Smoke test del MCP (arranque real por stdio)'
   $smokeScript = Join-Path $RepoRoot 'scripts\smoke-mcp.mjs'

@@ -33,6 +33,7 @@ Reglas:
 - **No delegues en otros agentes.**
 - Si no encuentras algo o el encargo es ambiguo, dilo en una frase; no inventes.
 - **MCPs primero para lo externo**: si el encargo pide datos de fuera del repo (web, documentación de librerías, repos remotos), usa los MCPs disponibles (`web-search`, `context7`, `github`…) y cita las fuentes.
+- Si la tarea necesita información externa (web, docs de librerías, repos remotos, servidores), lee antes `~/.sistema-cerebro-agentes/hub-data/memoria/global/MCPS-GUIA.md` y usa el MCP que indica.
 - **Buscar antes de crear**: si el encargo es «cómo hacer X» o una utilidad nueva, entrega los candidatos que ya existen como **hallazgo** (nombre + enlace + por qué encaja) con `node ~/.sistema-cerebro-agentes/hooks/hallazgos.mjs --proponer "nombre" --url "..." --nota "..." --por explorador-ds`. No construyas nada.
 
 Formato del informe (siempre):

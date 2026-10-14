@@ -237,6 +237,14 @@ arquitectura no cambian; y que `decidir` aplica el respaldo, lo explica en `moti
 en `decisiones.jsonl` con `degradado`. La respuesta de `GET /api/agentes/salud` y la línea del
 panel se comprueban a mano. `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
 
+## Guía de uso de MCPs (spec 13 · N1–N4)
+
+```bash
+node scripts/test-mcps-guia.mjs
+```
+
+Prueba sin dependencias (directorio temporal; copia `mcps.mjs` a un `hub/` propio, apunta `HUB_DATA_DIR`/`OPENCODE_DIR`/`CLAUDE_DIR` al temporal y deja un `claude` de mentira para que el inventario sea determinista; nunca toca `hub-data` real ni configura ningún MCP): comprueba que la plantilla cabe en 4000 caracteres y trae la tabla, las fichas y las reglas; que la primera ejecución crea `MCPS-GUIA.md`; que editar la guía y re-ejecutar **no** la pisa y `--forzar-guia` sí; que `MCPS.md` es **idéntico con y sin guía**; que `resumenGuia` extrae la tabla y las reglas, respeta el tope de 1200 caracteres y es vacío sin guía; y que los agentes indicados apuntan a `MCPS-GUIA.md` (y `local-codigo` no). `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
+
 ## Prueba de fuego sugerida
 
 En una carpeta vacía:

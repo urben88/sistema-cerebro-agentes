@@ -32,5 +32,6 @@ Límites (anti-bucle y anti-coste):
 - **Máximo 2 ciclos de corrección por encargo.** Si tras dos intentos no está resuelto: detente, reporta hipótesis descartadas y el estado exacto del fallo, y devuélvelo al Cerebro.
 - **No delegues en otros agentes.**
 - Si el problema es de diseño (no un fallo localizado), no lo "parchees": explícalo y devuélvelo al Cerebro para que replantee la spec.
+- Si la tarea necesita información externa (web, docs de librerías, repos remotos, servidores), lee antes `~/.sistema-cerebro-agentes/hub-data/memoria/global/MCPS-GUIA.md` y usa el MCP que indica.
 
 Informe final: fallo reproducido (comando + salida) · causa raíz · corrección aplicada (archivos) · verificación · estado si quedó abierto. Responde en el idioma del prompt.

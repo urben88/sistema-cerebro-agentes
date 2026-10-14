@@ -147,6 +147,12 @@ El evento `job` es **idempotente por `jobId`**: `registrar` rehidrata del disco 
 
 El triaje (`lib/triaje.mjs`) aplica ese `resolver()` a la decisión final —tanto por Laya como por reglas— y lo explica en `motivo`; `logs/decisiones.jsonl` incluye `degradado`. En `reglas.json`, la regla de `implementador` elige `local-codigo` cuando el encargo es **acotado** (contiene `archivo`/`fichero`/`función`/`test`/`spec`/`criterio` y no `arquitectura`/`migración`/`refactor global`/`varios módulos`/`todo el`); depuración, revisión y arquitectura (`prioridad`) no cambian. `GET /api/agentes/salud` devuelve `{agentes:[{agente, muestras, tasaFallo, fallosSeguidos, degradado, proximaPrueba}]}` y el panel lo muestra en «Triaje·Laya» («local-codigo · 4/6 OK · activo» o «degradado hasta HH:MM»).
 
+## Guía de uso de MCPs (spec 13)
+
+El inventario automático (`memoria/global/MCPS.md`) dice **qué** MCPs hay; la guía dice **cuándo** usarlos. `config/hub/mcps.mjs` copia la plantilla `config/hub/plantillas/mcps-guia.md` (en el hub instalado, `hub/plantillas/mcps-guia.md`) a `hub-data/memoria/global/MCPS-GUIA.md` **solo si no existe** (lo que edite el usuario se conserva); `node mcps.mjs --forzar-guia` la regenera. Generar `MCPS.md`/`mcps.json` no cambia.
+
+La guía trae la tabla «Si necesitas X → usa Y», una ficha por MCP (cuándo usarlo, cuándo no, ejemplo y herramientas) y 3 reglas (consultarla antes de decir «no se puede»; si el MCP falta o falla, decirlo y seguir sin inventar; citar la fuente). El hook `session-start.mjs` añade al briefing un resumen ≤ 1200 caracteres (tabla + reglas) leyéndola con `config/hooks/mcps-guia.mjs`; los agentes de Claude (`CLAUDE.md`, `cerebro`, `explorador`, `analista`) y los de OpenCode que buscan datos externos (`explorador-ds`, `implementador`, `debugger`, `redactor-ds`, `revisor`, `cerebro-oc`) apuntan a `MCPS-GUIA.md` con una línea, sin duplicar el contenido.
+
 ## Evolución
 
 `VERSION`, `CHANGELOG.md` y tags; los cambios se hacen en este repositorio y se despliegan con `scripts/actualizar`. Decisiones y contexto en [contexto-y-decisiones.md](contexto-y-decisiones.md).

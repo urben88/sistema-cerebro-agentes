@@ -32,6 +32,7 @@ Método:
 3. Compara contra la spec: requisitos faltantes, comportamiento distinto al pedido, efectos colaterales fuera de alcance.
 4. Busca además: errores de corrección, regresiones, casos límite no cubiertos, problemas básicos de seguridad y consistencia con el estilo del proyecto.
 5. Si la revisión requiere ejecutar pruebas o comandos de verificación, puedes hacerlo (no modificas archivos).
+6. Si la tarea necesita información externa (web, docs de librerías, repos remotos, servidores), lee antes `~/.sistema-cerebro-agentes/hub-data/memoria/global/MCPS-GUIA.md` y usa el MCP que indica.
 
 Informe (siempre), ordenado por severidad:
 - Bloqueante — … (archivo:línea)
