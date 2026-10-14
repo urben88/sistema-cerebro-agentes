@@ -1263,6 +1263,72 @@ function pintarAprobaciones(d) {
   }
 }
 
+// R5 · skills: pendientes con Aprobar/Rechazar y tabla de uso (contador).
+function pintarSkills(datos, usoDatos) {
+  const contPend = vaciar($('skillsPendientes'))
+  const pend = (datos && datos.pendientes) || []
+  if (!pend.length) {
+    contPend.append(h('p', { clase: 'tenue', texto: 'Sin skills propuestos pendientes.' }))
+  } else {
+    for (const p of pend) {
+      const c = h('div', { clase: 'agente' })
+      const nombre = (p.payload && p.payload.nombre) || p.id
+      const cab = h('div')
+      cab.append(h('span', { clase: 'badge azul', texto: 'skill' }))
+      cab.append(h('span', { clase: 'nombre', texto: nombre }))
+      c.append(cab)
+      c.append(h('div', { clase: 'desc', texto: (p.payload && p.payload.descripcion) || p.resumen || '' }))
+      const ts = p.creado ? Date.parse(p.creado) : null
+      c.append(h('div', { clase: 'desc tenue', texto: `${p.origen || '—'} · ${hace(ts)}` }))
+      const fila = h('div', { clase: 'desc' })
+      const aprobar = h('button', { clase: 'boton mini', type: 'button', texto: 'Aprobar' })
+      aprobar.addEventListener('click', async () => {
+        try {
+          await fetch('/api/skills/aprobar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) })
+          refrescarPesado()
+        } catch { /* nada */ }
+      })
+      const rechazar = h('button', { clase: 'boton mini peligro', type: 'button', texto: 'Rechazar' })
+      rechazar.addEventListener('click', async () => {
+        try {
+          await fetch('/api/skills/rechazar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) })
+          refrescarPesado()
+        } catch { /* nada */ }
+      })
+      fila.append(aprobar)
+      fila.append(rechazar)
+      c.append(fila)
+      contPend.append(c)
+    }
+  }
+
+  const contUso = vaciar($('skillsUso'))
+  const uso = (usoDatos && usoDatos.uso) || {}
+  const candidatos = new Set(((usoDatos && usoDatos.candidatos) || []).map((x) => x.nombre))
+  const entradas = Object.entries(uso).sort((a, b) => (b[1].uso || 0) - (a[1].uso || 0))
+  if (!entradas.length) {
+    contUso.append(h('p', { clase: 'tenue', texto: 'Sin uso registrado todavía.' }))
+  } else {
+    const tabla = h('table')
+    tabla.append(h('thead', {}, h('tr', {},
+      h('th', { texto: 'Skill' }), h('th', { texto: 'Uso' }), h('th', { texto: 'Visto' }),
+      h('th', { texto: 'Parcheado' }), h('th', { texto: 'Último uso' }), h('th', { texto: '' }))))
+    const tb = h('tbody')
+    for (const [nombre, u] of entradas) {
+      const ultimo = u.ultimo_uso ? Date.parse(u.ultimo_uso) : null
+      tb.append(h('tr', {},
+        h('td', { texto: nombre }),
+        h('td', { texto: String(u.uso || 0) }),
+        h('td', { texto: String(u.visto || 0) }),
+        h('td', { texto: String(u.parcheado || 0) }),
+        h('td', { texto: ultimo ? hace(ultimo) : '—' }),
+        h('td', { texto: candidatos.has(nombre) ? 'candidato a archivar' : '' })))
+    }
+    tabla.append(tb)
+    contUso.append(tabla)
+  }
+}
+
 function aprobacionesDemo() {
   return {
     modo: 'manual',
@@ -1471,7 +1537,7 @@ async function refrescarLigero() {
 
 async function refrescarPesado() {
   try {
-    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs, aprob] = await Promise.all([
+    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs, aprob, skillsPend, skillsUso] = await Promise.all([
       fetch('/api/gasto').then((r) => r.json()),
       fetch('/api/ventana').then((r) => r.json()),
       fetch('/api/laya').then((r) => r.json()),
@@ -1481,6 +1547,8 @@ async function refrescarPesado() {
       fetch('/api/gasto/equipo').then((r) => r.json()).catch(() => null),
       fetch('/api/logs?limite=80').then((r) => r.json()).catch(() => null),
       fetch('/api/aprobaciones').then((r) => r.json()).catch(() => null),
+      fetch('/api/skills/pendientes').then((r) => r.json()).catch(() => null),
+      fetch('/api/skills/uso').then((r) => r.json()).catch(() => null),
     ])
     pintarGasto(gasto)
     pintarVentana(ventana)
@@ -1492,6 +1560,7 @@ async function refrescarPesado() {
     pintarReparto(equipo)
     estado.aprobaciones = aprob
     pintarAprobaciones(estado.demo ? aprobacionesDemo() : aprob)
+    pintarSkills(estado.demo ? { pendientes: [] } : skillsPend, estado.demo ? { uso: {}, candidatos: [] } : skillsUso)
   } catch { /* nada */ }
 }
 

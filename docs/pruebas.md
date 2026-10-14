@@ -121,6 +121,28 @@ pendientes (encolar/listar/resolver) con tipo e id validados (un id con `../` se
 `aprobaciones.json` corrupto se tolera y se reescribe válido.
 `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
 
+## Skills autogenerados (spec 10 · R5)
+
+```bash
+node scripts/test-skills.mjs
+```
+
+Prueba sin dependencias (directorios temporales, nunca toca `hub-data` real ni `~/.claude/skills`):
+comprueba que el linter acepta un skill válido y rechaza nombre inválido, nombre ≠ carpeta,
+descripción > 300 chars, cuerpo > 24 000 y un `README.md` prohibido; que el guard marca
+`curl|sh`, `base64`+`eval` y «ignore previous instructions» como `peligroso` y `sudo` como
+`precaucion`; que un skill propuesto **no** existe en `skillsDir` hasta aprobarlo y que el
+peligroso se rechaza; que `aprobar` crea la carpeta (+ `references/`) y rechaza si ya existe,
+mientras `rechazar` descarta el pendiente; que el contador `skills.usage.json` hace *merge*
+(mover/editar a mano entre dos registros no se pierde) y acumula `veces`; que
+`candidatosArchivo` propone lo sin uso en 60 días y **no borra**; que `duplicado` detecta por
+palabras y vía `buscar` (y `proponer` avisa `duplicado` en vez de apilar); que
+`contarUsoDeTranscript` cuenta las tres formas de mención; y que el CLI `skill-lint.mjs` sale
+0/1 e imprime JSON. `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
+
+Limitación (R5.5): el contador solo ve lo que pasa por Claude Code (hooks `Stop`/`SessionEnd`
+de `skills-uso.mjs`); los usos fuera de Claude Code (OpenCode, ejecución directa) no se cuentan.
+
 ## Prueba de fuego sugerida
 
 En una carpeta vacía:

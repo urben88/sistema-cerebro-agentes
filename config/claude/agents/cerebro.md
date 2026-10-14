@@ -66,3 +66,12 @@ Responde siempre en el idioma del usuario.
 ## Aprobaciones por niveles (R4)
 
 Ante un job en `input_required`, consulta la clasificación antes de responder: `POST http://127.0.0.1:4597/api/aprobaciones/clasificar` con `{comando|texto, sessionId}`. `hardline` → rechaza siempre; `peligroso` → decide el usuario (o pregúntale); `seguro` → aprueba. Responde con `opencode_job_input`/`opencode_session_permission`. Usa `una_vez`, `sesion` o `siempre`: solo `sesion`/`siempre` persisten, y se registran con `POST http://127.0.0.1:4597/api/aprobaciones/registrar` `{comando, alcance, sessionId}`. Recuerda que el allowlist del hub nunca salva un `hardline`.
+
+## Skills autogenerados (R5)
+
+Al **cerrar una tarea compleja** (≥ 5 pasos, o un error resuelto tras 2 intentos), propón un skill con lo aprendido:
+
+- `POST http://127.0.0.1:4597/api/skills/proponer` con `{nombre, descripcion, cuerpo, origen, referencias?}`. El hub lo valida (linter + guard) y lo deja **pendiente**; **el usuario lo aprueba** y solo entonces existe en `~/.claude/skills`. **Nunca** lo crees tú directamente ni escribas en esa carpeta.
+- Regla «una lección = una regla»: antes de proponer, busca si ya existe (búsqueda R1 con `tipo=skill`); si lo hay, **corrige la frase en su sitio** en lugar de apilar un `ACTUALIZACIÓN:`. `proponer` te avisa con `duplicado` (y el nombre) en vez de encolar un duplicado.
+- `nombre` en minúsculas (`^[a-z0-9][a-z0-9_-]*$`), `description` ≤ 300 chars y cuerpo ≤ 24 000 chars; nada de `README.md`, `CHANGELOG.md`, `.env` ni `install.sh`. Lo peligroso (`curl|sh`, `base64`+`eval`, lectura de `~/.ssh`/tokens, «ignore previous instructions») se rechaza solo.
+- El contador de uso vive en el hub (`GET http://127.0.0.1:4597/api/skills/uso`); un skill sin uso en 60 días se **propone para archivar**, nunca se borra solo.

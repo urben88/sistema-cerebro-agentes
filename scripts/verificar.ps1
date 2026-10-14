@@ -235,6 +235,11 @@ $aprobPruebas = Join-Path $RepoRoot 'scripts\test-aprobaciones.mjs'
 & node $aprobPruebas | Out-Null
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de aprobaciones (niveles, allowlist con merge, pendientes)' 'Ejecuta: node scripts\test-aprobaciones.mjs'
 
+Write-Step 'Skills autogenerados (R5 · spec 10)'
+$skillsPruebas = Join-Path $RepoRoot 'scripts\test-skills.mjs'
+& node $skillsPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de skills (linter, guard, propuesta→aprobación, uso)' 'Ejecuta: node scripts\test-skills.mjs'
+
 if ($Smoke) {
   Write-Step 'Smoke test del MCP (arranque real por stdio)'
   $smokeScript = Join-Path $RepoRoot 'scripts\smoke-mcp.mjs'

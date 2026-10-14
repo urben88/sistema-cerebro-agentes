@@ -27,7 +27,7 @@ for (const modelo of ['claude-sonnet-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'
 s.hooks = s.hooks || {}
 
 /** Ficheros que gestiona el sistema: se registran solo si existen en disco. */
-const GESTIONADOS = ['session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'latido.mjs', 'aviso-contexto.mjs']
+const GESTIONADOS = ['session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'skills-uso.mjs']
 const existe = (f) => fs.existsSync(path.join(hooksDir, f))
 const comando = (f) => `node "${path.join(hooksDir, f)}"`
 const faltan = []
@@ -73,6 +73,20 @@ if (existe('latido.mjs')) {
     s.hooks[evento] = grupos
   }
 } else faltan.push('latido.mjs')
+
+// R5 · contador de uso de skills: se alimenta al terminar el turno (Stop) y al cerrar
+// la sesión (SessionEnd), parseando el transcript. Idempotente y sin pisar otros hooks.
+if (existe('skills-uso.mjs')) {
+  const cmdSkills = comando('skills-uso.mjs')
+  const registrarSkillsUso = (evento) => {
+    const grupos = Array.isArray(s.hooks[evento]) ? s.hooks[evento] : []
+    const yaEsta = grupos.some((g) => Array.isArray(g?.hooks) && g.hooks.some((h) => typeof h?.command === 'string' && h.command.includes('skills-uso.mjs')))
+    if (!yaEsta) grupos.push({ hooks: [{ type: 'command', command: cmdSkills }] })
+    s.hooks[evento] = grupos
+  }
+  registrarSkillsUso('Stop')
+  registrarSkillsUso('SessionEnd')
+} else faltan.push('skills-uso.mjs')
 
 // Guardián de contexto: aviso corto (con enfriamiento) cuando el hilo crece demasiado.
 // Se suma a los latidos de UserPromptSubmit sin pisarlos (idempotente).

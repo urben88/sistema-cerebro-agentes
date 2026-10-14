@@ -31,6 +31,7 @@ import { crearVivo } from './lib/vivo.mjs'
 import { crearLogErrores } from './lib/errores-log.mjs'
 import { crearLedger, ESTADOS as ESTADOS_LEDGER } from './lib/ledger.mjs'
 import { crearAprobaciones } from './lib/aprobaciones.mjs'
+import { crearSkills } from './lib/skills.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HOME = os.homedir()
@@ -42,6 +43,8 @@ const PANEL_DIR = path.join(__dirname, 'panel')
 const PLANTILLAS_DIR = path.join(__dirname, 'plantillas')
 const OPENCODE_DIR = process.env.OPENCODE_DIR || path.join(HOME, '.config', 'opencode')
 const CLAUDE_DIR = process.env.CLAUDE_DIR || path.join(HOME, '.claude')
+// R5 · skills autogenerados: misma carpeta que indexa la búsqueda (tipo=skill).
+const SKILLS_DIR = path.join(CLAUDE_DIR, 'skills')
 const AUTH_JSON = process.env.OPENCODE_AUTH || path.join(HOME, '.local', 'share', 'opencode', 'auth.json')
 const OPENCODE_HOST = process.env.OPENCODE_HOST || null
 const MAX_CUERPO = 1024 * 1024
@@ -104,7 +107,7 @@ memoria.inicializar()
 const buscar = crearBuscar({
   dataDir: DATA_DIR,
   memoriaDir: MEMORIA_DIR,
-  skillsDir: path.join(CLAUDE_DIR, 'skills'),
+  skillsDir: SKILLS_DIR,
   logsDir: LOGS_DIR,
 })
 
@@ -148,6 +151,12 @@ const triaje = crearTriaje({ reglas, logDecisiones: path.join(LOGS_DIR, 'decisio
 // `hub-data/aprobaciones.json` (tmp+rename con read-merge-write) y cola de pendientes
 // en `hub-data/pendientes/`.
 const aprobaciones = crearAprobaciones({ dataDir: DATA_DIR, config })
+
+// ----------------------------------------------------------------- skills (R5 · spec 10)
+// Propuesta → pendiente → aprobación (nunca existe sin aprobar). Linter+guard en
+// `config/hooks/skill-lint.mjs`, contador de uso en `hub-data/skills.usage.json` y
+// detección de duplicados con `buscar` (tipo=skill, R1).
+const skills = crearSkills({ dataDir: DATA_DIR, skillsDir: SKILLS_DIR, aprobaciones, buscar })
 
 // ---------------------------------------------------------------- hallazgos (buscar antes de crear)
 const HALLAZGOS_JSONL = path.join(DATA_DIR, 'hallazgos.jsonl')
@@ -594,6 +603,44 @@ const servidor = http.createServer(async (req, res) => {
       const b = await cuerpoJson(req)
       const r = aprobaciones.resolverPendiente(String(b.tipo || ''), String(b.id || ''))
       return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    // ------------------------------------------------ skills (R5 · spec 10)
+    if (ruta === '/api/skills/proponer' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.nombre !== 'string' || !b.nombre.trim()) return enviarJson(res, { ok: false, error: 'falta nombre' }, 400)
+      if (typeof b.descripcion !== 'string' || !b.descripcion.trim()) return enviarJson(res, { ok: false, error: 'falta descripcion' }, 400)
+      if (typeof b.cuerpo !== 'string' || !b.cuerpo.trim()) return enviarJson(res, { ok: false, error: 'falta cuerpo' }, 400)
+      const r = skills.proponer({ nombre: b.nombre, descripcion: b.descripcion, cuerpo: b.cuerpo, origen: b.origen, referencias: b.referencias })
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/skills/pendientes' && req.method === 'GET') {
+      return enviarJson(res, { ok: true, pendientes: skills.pendientes() })
+    }
+    if (ruta === '/api/skills/aprobar' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.id !== 'string' || !b.id.trim()) return enviarJson(res, { ok: false, error: 'falta id' }, 400)
+      const r = skills.aprobar(String(b.id))
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/skills/rechazar' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.id !== 'string' || !b.id.trim()) return enviarJson(res, { ok: false, error: 'falta id' }, 400)
+      const r = skills.rechazar(String(b.id))
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/skills/uso' && req.method === 'GET') {
+      return enviarJson(res, { ok: true, uso: skills.leerUso(), candidatos: skills.candidatosArchivo() })
+    }
+    if (ruta === '/api/skills/uso' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.nombre !== 'string' || !b.nombre.trim()) return enviarJson(res, { ok: false, error: 'falta nombre' }, 400)
+      const tipo = typeof b.tipo === 'string' && b.tipo.trim() ? b.tipo : 'uso'
+      const r = skills.registrarUso(String(b.nombre), tipo, b.veces)
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/skills/archivo' && req.method === 'GET') {
+      const dias = u.searchParams.get('dias') || 60
+      return enviarJson(res, { ok: true, candidatos: skills.candidatosArchivo(dias) })
     }
     if (ruta === '/api/proyectos') return enviarJson(res, { ok: true, proyectos: memoria.proyectos() })
     if (ruta === '/api/memoria/proyecto') {
