@@ -3,6 +3,24 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado semántico (MAJOR.MINOR.PATCH).
 
+## [0.4.0] - 2026-10-14
+
+### Añadido (spec 10 · patrones de Hermes Agent, reimplementados)
+
+- **R0 · Lanzamiento por API V1** (`lib/lanzador.mjs`): el hub crea sesión y envía mensajes a OpenCode con agente y `directory`, sin depender del MCP.
+- **R1 · Búsqueda FTS5** de memoria, bitácoras, decisiones, hallazgos y skills (`GET /api/buscar`, `--reindexar`, fallback lineal con `HUB_BUSCAR_FALLBACK=1`).
+- **R2 · Nudges de memoria** en `latido.mjs` y límites de tamaño con HTTP 422 en ESTADO / CONTEXTO-REPO.
+- **R3 · Ledger durable de trabajos** (`hub-data/trabajos.json`): estados formales, reconciliación al arrancar, atasco por falta de progreso (nunca cancela solo).
+- **R4 · Aprobaciones por niveles** (`hardline` / `peligroso` / `seguro`): el hub clasifica (`POST /api/aprobaciones/clasificar`) y el cerebro resuelve; allowlist propio con merge contra disco, cola de pendientes, `deny` hardline en los 9 agentes de OpenCode y panel.
+- **R5 · Skills autogenerados**: propuesta → pendiente → aprobación del usuario; linter y guard de seguridad (`config/hooks/skill-lint.mjs`), contador de uso (hook `skills-uso.mjs`), candidatos a archivar sin borrar nunca.
+- **R6 · Cron** (`lib/cron.mjs`): schedule tipado, parser es/en, preflight, claim con TTL, reintentos 5/15/30, tope de coste real (aborta la sesión) y panel «Programadas».
+- **R7 · Compresión de bitácoras** (`lib/compresion.mjs`): archivo íntegro verificado en `BITACORA-archivo/`, resumen por `redactor-ds` con fallback determinista, protección frente a apuntes concurrentes.
+- **R8 · Aprobación inteligente**: el cerebro invoca al guardián (plantilla `guardian-prompt.md`) y reporta el veredicto; hardline jamás aprobable; 3 denegaciones seguidas abren el circuito y vuelve a `manual`.
+
+### Corregido tras revisión
+
+- `seguro` ya no autoaprueba `find -delete`, redirecciones, `tee` ni `sort -o`; rutas de `references/` con `..` rechazadas; bajas del cron persistidas entre instancias; la compresión no pierde apuntes añadidos durante el resumen.
+
 ## [0.3.0] - 2026-10-13
 
 ### Añadido
