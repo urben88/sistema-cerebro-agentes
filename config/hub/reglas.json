@@ -4,6 +4,7 @@
   "confianzaMinima": 0.6,
   "paraleloMax": 2,
   "nudge_intervalo": 10,
+  "bitacora_max_chars": 60000,
   "presupuestos": {
     "explorador-ds": 0.2,
     "redactor-ds": 0.2,

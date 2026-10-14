@@ -169,6 +169,25 @@ rechaza con error claro; que un **id no seguro** no se ejecuta ni escribe salida
 consigna R6.7 (los agentes que escriben exigen `aprobado_usuario`). `verificar.sh` / `verificar.ps1`
 la ejecutan como un paso más.
 
+## Compresión de bitácora (spec 10 · R7)
+
+```bash
+node scripts/test-compresion.mjs
+```
+
+Prueba sin dependencias (directorios temporales, nunca toca `hub-data` real), con reloj y
+**lanzador falsos** (jamás lanza jobs reales): comprueba que bajo umbral no se archiva ni se
+toca la bitácora; que sobre umbral se archiva lo intermedio conservando los **3 primeros** y
+los **20 últimos** apuntes (`BITACORA.md` deja de tenerlos) y se crea `BITACORA-archivo/` con el
+**original íntegro** (incluido el volcado largo); que la **poda** corta volcados/código > 1500
+chars a `[volcado de N chars omitido]` (también en el prompt del resumidor); que el texto
+**verbatim** del usuario (`Usuario:` / `> `) y las decisiones (`**Decisión**` / `DECISIÓN:`) se
+conservan; que con el **resumidor caído** se usa el fallback determinista ≤ 8000 chars y los
+**secretos** (un `sk-…` inyectado) quedan **redactados**; que la **episódica** omite la segunda
+compresión del mismo día (`ya_comprimido_hoy`) y vuelve a permitirla al día siguiente (reloj
+inyectable); y que un **slug con `../`** se rechaza. `verificar.sh` / `verificar.ps1` la ejecutan
+como un paso más.
+
 ## Prueba de fuego sugerida
 
 En una carpeta vacía:

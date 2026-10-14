@@ -264,6 +264,13 @@ else
   test_item 1 'Pruebas de cron (parser, siguiente, claim, preflight, reintentos)' 'Ejecuta: node scripts/test-cron.mjs'
 fi
 
+step 'Resumen propio de contexto (R7 · spec 10)'
+if node "$REPO_ROOT/scripts/test-compresion.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de compresión (troceo, poda, verbatim, fallback, episódica)'
+else
+  test_item 1 'Pruebas de compresión (troceo, poda, verbatim, fallback, episódica)' 'Ejecuta: node scripts/test-compresion.mjs'
+fi
+
 if [ "$SMOKE" -eq 1 ]; then
   step 'Smoke test del MCP (arranque real por stdio)'
   if [ "$ASK" -eq 1 ]; then

@@ -34,6 +34,7 @@ import { crearAprobaciones } from './lib/aprobaciones.mjs'
 import { crearSkills } from './lib/skills.mjs'
 import { crearLanzador } from './lib/lanzador.mjs'
 import { crearCron, parsearSchedule } from './lib/cron.mjs'
+import { crearCompresion } from './lib/compresion.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HOME = os.homedir()
@@ -179,6 +180,13 @@ function cicloCron() {
   }
 }
 setInterval(cicloCron, 30 * 1000).unref?.()
+
+// ------------------------------------------------- compresión de bitácora (R7 · spec 10)
+// Resumen propio de contexto: cuando BITACORA.md supera `bitacora_max_chars`
+// (reglas.json; 60 000 por defecto) se archiva lo intermedio en BITACORA-archivo/ y
+// se deja un resumen (redactor-ds por la API V1, fallback determinista). Máx. una
+// compresión por proyecto y día. Reindexa en `buscar` (R1) tras comprimir.
+const compresion = crearCompresion({ memoria, lanzador, reglas, buscar })
 
 // ---------------------------------------------------------------- hallazgos (buscar antes de crear)
 const HALLAZGOS_JSONL = path.join(DATA_DIR, 'hallazgos.jsonl')
@@ -715,6 +723,7 @@ const servidor = http.createServer(async (req, res) => {
         ok: true, proyecto: p,
         estado: memoria.leerEstado(p.slug), contexto: memoria.leerContexto(p.slug),
         bitacora: (memoria.leerBitacora(p.slug) || '').slice(-4000),
+        bitacoraTamano: (memoria.leerBitacora(p.slug) || '').length,
       })
     }
     if (ruta === '/api/memoria/estado' && req.method === 'POST') {
@@ -752,7 +761,35 @@ const servidor = http.createServer(async (req, res) => {
       if (!b.cwd || !b.titulo) return enviarJson(res, { ok: false, error: 'faltan cwd o titulo' }, 400)
       const p = memoria.agregarBitacora(b.cwd, b.titulo, b.texto || '')
       indexarProyectoSilencioso(p.slug)
+      // R7 · gancho opcional: si la bitácora supera el umbral, comprime en segundo plano
+      // sin bloquear la respuesta y sin romper nunca la escritura.
+      try {
+        if (compresion.necesitaComprimir(p.slug)) {
+          const prom = compresion.comprimir(p.slug)
+          if (prom && typeof prom.catch === 'function') {
+            prom.catch((e) => { try { logErrores.registrar({ origen: 'compresion', severidad: 'aviso', mensaje: `Compresión de «${p.slug}» falló: ${e?.message || e}` }) } catch { /* nada */ } })
+          }
+        }
+      } catch { /* la compresión nunca rompe la escritura de la bitácora */ }
       return enviarJson(res, { ok: true, proyecto: p })
+    }
+    if (ruta === '/api/memoria/comprimir' && req.method === 'POST') {
+      // R7 · compresión manual/forzada. El proyecto admite slug o cwd; un slug con
+      // traversal (`..`) se rechaza con 400.
+      const b = await cuerpoJson(req)
+      const proyecto = b.proyecto ?? b.slug ?? b.cwd
+      if (typeof proyecto !== 'string' || !proyecto.trim()) {
+        return enviarJson(res, { ok: false, error: 'falta proyecto' }, 400)
+      }
+      const r = await compresion.comprimir(proyecto, { forzar: b.forzar === true })
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/memoria/compresion' && req.method === 'GET') {
+      // R7 · estado de compresión del proyecto (tamaño de bitácora, umbral, última).
+      const proyecto = u.searchParams.get('proyecto') || u.searchParams.get('cwd')
+      if (!proyecto) return enviarJson(res, { ok: false, error: 'falta proyecto' }, 400)
+      const r = compresion.estado(proyecto)
+      return enviarJson(res, r, r.ok ? 200 : 400)
     }
     if (ruta === '/api/memoria/checkpoint' && req.method === 'POST') {
       const b = await cuerpoJson(req)

@@ -985,6 +985,27 @@ async function verProyecto(ruta) {
     $('modalTitulo').textContent = `Proyecto · ${r.proyecto.nombre}`
     $('modalSub').textContent = r.proyecto.ruta
     $('modalCuerpo').textContent = `## ESTADO.md\n\n${r.estado || '(vacío)'}\n\n## CONTEXTO-REPO.md\n\n${r.contexto || '(pendiente)'}\n\n## Última bitácora\n\n${(r.bitacora || '(vacía)').slice(-2000)}`
+    // R7 · tamaño de la bitácora y compresión manual del proyecto.
+    const acc = $('modalAcciones')
+    if (acc) {
+      vaciar(acc)
+      acc.append(h('span', { clase: 'tenue', texto: `Bitácora: ${fmt(r.bitacoraTamano || 0)} caracteres` }))
+      const boton = h('button', { clase: 'boton mini', type: 'button', texto: 'Comprimir ahora' })
+      boton.addEventListener('click', async () => {
+        boton.disabled = true
+        boton.textContent = 'Comprimiendo…'
+        try {
+          const rr = await fetch('/api/memoria/comprimir', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ proyecto: r.proyecto.ruta, forzar: true }),
+          }).then((x) => x.json())
+          boton.textContent = rr.ok
+            ? (rr.omitido ? `Sin cambios (${rr.omitido})` : `Comprimido (${rr.modo}, ${rr.archivado} apuntes)`)
+            : `Error: ${rr.error || 'no se pudo comprimir'}`
+        } catch { boton.textContent = 'Error de red' }
+      })
+      acc.append(boton)
+    }
     $('modal').classList.remove('oculto')
   } catch { /* nada */ }
 }

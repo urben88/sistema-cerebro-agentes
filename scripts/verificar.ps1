@@ -245,6 +245,11 @@ $cronPruebas = Join-Path $RepoRoot 'scripts\test-cron.mjs'
 & node $cronPruebas | Out-Null
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de cron (parser, siguiente, claim, preflight, reintentos)' 'Ejecuta: node scripts\test-cron.mjs'
 
+Write-Step 'Resumen propio de contexto (R7 · spec 10)'
+$compresionPruebas = Join-Path $RepoRoot 'scripts\test-compresion.mjs'
+& node $compresionPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de compresión (troceo, poda, verbatim, fallback, episódica)' 'Ejecuta: node scripts\test-compresion.mjs'
+
 if ($Smoke) {
   Write-Step 'Smoke test del MCP (arranque real por stdio)'
   $smokeScript = Join-Path $RepoRoot 'scripts\smoke-mcp.mjs'
