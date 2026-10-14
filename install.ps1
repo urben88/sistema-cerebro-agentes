@@ -292,6 +292,13 @@ Write-Step 'Agente cerebro en Claude Code (con el MCP dentro)'
 $rm = Invoke-Cli 'claude' @('mcp', 'remove', 'opencode', '--scope', 'user')
 if ($rm.Code -eq 0) { Write-Note 'Retirado el registro global antiguo del MCP (ahora vive en el agente cerebro)' }
 
+# Modo normal: el triaje (Laya) SI es global, para que `claude` a secas reparta subagentes.
+# OpenCode NO: sigue solo dentro del agente cerebro.
+$triajeGlobal = Join-Path $SystemDir 'mcp\triaje-mcp.mjs'
+Invoke-Cli 'claude' @('mcp', 'remove', 'triaje', '--scope', 'user') | Out-Null
+$addT = Invoke-Cli 'claude' @('mcp', 'add', '--scope', 'user', 'triaje', '--', 'node', $triajeGlobal)
+if ($addT.Code -eq 0) { Write-Ok 'MCP triaje registrado a nivel de usuario (modo normal)' } else { Write-Note 'No se pudo registrar el MCP triaje global; hazlo a mano: claude mcp add --scope user triaje -- node <ruta>' }
+
 $agentSrcDir = Join-Path $ConfigRoot 'claude\agents'
 $agentDir = Join-Path $UserHome '.claude\agents'
 New-Item -ItemType Directory -Force -Path $agentDir | Out-Null

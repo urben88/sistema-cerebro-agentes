@@ -193,6 +193,9 @@ AGENT_DIR="$HOME/.claude/agents"
 mkdir -p "$AGENT_DIR"
 ARGS_JSON='["'"$SYSTEM_DIR"'/launcher.sh"]'
 TRIAJE_MCP="$SYSTEM_DIR/mcp/triaje-mcp.mjs"
+# Modo normal: el triaje (Laya) si es global; OpenCode solo dentro del agente cerebro.
+claude mcp remove triaje --scope user >/dev/null 2>&1 || true
+if claude mcp add --scope user triaje -- node "$TRIAJE_MCP" >/dev/null 2>&1; then ok "MCP triaje registrado a nivel de usuario (modo normal)"; else note "No se pudo registrar el MCP triaje global; claude mcp add --scope user triaje -- node <ruta>"; fi
 for f in cerebro.md subdirector.md; do
   dst="$AGENT_DIR/$f"
   backup_item "$dst"

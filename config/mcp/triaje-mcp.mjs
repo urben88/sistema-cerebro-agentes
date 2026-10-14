@@ -31,6 +31,7 @@ const TOOLS = [
       properties: {
         tarea: { type: 'string', description: 'Descripción breve de la tarea (una o dos frases).' },
         contexto: { type: 'string', description: 'Contexto opcional: proyecto, ficheros, complejidad.' },
+        solo_claude: { type: 'boolean', description: 'true en modo normal (sin OpenCode): traduce la decisión a un subagente de Claude (Haiku o Sonnet) con su modelo y esfuerzo.' },
       },
       required: ['tarea'],
     },
@@ -59,6 +60,30 @@ const TOOLS = [
     },
   },
 ]
+
+// Modo normal: traduce la decisión de Laya (que puede nombrar agentes de OpenCode) a un
+// subagente de Claude con modelo y esfuerzo. Sonnet/Haiku solo; nunca OpenCode.
+const CLAUDE_AGENTES = {
+  explorador: { modelo: 'haiku', esfuerzo: 'low' },
+  redactor: { modelo: 'haiku', esfuerzo: 'low' },
+  analista: { modelo: 'haiku', esfuerzo: 'medium' },
+  subdirector: { modelo: 'haiku', esfuerzo: 'medium' },
+  planificador: { modelo: 'haiku', esfuerzo: 'medium' },
+  arquitecto: { modelo: 'sonnet', esfuerzo: 'high' },
+}
+const OC_A_CLAUDE = {
+  'explorador-ds': 'explorador', local: 'explorador', 'redactor-ds': 'redactor',
+  testeador: 'analista', revisor: 'analista',
+}
+function aClaude(j) {
+  const a = String(j.agente || '').toLowerCase()
+  const dificil = j.escalar === true || j.riesgo === true || /alto|high/i.test(String(j.riesgo))
+  let sub = CLAUDE_AGENTES[a] ? a : OC_A_CLAUDE[a]
+  if (sub === 'analista' && dificil) sub = 'arquitecto'
+  if (sub) return { subagente: sub, ...CLAUDE_AGENTES[sub], nota: dificil ? 'tarea delicada: revisa tú el resultado' : 'delegable; encargo acotado y salida breve' }
+  // implementar/depurar o decisión del cerebro: lo hace el hilo principal (Sonnet).
+  return { subagente: '(ninguno: hazlo tú en el hilo principal)', modelo: 'sonnet', esfuerzo: dificil ? 'high' : 'medium', nota: 'trabajo de código o decisión: no se delega a Haiku' }
+}
 
 function send(obj) { process.stdout.write(JSON.stringify(obj) + '\n') }
 
@@ -161,6 +186,11 @@ rl.on('line', async (line) => {
           signal: AbortSignal.timeout(20000),
         })
         const j = await r.json()
+        if (j.ok && args.solo_claude === true) {
+          const c = aClaude(j)
+          const texto = `modo: normal (solo Claude)\nsubagent_type: ${c.subagente}\nmodel: ${c.modelo}\neffort: ${c.esfuerzo}\nnota: ${c.nota}\n(origen: capa ${j.capa}, agente ${j.agente}, confianza ${typeof j.confianza === 'number' ? j.confianza.toFixed(2) : j.confianza}, fuente ${j.fuente})`
+          return send({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: texto }] } })
+        }
         const texto = j.ok
           ? `capa: ${j.capa}\nagente: ${j.agente}\nesfuerzo: ${j.esfuerzo ?? '(el del agente)'}\nescalar: ${j.escalar}\nriesgo: ${j.riesgo}\nconfianza: ${typeof j.confianza === 'number' ? j.confianza.toFixed(2) : j.confianza}\nfuente: ${j.fuente}\nmotivo: ${j.motivo}`
           : `Error del hub: ${j.error || 'desconocido'}`
