@@ -39,7 +39,7 @@ function duracion(desde, hasta) {
 try {
   const bruto = await leerStdin()
   let datos = {}
-  try { datos = JSON.parse(bruto || '{}') } catch { /* payload no JSON */ }
+  try { datos = JSON.parse(String(bruto || '{}').replace(/^﻿/, '')) } catch { /* payload no JSON */ }
 
   const pct = Math.floor(datos.context_window?.used_percentage ?? 0)
   const modelo = datos.model?.display_name || 'Claude'
