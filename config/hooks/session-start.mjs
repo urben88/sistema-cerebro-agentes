@@ -68,7 +68,9 @@ try {
   // Solo actuamos si el proyecto tiene memoria: en repos sin memoria no estorbamos.
   let briefing = null
   try {
-    const r = await fetch(`${HUB}/api/briefing?cwd=${encodeURIComponent(cwd)}`, { signal: AbortSignal.timeout(2500) })
+    // La sesión viaja para que el hub registre el briefing por sesión y proyecto (spec 11 · M3).
+    const sesion = datos.session_id || datos.sessionId || ''
+    const r = await fetch(`${HUB}/api/briefing?cwd=${encodeURIComponent(cwd)}${sesion ? `&sesion=${encodeURIComponent(sesion)}` : ''}`, { signal: AbortSignal.timeout(2500) })
     if (r.ok) {
       const j = await r.json()
       if (j.ok && j.proyecto) briefing = j.texto

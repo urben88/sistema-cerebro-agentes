@@ -250,6 +250,11 @@ $compresionPruebas = Join-Path $RepoRoot 'scripts\test-compresion.mjs'
 & node $compresionPruebas | Out-Null
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de compresión (troceo, poda, verbatim, fallback, episódica)' 'Ejecuta: node scripts\test-compresion.mjs'
 
+Write-Step 'Métricas de uso (spec 11)'
+$metricasPruebas = Join-Path $RepoRoot 'scripts\test-metricas.mjs'
+& node $metricasPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de métricas (JSONL, saneo, rotación, poda, job idempotente)' 'Ejecuta: node scripts\test-metricas.mjs'
+
 if ($Smoke) {
   Write-Step 'Smoke test del MCP (arranque real por stdio)'
   $smokeScript = Join-Path $RepoRoot 'scripts\smoke-mcp.mjs'

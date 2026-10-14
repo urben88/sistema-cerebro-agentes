@@ -1069,6 +1069,37 @@ function pintarGasto(g) {
   cont.append(card2)
 }
 
+// Spec 11 · M7 · tarjeta pequeña de métricas: interruptor, tamaño, nº de eventos y exportar.
+function pintarMetricas(resumen, activas) {
+  const cont = vaciar($('metricas'))
+  if (!cont) return
+  const r = resumen || {}
+  const bytes = typeof r.bytes === 'number' ? r.bytes : 0
+  const tam = bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${(bytes / 1024).toFixed(1)} KB`
+  const card = h('div', { clase: 'agente' })
+
+  const cab = h('div', { clase: 'cab-oficina' })
+  const casilla = h('label', { clase: 'chip casilla', title: 'Activar o desactivar la recogida de métricas' })
+  const chk = h('input', { type: 'checkbox' })
+  chk.checked = activas !== false
+  chk.addEventListener('change', async () => {
+    try {
+      await fetch('/api/metricas/activas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ activas: chk.checked }) })
+    } catch { /* hub caído */ }
+    refrescarPesado()
+  })
+  casilla.append(chk, ' activas')
+  cab.append(casilla)
+  cab.append(h('a', { clase: 'boton mini', href: '/api/metricas/exportar', download: 'metricas.jsonl', texto: 'Exportar .jsonl' }))
+  card.append(cab)
+
+  card.append(h('div', { clase: 'desc', texto: `${fmt(r.eventos || 0)} eventos · ${tam}${r.desde ? ` · desde ${String(r.desde).slice(0, 10)}` : ''}` }))
+  const tipos = Object.entries(r.porTipo || {}).sort((a, b) => b[1] - a[1])
+  if (tipos.length) card.append(h('div', { clase: 'desc tenue', texto: tipos.map(([t, n]) => `${t}:${n}`).join(' · ') }))
+  card.append(h('div', { clase: 'desc tenue', texto: 'Log local en hub-data/logs/metricas.jsonl · nunca guarda prompts, respuestas ni comandos.' }))
+  cont.append(card)
+}
+
 function pintarVentana(v) {
   const tb = $('tablaVentana').querySelector('tbody')
   vaciar(tb)
@@ -1677,7 +1708,7 @@ async function refrescarLigero() {
 
 async function refrescarPesado() {
   try {
-    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs, aprob, skillsPend, skillsUso, cronDatos] = await Promise.all([
+    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs, aprob, skillsPend, skillsUso, cronDatos, metricasRes, metricasAct] = await Promise.all([
       fetch('/api/gasto').then((r) => r.json()),
       fetch('/api/ventana').then((r) => r.json()),
       fetch('/api/laya').then((r) => r.json()),
@@ -1690,6 +1721,8 @@ async function refrescarPesado() {
       fetch('/api/skills/pendientes').then((r) => r.json()).catch(() => null),
       fetch('/api/skills/uso').then((r) => r.json()).catch(() => null),
       fetch('/api/cron').then((r) => r.json()).catch(() => null),
+      fetch('/api/metricas/resumen').then((r) => r.json()).catch(() => null),
+      fetch('/api/metricas/activas').then((r) => r.json()).catch(() => null),
     ])
     pintarGasto(gasto)
     pintarVentana(ventana)
@@ -1703,6 +1736,7 @@ async function refrescarPesado() {
     pintarAprobaciones(estado.demo ? aprobacionesDemo() : aprob)
     pintarSkills(estado.demo ? { pendientes: [] } : skillsPend, estado.demo ? { uso: {}, candidatos: [] } : skillsUso)
     pintarProgramadas(estado.demo ? { jobs: [], avisos: [] } : cronDatos)
+    pintarMetricas(estado.demo ? { eventos: 0, bytes: 0, porTipo: {} } : (metricasRes || {}), estado.demo ? true : (metricasAct ? metricasAct.activas : true))
   } catch { /* nada */ }
 }
 

@@ -3,6 +3,19 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado semántico (MAJOR.MINOR.PATCH).
 
+## [0.5.0] - 2026-10-14
+
+### Añadido (spec 11 · métricas de uso)
+
+- **M1 · Módulo `lib/metricas.mjs`**: `crearMetricas({dirLogs})` escribe `hub-data/logs/metricas.jsonl` (una línea JSON por evento `{ts, tipo, …}`), con rotación a `metricas.1.jsonl` al pasar de 8 MB, poda por retención y **saneo** (se descartan `prompt`, `texto`, `respuesta`, `contenido` —y por defensa `comando`, `command`, `consulta`— y cualquier campo string > 200 chars). Nunca lanza: un fallo de escritura va al registro central como `aviso`.
+- **M2 · Eventos de trabajo**: al pasar a `completado | fallido | cancelado | atascado`, un evento `job` con `jobId`, `agente`, `modelo`, `directorio`, `estado`, `duracionMs`, `coste` y `pasos`; **idempotente por `jobId`** incluso tras reiniciar el hub.
+- **M3 · Contexto y memoria**: `briefing` (chars por sesión y proyecto), `nudge` (disparado/descartado), `compresion` (chars antes/después y modo `resumen|fallback`) y `busqueda` (nº de consultas, resultados y ms, sin la consulta), más los límites 422 (fichero y chars).
+- **M4 · Decisiones**: `aprobacion` (nivel, decisión, alcance, modo efectivo), `guardian` (veredicto y ms), `skill` (propuesto/aprobado/rechazado/usado) y `cron` (ejecución: id, agente, estado). Nunca el comando ni la consulta.
+- **M5 · API**: `GET /api/metricas?tipo=&desde=&limite=` (máx. 1000), `GET /api/metricas/exportar` (descarga el JSONL completo, rotado + actual) y `GET /api/metricas/resumen` (conteos, rango, bytes y `porTipo`).
+- **M6 · Configuración**: `metricas_activas` (defecto `true`) y `metricas_retencion_dias` (90) en `hub-data/config.json`; al arrancar el hub se poda lo más viejo que la retención.
+- **M7 · Panel**: tarjeta «Métricas» en «Datos» con interruptor activar/desactivar, tamaño, nº de eventos y botón «Exportar .jsonl» (sin gráficas).
+- **M8 · Documentación y pruebas**: `docs/arquitectura.md` y `docs/pruebas.md` (formato de cada evento y qué NO se guarda) y `scripts/test-metricas.mjs` enganchado en `verificar.sh/.ps1`.
+
 ## [0.4.0] - 2026-10-14
 
 ### Añadido (spec 10 · patrones de Hermes Agent, reimplementados)

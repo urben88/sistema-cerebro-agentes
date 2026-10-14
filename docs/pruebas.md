@@ -199,6 +199,28 @@ compresión del mismo día (`ya_comprimido_hoy`) y vuelve a permitirla al día s
 inyectable); y que un **slug con `../`** se rechaza. `verificar.sh` / `verificar.ps1` la ejecutan
 como un paso más.
 
+## Métricas de uso (spec 11 · M1–M8)
+
+```bash
+node scripts/test-metricas.mjs
+```
+
+Prueba sin dependencias (directorios temporales, nunca toca `hub-data` real) con reloj y
+umbrales cortos inyectados: comprueba que `registrar` escribe una línea JSON por evento con
+`ts` ISO; que el **saneo** descarta `prompt`/`texto`/`respuesta`/`contenido`/`comando` y los
+strings de más de 200 caracteres (también anidados) sin que la cadena sensible llegue al
+disco; que con `activas:false` el fichero **no crece** (y se puede reactivar en caliente); que
+al pasar de `maxBytes` rota a `metricas.1.jsonl` sin perder eventos con una sola rotación; que
+`podar()` descarta lo más viejo que la retención; que el evento `job` es **idempotente por
+`jobId`** y no se duplica al recrear la instancia («reinicio»); que `leer` filtra por
+`tipo`/`desde`, ordena de más reciente a más antiguo y topa en 1000; que `exportar` devuelve
+rotado + actual y **cada línea parsea como JSON**; que `resumen`/`tamano` dan conteos, rango,
+bytes y `porTipo`; y que un **fallo de escritura** (directorio no creable) no lanza y reporta
+un `aviso` a `logErrores`. `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
+
+Formato de cada evento y qué **no** se guarda: ver
+[arquitectura.md](arquitectura.md#métricas-de-uso-spec-11).
+
 ## Prueba de fuego sugerida
 
 En una carpeta vacía:

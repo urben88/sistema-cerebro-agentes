@@ -254,6 +254,14 @@ try {
       // actividad: herramientas, textos y subtareas; el pensamiento no es legible).
       transcript: datos.transcript_path || datos.transcriptPath || null,
     }
+    // R2 · el nudge se decide ANTES de avisar al hub, para poder reportar su resultado
+    // (spec 11 · M3: disparado/descartado). Viaja SOLO como additionalContext de
+    // UserPromptSubmit; en el resto de eventos el hook no devuelve nada.
+    let nudge = null
+    if (evento === 'UserPromptSubmit') {
+      try { nudge = nudgeSiToca(cuerpo.cwd, cuerpo.sesion) } catch { nudge = null }
+      cuerpo.nudge = nudge ? 'disparado' : 'descartado'
+    }
     try {
       await fetch(`${HUB}/api/latido`, {
         method: 'POST',
@@ -263,16 +271,10 @@ try {
       })
     } catch { /* hub apagado o lento: se ignora */ }
 
-    // R2 · el nudge viaja SOLO como additionalContext de UserPromptSubmit; en el
-    // resto de eventos el hook no devuelve nada (siguen alimentando el panel).
-    if (evento === 'UserPromptSubmit') {
-      let nudge = null
-      try { nudge = nudgeSiToca(cuerpo.cwd, cuerpo.sesion) } catch { nudge = null }
-      if (nudge) {
-        console.log(JSON.stringify({
-          hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: nudge },
-        }))
-      }
+    if (evento === 'UserPromptSubmit' && nudge) {
+      console.log(JSON.stringify({
+        hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: nudge },
+      }))
     }
   }
   process.exit(0)

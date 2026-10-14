@@ -271,6 +271,13 @@ else
   test_item 1 'Pruebas de compresión (troceo, poda, verbatim, fallback, episódica)' 'Ejecuta: node scripts/test-compresion.mjs'
 fi
 
+step 'Métricas de uso (spec 11)'
+if node "$REPO_ROOT/scripts/test-metricas.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de métricas (JSONL, saneo, rotación, poda, job idempotente)'
+else
+  test_item 1 'Pruebas de métricas (JSONL, saneo, rotación, poda, job idempotente)' 'Ejecuta: node scripts/test-metricas.mjs'
+fi
+
 if [ "$SMOKE" -eq 1 ]; then
   step 'Smoke test del MCP (arranque real por stdio)'
   if [ "$ASK" -eq 1 ]; then

@@ -35,6 +35,7 @@ import { crearSkills } from './lib/skills.mjs'
 import { crearLanzador } from './lib/lanzador.mjs'
 import { crearCron, parsearSchedule } from './lib/cron.mjs'
 import { crearCompresion } from './lib/compresion.mjs'
+import { crearMetricas } from './lib/metricas.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HOME = os.homedir()
@@ -69,6 +70,9 @@ const CONFIG_DEFECTO = {
   // R4/R8 · aprobaciones por niveles: el hub clasifica y aplica reglas duras; el cerebro
   // resuelve (lo peligroso lo evalúa el guardián en modo `inteligente`).
   aprobaciones: { modo: 'manual' },
+  // Spec 11 · métricas de uso: log JSONL local (nunca prompts/respuestas/comandos).
+  metricas_activas: true,
+  metricas_retencion_dias: 90,
 }
 
 function cargarConfig() {
@@ -137,6 +141,34 @@ process.on('uncaughtException', (e) => {
   try { logErrores.registrarYLog({ origen: 'hub', severidad: 'critico', mensaje: `Excepción no capturada: ${e?.message || e}`, stack: e?.stack }) } catch { /* nada */ }
   process.exit(1)
 })
+// ------------------------------------- métricas de uso (spec 11)
+// Log JSONL local (`hub-data/logs/metricas.jsonl`) para analizar con una IA. Solo
+// métricas: nunca prompts, respuestas, comandos ni consultas literales. Al arrancar se
+// podan las líneas más viejas que `metricas_retencion_dias` (90 por defecto).
+const metricas = crearMetricas({
+  dirLogs: LOGS_DIR,
+  activas: config.metricas_activas !== false,
+  retencionDias: config.metricas_retencion_dias,
+  logErrores: (d) => { try { logErrores.registrar(d) } catch { /* nada */ } },
+})
+try { metricas.podar() } catch { /* la poda nunca impide arrancar */ }
+
+/** Escribe una clave en `hub-data/config.json` (read-merge-write, atómico). */
+function guardarConfigClave(clave, valor) {
+  const archivo = path.join(DATA_DIR, 'config.json')
+  let j = {}
+  try { j = JSON.parse(fs.readFileSync(archivo, 'utf8')) } catch { j = {} }
+  if (!j || typeof j !== 'object' || Array.isArray(j)) j = {}
+  j[clave] = valor
+  const texto = JSON.stringify(j, null, 2) + '\n'
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true })
+    const tmp = `${archivo}.tmp-${process.pid}-${Date.now()}`
+    fs.writeFileSync(tmp, texto, 'utf8')
+    try { fs.renameSync(tmp, archivo) } catch { fs.writeFileSync(archivo, texto, 'utf8'); try { fs.unlinkSync(tmp) } catch { /* nada */ } }
+  } catch { /* sin disco */ }
+}
+
 const oc = crearOpenCode({ systemDir: SYSTEM_DIR, host: OPENCODE_HOST })
 const organizacion = crearOrganizacion({ home: HOME, opencodeDir: OPENCODE_DIR, claudeDir: CLAUDE_DIR })
 const ventana = crearVentana({ baseDir: path.join(CLAUDE_DIR, 'projects') })
@@ -175,6 +207,7 @@ function cicloCron() {
   try {
     const p = cron.tick()
     if (p && typeof p.catch === 'function') {
+      if (typeof p.then === 'function') p.then((r) => { for (const x of (r?.ejecutados || [])) registrarMetricaCron(x) })
       p.catch((e) => { try { logErrores.registrar({ origen: 'cron', severidad: 'aviso', mensaje: `Ciclo del cron falló: ${e?.message || e}` }) } catch { /* nada */ } })
     }
   } catch (e) {
@@ -432,6 +465,44 @@ const ledger = crearLedger({
 })
 
 let ultimoAvisoConcurrencia = 0
+
+/** Estados del ledger que disparan el evento `job` (spec 11 · M2). */
+const ESTADOS_METRICA_JOB = new Set(['completado', 'fallido', 'cancelado', 'atascado'])
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+/** Quita las claves nulas/indefinidas (los campos opcionales se omiten, no se vacían). */
+function limpiarNulos(obj) {
+  const out = {}
+  for (const [k, v] of Object.entries(obj)) if (v !== null && v !== undefined) out[k] = v
+  return out
+}
+
+/**
+ * Registra un evento `job` por cada trabajo del ledger en estado `completado | fallido |
+ * cancelado | atascado`. `metricas.registrar` lo hace idempotente por `jobId` (incluso
+ * entre reinicios), así que se puede llamar en cada ciclo sin duplicar.
+ */
+function registrarMetricasLedger(jobs, eventos) {
+  const porId = new Map((Array.isArray(jobs) ? jobs : []).map((j) => [j.jobId, j]))
+  for (const e of ledger.leer()) {
+    if (!ESTADOS_METRICA_JOB.has(e.estado)) continue
+    const j = porId.get(e.jobId) || null
+    const creado = num(j?.createdAt) || num(e.creado)
+    const actualizado = num(j?.updatedAt) || num(e.actualizado)
+    const pasos = Array.isArray(eventos[e.jobId]) ? eventos[e.jobId].length : 0
+    metricas.registrar(limpiarNulos({
+      tipo: 'job',
+      jobId: e.jobId,
+      agente: e.agente || j?.agent || null,
+      modelo: j?.modelo || null,
+      directorio: e.directorio || j?.directory || null,
+      estado: e.estado,
+      duracionMs: creado != null && actualizado != null && actualizado >= creado ? actualizado - creado : null,
+      coste: typeof j?.cost === 'number' ? j.cost : null,
+      pasos: pasos > 0 ? pasos : null,
+    }))
+  }
+}
+
 function cicloLedger() {
   try {
     // top-80 por `updatedAt` para no parsear todo el histórico; un job vivo pero viejo
@@ -444,6 +515,8 @@ function cicloLedger() {
     const eventos = {}
     for (const e of ledger.leer()) eventos[e.jobId] = (vivo.detalle(e.jobId).eventos || [])
     ledger.revisarAtascos({ jobs, eventos })
+    // Spec 11 · M2 · un evento `job` por trabajo terminal (idempotente por jobId).
+    try { registrarMetricasLedger(jobs, eventos) } catch { /* las métricas nunca rompen el ciclo */ }
     // Concurrencia: el hub solo mide y avisa (con freno para no inundar el registro).
     const m = ledger.medir()
     if (m.aviso && Date.now() - ultimoAvisoConcurrencia > 10 * 60 * 1000) {
@@ -549,6 +622,36 @@ async function cuerpoJson(req) {
 
 // ----------------------------------------------------------------- servidor
 
+/** Spec 11 · M3 · evento `compresion` (chars antes/después y modo resumen|fallback). */
+function registrarMetricaCompresion(proyecto, r) {
+  try {
+    if (!r || r.ok !== true || r.omitido) return
+    metricas.registrar(limpiarNulos({
+      tipo: 'compresion',
+      proyecto: typeof proyecto === 'string' ? proyecto.slice(0, 200) : null,
+      antes: typeof r.antes === 'number' ? r.antes : null,
+      despues: typeof r.despues === 'number' ? r.despues : null,
+      modo: r.modo === 'determinista' ? 'fallback' : 'resumen',
+    }))
+  } catch { /* nada */ }
+}
+
+/** Spec 11 · M4 · evento `cron` (id, agente, estado, coste si se conoce). */
+function registrarMetricaCron(r) {
+  try {
+    if (!r || !r.jobId) return
+    const j = cron.obtener(r.jobId)
+    metricas.registrar(limpiarNulos({
+      tipo: 'cron',
+      id: r.jobId,
+      agente: j?.destino?.agente || null,
+      estado: r.ok ? 'lanzado' : 'fallido',
+      coste: typeof r.coste === 'number' ? r.coste : null,
+    }))
+  } catch { /* nada */ }
+}
+
+
 /** Indexa un proyecto tras escribir memoria: best-effort, pero deja rastro en el log de errores. */
 function indexarProyectoSilencioso(slug) {
   try {
@@ -586,12 +689,18 @@ const servidor = http.createServer(async (req, res) => {
     }
     if (ruta === '/api/briefing') {
       const cwd = u.searchParams.get('cwd') || '.'
-      return enviarJson(res, {
-        ok: true,
-        proyecto: memoria.buscarProyecto(cwd),
-        texto: memoria.briefing(cwd, { alertas: vigilante.alertas(), jobs: oc.leerJobs(80), hallazgos: leerHallazgos('propuesto') }),
-        alertas: vigilante.alertas(),
-      })
+      const proyecto = memoria.buscarProyecto(cwd)
+      const texto = memoria.briefing(cwd, { alertas: vigilante.alertas(), jobs: oc.leerJobs(80), hallazgos: leerHallazgos('propuesto') })
+      // Spec 11 · M3 · chars inyectados por sesión y proyecto (sin volcar el texto).
+      try {
+        metricas.registrar(limpiarNulos({
+          tipo: 'briefing',
+          proyecto: proyecto ? proyecto.slug : null,
+          sesion: u.searchParams.get('sesion') || null,
+          chars: texto.length,
+        }))
+      } catch { /* nada */ }
+      return enviarJson(res, { ok: true, proyecto, texto, alertas: vigilante.alertas() })
     }
     if (ruta === '/api/hallazgos' && req.method === 'GET') {
       const estado = u.searchParams.get('estado') || null
@@ -612,19 +721,27 @@ const servidor = http.createServer(async (req, res) => {
       const b = await cuerpoJson(req)
       const texto = b.comando ?? b.texto
       if (typeof texto !== 'string' || !texto.trim()) return enviarJson(res, { ok: false, error: 'faltan comando o texto' }, 400)
-      return enviarJson(res, { ok: true, ...aprobaciones.decision(texto, { sessionId: b.sessionId || null }) })
+      const d = aprobaciones.decision(texto, { sessionId: b.sessionId || null })
+      // Spec 11 · M4 · aprobación: nivel, decisión y modo efectivo (sin el comando).
+      try { metricas.registrar(limpiarNulos({ tipo: 'aprobacion', nivel: d.nivel, decision: d.accion, modoEfectivo: d.modoEfectivo || null })) } catch { /* nada */ }
+      return enviarJson(res, { ok: true, ...d })
     }
     if (ruta === '/api/aprobaciones/registrar' && req.method === 'POST') {
       const b = await cuerpoJson(req)
       if (typeof b.comando !== 'string' || !b.comando.trim()) return enviarJson(res, { ok: false, error: 'falta comando' }, 400)
       const r = aprobaciones.registrar(b.comando, b.alcance, b.sessionId || null)
+      // Spec 11 · M4 · allowlist: decisión, alcance y (no) persistencia (sin el comando).
+      if (r.ok) try { metricas.registrar(limpiarNulos({ tipo: 'aprobacion', decision: 'registrar', alcance: ['una_vez', 'sesion', 'siempre'].includes(b.alcance) ? b.alcance : null, modoEfectivo: aprobaciones.modoEfectivo(), persistido: r.persistido ?? null })) } catch { /* nada */ }
       return enviarJson(res, r, r.ok ? 200 : 400)
     }
     // R8 · el cerebro reporta aquí el veredicto del guardián; el hub aplica reglas duras.
     if (ruta === '/api/aprobaciones/veredicto' && req.method === 'POST') {
+      const t0 = Date.now()
       const b = await cuerpoJson(req)
       if (typeof b.comando !== 'string' || !b.comando.trim()) return enviarJson(res, { ok: false, error: 'falta comando' }, 400)
       const r = aprobaciones.registrarVeredicto({ comando: b.comando, veredicto: b.veredicto, sessionId: b.sessionId || null, motivo: b.motivo })
+      // Spec 11 · M4 · guardián: veredicto y ms (del cuerpo si lo envía el cerebro).
+      if (r.ok) try { metricas.registrar(limpiarNulos({ tipo: 'guardian', veredicto: r.veredicto, ms: Number.isFinite(b.ms) ? b.ms : Date.now() - t0 })) } catch { /* nada */ }
       return enviarJson(res, r, r.ok ? 200 : 400)
     }
     if (ruta === '/api/aprobaciones/circuito/reiniciar' && req.method === 'POST') {
@@ -654,6 +771,8 @@ const servidor = http.createServer(async (req, res) => {
       if (typeof b.descripcion !== 'string' || !b.descripcion.trim()) return enviarJson(res, { ok: false, error: 'falta descripcion' }, 400)
       if (typeof b.cuerpo !== 'string' || !b.cuerpo.trim()) return enviarJson(res, { ok: false, error: 'falta cuerpo' }, 400)
       const r = skills.proponer({ nombre: b.nombre, descripcion: b.descripcion, cuerpo: b.cuerpo, origen: b.origen, referencias: b.referencias })
+      // Spec 11 · M4 · skill propuesto (solo si quedó en cola, no si era duplicado).
+      if (r.ok && r.pendiente) { try { metricas.registrar({ tipo: 'skill', estado: 'propuesto', nombre: String(b.nombre).slice(0, 100) }) } catch { /* nada */ } }
       return enviarJson(res, r, r.ok ? 200 : 400)
     }
     if (ruta === '/api/skills/pendientes' && req.method === 'GET') {
@@ -663,12 +782,18 @@ const servidor = http.createServer(async (req, res) => {
       const b = await cuerpoJson(req)
       if (typeof b.id !== 'string' || !b.id.trim()) return enviarJson(res, { ok: false, error: 'falta id' }, 400)
       const r = skills.aprobar(String(b.id))
+      if (r.ok && r.skill?.nombre) { try { metricas.registrar({ tipo: 'skill', estado: 'aprobado', nombre: String(r.skill.nombre).slice(0, 100) }) } catch { /* nada */ } }
       return enviarJson(res, r, r.ok ? 200 : 400)
     }
     if (ruta === '/api/skills/rechazar' && req.method === 'POST') {
       const b = await cuerpoJson(req)
       if (typeof b.id !== 'string' || !b.id.trim()) return enviarJson(res, { ok: false, error: 'falta id' }, 400)
+      const pend = skills.pendientes().find((p) => p.id === String(b.id))
       const r = skills.rechazar(String(b.id))
+      if (r.ok) {
+        const nombre = pend?.payload?.nombre || pend?.resumen || null
+        try { metricas.registrar(limpiarNulos({ tipo: 'skill', estado: 'rechazado', nombre: nombre ? String(nombre).slice(0, 100) : null })) } catch { /* nada */ }
+      }
       return enviarJson(res, r, r.ok ? 200 : 400)
     }
     if (ruta === '/api/skills/uso' && req.method === 'GET') {
@@ -679,6 +804,8 @@ const servidor = http.createServer(async (req, res) => {
       if (typeof b.nombre !== 'string' || !b.nombre.trim()) return enviarJson(res, { ok: false, error: 'falta nombre' }, 400)
       const tipo = typeof b.tipo === 'string' && b.tipo.trim() ? b.tipo : 'uso'
       const r = skills.registrarUso(String(b.nombre), tipo, b.veces)
+      // Spec 11 · M4 · skill usado (uso|visto|parcheado).
+      if (r.ok) { try { metricas.registrar({ tipo: 'skill', estado: 'usado', nombre: String(b.nombre).slice(0, 100), uso: tipo }) } catch { /* nada */ } }
       return enviarJson(res, r, r.ok ? 200 : 400)
     }
     if (ruta === '/api/skills/archivo' && req.method === 'GET') {
@@ -725,6 +852,7 @@ const servidor = http.createServer(async (req, res) => {
       const b = await cuerpoJson(req)
       if (typeof b.id !== 'string' || !b.id.trim()) return enviarJson(res, { ok: false, error: 'falta id' }, 400)
       const r = await cron.ejecutar(String(b.id))
+      registrarMetricaCron(r)
       return enviarJson(res, { ok: r.ok, resultado: r, jobs: cron.listar(), avisos: cron.avisos() }, r.ok ? 200 : 400)
     }
     if (ruta === '/api/proyectos') return enviarJson(res, { ok: true, proyectos: memoria.proyectos() })
@@ -746,6 +874,8 @@ const servidor = http.createServer(async (req, res) => {
       // R2 · el cuerpo supera el límite: 422 con lo guardado hoy para consolidar.
       if (p.excede) {
         const actual = memoria.buscarProyecto(b.cwd)
+        // Spec 11 · M3 · límite de memoria superado (R2): qué fichero y chars.
+        try { metricas.registrar({ tipo: 'limite', fichero: 'ESTADO.md', chars: p.actuales }) } catch { /* nada */ }
         return enviarJson(res, {
           ok: false, motivo: 'excede', limite: p.limite, actuales: p.actuales,
           contenidoActual: actual ? (memoria.leerEstado(actual.slug) || '') : '',
@@ -761,6 +891,8 @@ const servidor = http.createServer(async (req, res) => {
       // R2 · mismo contrato de exceso que ESTADO.md.
       if (p.excede) {
         const actual = memoria.buscarProyecto(b.cwd)
+        // Spec 11 · M3 · límite de memoria superado (R2): qué fichero y chars.
+        try { metricas.registrar({ tipo: 'limite', fichero: 'CONTEXTO-REPO.md', chars: p.actuales }) } catch { /* nada */ }
         return enviarJson(res, {
           ok: false, motivo: 'excede', limite: p.limite, actuales: p.actuales,
           contenidoActual: actual ? (memoria.leerContexto(actual.slug) || '') : '',
@@ -779,8 +911,9 @@ const servidor = http.createServer(async (req, res) => {
       try {
         if (compresion.necesitaComprimir(p.slug)) {
           const prom = compresion.comprimir(p.slug)
-          if (prom && typeof prom.catch === 'function') {
-            prom.catch((e) => { try { logErrores.registrar({ origen: 'compresion', severidad: 'aviso', mensaje: `Compresión de «${p.slug}» falló: ${e?.message || e}` }) } catch { /* nada */ } })
+          if (prom && typeof prom.then === 'function') {
+            prom.then((r) => registrarMetricaCompresion(p.slug, r))
+              .catch((e) => { try { logErrores.registrar({ origen: 'compresion', severidad: 'aviso', mensaje: `Compresión de «${p.slug}» falló: ${e?.message || e}` }) } catch { /* nada */ } })
           }
         }
       } catch { /* la compresión nunca rompe la escritura de la bitácora */ }
@@ -795,6 +928,7 @@ const servidor = http.createServer(async (req, res) => {
         return enviarJson(res, { ok: false, error: 'falta proyecto' }, 400)
       }
       const r = await compresion.comprimir(proyecto, { forzar: b.forzar === true })
+      registrarMetricaCompresion(proyecto, r)
       return enviarJson(res, r, r.ok ? 200 : 400)
     }
     if (ruta === '/api/memoria/compresion' && req.method === 'GET') {
@@ -821,11 +955,22 @@ const servidor = http.createServer(async (req, res) => {
       if (tipo && !buscar.tipos.includes(tipo)) {
         return enviarJson(res, { ok: false, error: `tipo inválido; válidos: ${buscar.tipos.join(', ')}` }, 400)
       }
+      const t0 = Date.now()
       const r = buscar.buscar(q, {
         proyecto: u.searchParams.get('proyecto') || null,
         limite: u.searchParams.get('limite') || 10,
         tipo,
       })
+      // Spec 11 · M3 · nº de consultas, resultados y ms (sin la consulta literal).
+      try {
+        metricas.registrar(limpiarNulos({
+          tipo: 'busqueda',
+          consultas: 1,
+          resultados: r.resultados.length,
+          ms: Date.now() - t0,
+          proyecto: u.searchParams.get('proyecto') || null,
+        }))
+      } catch { /* nada */ }
       return enviarJson(res, { ok: true, modo: r.modo, aviso: r.aviso || null, resultados: r.resultados })
     }
     if (ruta === '/api/vigilante') {
@@ -888,6 +1033,13 @@ const servidor = http.createServer(async (req, res) => {
       const b = await cuerpoJson(req)
       if (!b.cwd) return enviarJson(res, { ok: false, error: 'falta cwd' }, 400)
       registrarLatido(b)
+      // Spec 11 · M3 · nudge de memoria disparado/descartado (lo reporta el hook `latido`).
+      if (b.nudge === 'disparado' || b.nudge === 'descartado') {
+        try {
+          const p = memoria.buscarProyecto(b.cwd)
+          metricas.registrar(limpiarNulos({ tipo: 'nudge', estado: b.nudge, proyecto: p ? p.slug : null, sesion: b.sesion || null }))
+        } catch { /* nada */ }
+      }
       return enviarJson(res, { ok: true })
     }
     if (ruta === '/api/tarea-subagente' && req.method === 'POST') {
@@ -934,6 +1086,39 @@ const servidor = http.createServer(async (req, res) => {
       const texto = logErrores.exportar({ limite: parseInt(u.searchParams.get('limite'), 10) || 50 })
       res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8', 'Cache-Control': 'no-store' })
       return res.end(texto)
+    }
+    // ------------------------------------------------ métricas (spec 11)
+    if (ruta === '/api/metricas' && req.method === 'GET') {
+      const eventos = metricas.leer({
+        tipo: u.searchParams.get('tipo') || null,
+        desde: u.searchParams.get('desde') || null,
+        limite: parseInt(u.searchParams.get('limite'), 10) || 200,
+      })
+      return enviarJson(res, { ok: true, eventos, total: eventos.length })
+    }
+    if (ruta === '/api/metricas/resumen' && req.method === 'GET') {
+      // Solo conteos: eventos, rango, bytes y reparto por tipo (sin análisis).
+      return enviarJson(res, { ok: true, ...metricas.resumen() })
+    }
+    if (ruta === '/api/metricas/exportar' && req.method === 'GET') {
+      res.writeHead(200, {
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="metricas.jsonl"',
+        'Cache-Control': 'no-store',
+      })
+      return res.end(metricas.exportar())
+    }
+    if (ruta === '/api/metricas/activas' && req.method === 'GET') {
+      return enviarJson(res, { ok: true, activas: metricas.activas() })
+    }
+    if (ruta === '/api/metricas/activas' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.activas !== 'boolean') return enviarJson(res, { ok: false, error: 'activas debe ser true o false' }, 400)
+      const activas = b.activas
+      config.metricas_activas = activas
+      metricas.activar(activas)
+      guardarConfigClave('metricas_activas', activas)
+      return enviarJson(res, { ok: true, activas })
     }
     if (ruta === '/api/eventos') {
       // SSE: emite `actividad` solo cuando cambia el estado de algún personaje (cada 2 s).
