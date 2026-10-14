@@ -12,6 +12,21 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 
+/**
+ * R2 · límite de tamaño por fichero de memoria, en caracteres del CUERPO (sin
+ * cabecera). El cuerpo empieza en la primera línea que comienza por `## ` y llega
+ * hasta el final; si no hay ninguna, es todo el texto. Checkpoints y bitácora no
+ * se limitan (pueden crecer; su consolidación es otro mecanismo).
+ */
+export const LIMITES = { estado: 2200, contexto: 4000 }
+
+/** Caracteres del cuerpo de un texto de memoria (desde la primera línea `## `), recortado. */
+export function medirCuerpo(texto) {
+  const t = String(texto ?? '')
+  const i = t.search(/^## /m)
+  return (i >= 0 ? t.slice(i) : t).trim().length
+}
+
 export function crearMemoria(raiz, { temporalDias = 14, plantillasDir = null } = {}) {
   const dirProyectos = path.join(raiz, 'proyectos')
   const dirTemporal = path.join(raiz, 'temporal')
@@ -91,6 +106,8 @@ export function crearMemoria(raiz, { temporalDias = 14, plantillasDir = null } =
   const leerBitacora = (slug) => leer(path.join(rutaProyecto(slug), 'BITACORA.md')) || ''
 
   function escribirEstado(cwd, contenido) {
+    const exceso = excedeLimite(cwd, contenido, 'estado')
+    if (exceso) return exceso
     const p = asegurarProyecto(cwd)
     escribir(path.join(rutaProyecto(p.slug), 'ESTADO.md'), contenido)
     tocar(p.slug)
@@ -98,10 +115,25 @@ export function crearMemoria(raiz, { temporalDias = 14, plantillasDir = null } =
   }
 
   function escribirContexto(cwd, contenido) {
+    const exceso = excedeLimite(cwd, contenido, 'contexto')
+    if (exceso) return exceso
     const p = asegurarProyecto(cwd)
     escribir(path.join(rutaProyecto(p.slug), 'CONTEXTO-REPO.md'), contenido)
     tocar(p.slug)
     return p
+  }
+
+  /**
+   * R2 · si el cuerpo del texto supera el límite, devuelve
+   * `{excede:true, limite, actuales}` (los caracteres del cuerpo guardado hoy)
+   * sin escribir nada; si cabe, devuelve `null`.
+   */
+  function excedeLimite(cwd, contenido, tipo) {
+    const limite = LIMITES[tipo]
+    if (medirCuerpo(contenido) <= limite) return null
+    const p = buscarProyecto(cwd)
+    const actual = p ? (tipo === 'estado' ? leerEstado(p.slug) : leerContexto(p.slug)) : null
+    return { excede: true, limite, actuales: medirCuerpo(actual || '') }
   }
 
   function agregarBitacora(cwd, titulo, texto = '') {

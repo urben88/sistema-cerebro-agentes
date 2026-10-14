@@ -498,6 +498,14 @@ const servidor = http.createServer(async (req, res) => {
       const b = await cuerpoJson(req)
       if (!b.cwd || typeof b.contenido !== 'string') return enviarJson(res, { ok: false, error: 'faltan cwd o contenido' }, 400)
       const p = memoria.escribirEstado(b.cwd, b.contenido)
+      // R2 · el cuerpo supera el límite: 422 con lo guardado hoy para consolidar.
+      if (p.excede) {
+        const actual = memoria.buscarProyecto(b.cwd)
+        return enviarJson(res, {
+          ok: false, motivo: 'excede', limite: p.limite, actuales: p.actuales,
+          contenidoActual: actual ? (memoria.leerEstado(actual.slug) || '') : '',
+        }, 422)
+      }
       indexarProyectoSilencioso(p.slug)
       return enviarJson(res, { ok: true, proyecto: p })
     }
@@ -505,6 +513,14 @@ const servidor = http.createServer(async (req, res) => {
       const b = await cuerpoJson(req)
       if (!b.cwd || typeof b.contenido !== 'string') return enviarJson(res, { ok: false, error: 'faltan cwd o contenido' }, 400)
       const p = memoria.escribirContexto(b.cwd, b.contenido)
+      // R2 · mismo contrato de exceso que ESTADO.md.
+      if (p.excede) {
+        const actual = memoria.buscarProyecto(b.cwd)
+        return enviarJson(res, {
+          ok: false, motivo: 'excede', limite: p.limite, actuales: p.actuales,
+          contenidoActual: actual ? (memoria.leerContexto(actual.slug) || '') : '',
+        }, 422)
+      }
       indexarProyectoSilencioso(p.slug)
       return enviarJson(res, { ok: true, proyecto: p })
     }

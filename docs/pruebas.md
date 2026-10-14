@@ -63,6 +63,29 @@ Buscar desde agentes (CLI contra el hub):
 node ~/.sistema-cerebro-agentes/hooks/buscar.mjs "consulta" [--proyecto x] [--limite n]
 ```
 
+## Nudges de memoria (spec 10 · R2)
+
+```bash
+node scripts/test-nudges.mjs
+```
+
+Prueba sin dependencias (directorio temporal, el hub apunta a un puerto muerto y nunca
+toca `hub-data` real): con el intervalo en 10 turnos comprueba que `latido.mjs` emite un
+`additionalContext` al llegar al turno 10 y no lo repite hasta pasados otros 10; que una
+escritura de `ESTADO.md` (cambio de mtime) reinicia el contador; que solo
+`UserPromptSubmit` devuelve JSON (`Stop`/`SubagentStart`/`SubagentStop` no emiten nada);
+que un `estado-nudges.json` corrupto no rompe el hook; y, sobre la memoria directa, que
+una escritura de cuerpo por encima del límite se rechaza con `{excede,limite,actuales}`
+sin escribir, que dentro del límite sigue funcionando y que un checkpoint largo (y una
+entrada de bitácora larga) no se rechazan. `verificar.sh` / `verificar.ps1` la ejecutan
+como un paso más.
+
+Límites por fichero (`config/hub/lib/memoria.mjs`, caracteres del cuerpo sin cabecera):
+`ESTADO.md` ≤ 2200 y `CONTEXTO-REPO.md` ≤ 4000. Al superarlos, `POST /api/memoria/estado`
+y `/api/memoria/contexto` responden HTTP 422 `{ok:false, motivo:'excede', limite, actuales, contenidoActual}`
+(`contenidoActual` es el texto guardado hoy, para consolidar). El CLI `estado.mjs --escribir`
+muestra el error y sale con 1 pidiendo mover lo cerrado a la bitácora.
+
 ## Prueba de fuego sugerida
 
 En una carpeta vacía:

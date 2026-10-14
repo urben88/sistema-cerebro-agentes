@@ -220,6 +220,11 @@ $buscarPruebas = Join-Path $RepoRoot 'scripts\test-buscar.mjs'
 & node $buscarPruebas | Out-Null
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de búsqueda (FTS5, o fallback si no hay FTS5)' 'Ejecuta: node scripts\test-buscar.mjs'
 
+Write-Step 'Nudges de memoria (R2 · spec 10)'
+$nudgesPruebas = Join-Path $RepoRoot 'scripts\test-nudges.mjs'
+& node $nudgesPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de nudges y límites de memoria' 'Ejecuta: node scripts\test-nudges.mjs'
+
 if ($Smoke) {
   Write-Step 'Smoke test del MCP (arranque real por stdio)'
   $smokeScript = Join-Path $RepoRoot 'scripts\smoke-mcp.mjs'

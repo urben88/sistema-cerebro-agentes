@@ -74,6 +74,10 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
 
 El hub indexa la memoria de proyectos (BITACORA.md troceada por cabeceras, ESTADO.md, CONTEXTO-REPO.md y `checkpoints/`), las decisiones (`logs/decisiones.jsonl`), los hallazgos (`hub-data/hallazgos.jsonl`) y los skills (`config/claude/skills/<nombre>/SKILL.md`) en un índice SQLite FTS5 (`hub-data/indice.db`, `node:sqlite`, sin dependencias). Se reindexa de forma incremental al arrancar y tras cada escritura de memoria, y completo con `node hub.mjs --reindexar`. `GET /api/buscar?q=…&proyecto=…&limite=…&tipo=…` devuelve resultados con `snippet` y proyecto ordenados por `rank`; los agentes lo consultan con `node ~/.sistema-cerebro-agentes/hooks/buscar.mjs "consulta"`. Si `node:sqlite` no existe, no trae FTS5 (o se fuerza con `HUB_BUSCAR_FALLBACK=1`), el hub arranca igual y la búsqueda usa un recorrido lineal sobre los `.md`, sin ranking, indicándolo en la respuesta.
 
+## Memoria: nudges y límites (spec 10 · R2)
+
+El hook `latido.mjs` mantiene en `hub-data/estado-nudges.json` (propiedad del hook, escritura tmp+rename y read-merge-write que relee el fichero y conserva las claves ajenas) un contador por sesión y proyecto (clave `<slug>:<sesión>`) y, solo en `UserPromptSubmit`, inyecta un `additionalContext` cada `nudge_intervalo` turnos sin escritura (defecto 10; `HUB_DATA_DIR/reglas.json` manda sobre `hub/reglas.json`). El contador se reinicia cuando cambia el mtime de `ESTADO.md`; las entradas con más de 14 días sin actividad se podan y el fichero se limita a 200 entradas. Los ficheros de memoria tienen límite de **caracteres del cuerpo sin cabecera** (`ESTADO.md` ≤ 2200, `CONTEXTO-REPO.md` ≤ 4000): al superarlo, `POST /api/memoria/estado` y `/contexto` rechazan con **HTTP 422** `{ok:false, motivo:'excede', limite, actuales, contenidoActual}` para consolidar (mover lo cerrado a la bitácora); checkpoints y bitácora no se limitan.
+
 ## Evolución
 
 `VERSION`, `CHANGELOG.md` y tags; los cambios se hacen en este repositorio y se despliegan con `scripts/actualizar`. Decisiones y contexto en [contexto-y-decisiones.md](contexto-y-decisiones.md).

@@ -229,6 +229,13 @@ else
   test_item 1 'Pruebas de búsqueda (FTS5, o fallback si no hay FTS5)' 'Ejecuta: node scripts/test-buscar.mjs'
 fi
 
+step 'Nudges de memoria (R2 · spec 10)'
+if node "$REPO_ROOT/scripts/test-nudges.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de nudges y límites de memoria'
+else
+  test_item 1 'Pruebas de nudges y límites de memoria' 'Ejecuta: node scripts/test-nudges.mjs'
+fi
+
 if [ "$SMOKE" -eq 1 ]; then
   step 'Smoke test del MCP (arranque real por stdio)'
   if [ "$ASK" -eq 1 ]; then
