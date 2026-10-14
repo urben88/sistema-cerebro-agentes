@@ -257,6 +257,13 @@ else
   test_item 1 'Pruebas de skills (linter, guard, propuesta→aprobación, uso)' 'Ejecuta: node scripts/test-skills.mjs'
 fi
 
+step 'Cron y tareas programadas (R6 · spec 10)'
+if node "$REPO_ROOT/scripts/test-cron.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de cron (parser, siguiente, claim, preflight, reintentos)'
+else
+  test_item 1 'Pruebas de cron (parser, siguiente, claim, preflight, reintentos)' 'Ejecuta: node scripts/test-cron.mjs'
+fi
+
 if [ "$SMOKE" -eq 1 ]; then
   step 'Smoke test del MCP (arranque real por stdio)'
   if [ "$ASK" -eq 1 ]; then

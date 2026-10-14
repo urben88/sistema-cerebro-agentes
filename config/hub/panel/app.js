@@ -1161,6 +1161,69 @@ function pintarHallazgos(hh) {
 
 // Registro de errores: lista completa (mensaje, stack y contexto) para revisar o
 // exportar. Cada capa (hub, trabajos, hooks, MCP, panel) reporta a /api/log.
+// R6 · cron: lista de jobs programados (con siguiente ejecución y estado), botones
+// ejecutar/pausar/reanudar/borrar y los avisos del planificador (fallos, preflight, reintentos).
+function pintarProgramadas(datos) {
+  const d = datos || {}
+  const cont = vaciar($('cronJobs'))
+  const jobs = d.jobs || []
+  if (!jobs.length) {
+    cont.append(h('p', { clase: 'tenue', texto: 'Sin tareas programadas. Créalas con POST /api/cron (o pídeselas al cerebro).' }))
+  } else {
+    for (const j of jobs) {
+      const c = h('div', { clase: 'agente' })
+      const cab = h('div')
+      const clase = j.estado === 'activo' ? 'verde' : j.estado === 'fallido' ? 'rojo' : j.estado === 'pausado' ? 'ambar' : 'azul'
+      cab.append(h('span', { clase: `badge ${clase}`, texto: j.estado || '—' }))
+      cab.append(h('span', { clase: 'nombre', texto: j.nombre || j.id }))
+      c.append(cab)
+      const programacion = !j.schedule ? '—'
+        : j.schedule.kind === 'cron' ? `cron «${j.schedule.expr}»`
+          : j.schedule.kind === 'interval' ? `cada ${j.schedule.minutos} min`
+            : `una vez · ${j.schedule.ejecutar_en}`
+      c.append(h('div', { clase: 'desc', texto: `${(j.destino && j.destino.agente) || '—'} · ${programacion}` }))
+      c.append(h('div', {
+        clase: 'desc tenue',
+        texto: `siguiente: ${j.siguiente ? new Date(j.siguiente).toLocaleString() : '—'} · reintentos: ${j.reintentos || 0}${j.motivo ? ` · ${j.motivo}` : ''}`,
+      }))
+      const accion = (ruta, texto, peligro) => {
+        const b = h('button', { clase: `boton mini${peligro ? ' peligro' : ''}`, type: 'button', texto })
+        b.addEventListener('click', async () => {
+          try {
+            await fetch(ruta, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: j.id }) })
+            refrescarPesado()
+          } catch { /* nada */ }
+        })
+        return b
+      }
+      const fila = h('div', { clase: 'desc' })
+      fila.append(accion('/api/cron/ejecutar', 'Ejecutar'))
+      fila.append(accion(j.estado === 'pausado' ? '/api/cron/reanudar' : '/api/cron/pausar', j.estado === 'pausado' ? 'Reanudar' : 'Pausar'))
+      fila.append(accion('/api/cron/borrar', 'Borrar', true))
+      c.append(fila)
+      cont.append(c)
+    }
+  }
+
+  const contA = vaciar($('cronAvisos'))
+  const avisos = d.avisos || []
+  if (!avisos.length) {
+    contA.append(h('p', { clase: 'tenue', texto: 'Sin avisos.' }))
+  } else {
+    for (const a of avisos.slice(-20).reverse()) {
+      const c = h('div', { clase: 'agente' })
+      const clase = a.tipo === 'fallido' ? 'rojo' : a.tipo === 'fail_closed' ? 'ambar' : 'azul'
+      const cab = h('div')
+      cab.append(h('span', { clase: `badge ${clase}`, texto: a.tipo || 'aviso' }))
+      const ts = a.fecha ? Date.parse(a.fecha) : null
+      cab.append(h('span', { clase: 'desc tenue', texto: ts ? hace(ts) : '' }))
+      c.append(cab)
+      c.append(h('div', { clase: 'desc', texto: a.mensaje || '' }))
+      contA.append(c)
+    }
+  }
+}
+
 function pintarErrores(datos) {
   const cont = vaciar($('errores'))
   const errores = (datos && datos.errores) || []
@@ -1357,6 +1420,7 @@ const PESTANAS = [
   ['mcps', 'MCPs'],
   ['hallazgos', 'Hallazgos'],
   ['aprobaciones', 'Aprobaciones'],
+  ['programadas', 'Programadas'],
   ['errores', 'Errores'],
 ]
 
@@ -1537,7 +1601,7 @@ async function refrescarLigero() {
 
 async function refrescarPesado() {
   try {
-    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs, aprob, skillsPend, skillsUso] = await Promise.all([
+    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs, aprob, skillsPend, skillsUso, cronDatos] = await Promise.all([
       fetch('/api/gasto').then((r) => r.json()),
       fetch('/api/ventana').then((r) => r.json()),
       fetch('/api/laya').then((r) => r.json()),
@@ -1549,6 +1613,7 @@ async function refrescarPesado() {
       fetch('/api/aprobaciones').then((r) => r.json()).catch(() => null),
       fetch('/api/skills/pendientes').then((r) => r.json()).catch(() => null),
       fetch('/api/skills/uso').then((r) => r.json()).catch(() => null),
+      fetch('/api/cron').then((r) => r.json()).catch(() => null),
     ])
     pintarGasto(gasto)
     pintarVentana(ventana)
@@ -1561,6 +1626,7 @@ async function refrescarPesado() {
     estado.aprobaciones = aprob
     pintarAprobaciones(estado.demo ? aprobacionesDemo() : aprob)
     pintarSkills(estado.demo ? { pendientes: [] } : skillsPend, estado.demo ? { uso: {}, candidatos: [] } : skillsUso)
+    pintarProgramadas(estado.demo ? { jobs: [], avisos: [] } : cronDatos)
   } catch { /* nada */ }
 }
 

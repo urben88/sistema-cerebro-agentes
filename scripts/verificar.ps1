@@ -240,6 +240,11 @@ $skillsPruebas = Join-Path $RepoRoot 'scripts\test-skills.mjs'
 & node $skillsPruebas | Out-Null
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de skills (linter, guard, propuesta→aprobación, uso)' 'Ejecuta: node scripts\test-skills.mjs'
 
+Write-Step 'Cron y tareas programadas (R6 · spec 10)'
+$cronPruebas = Join-Path $RepoRoot 'scripts\test-cron.mjs'
+& node $cronPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de cron (parser, siguiente, claim, preflight, reintentos)' 'Ejecuta: node scripts\test-cron.mjs'
+
 if ($Smoke) {
   Write-Step 'Smoke test del MCP (arranque real por stdio)'
   $smokeScript = Join-Path $RepoRoot 'scripts\smoke-mcp.mjs'

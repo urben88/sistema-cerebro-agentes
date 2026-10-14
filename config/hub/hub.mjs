@@ -32,6 +32,8 @@ import { crearLogErrores } from './lib/errores-log.mjs'
 import { crearLedger, ESTADOS as ESTADOS_LEDGER } from './lib/ledger.mjs'
 import { crearAprobaciones } from './lib/aprobaciones.mjs'
 import { crearSkills } from './lib/skills.mjs'
+import { crearLanzador } from './lib/lanzador.mjs'
+import { crearCron, parsearSchedule } from './lib/cron.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HOME = os.homedir()
@@ -157,6 +159,26 @@ const aprobaciones = crearAprobaciones({ dataDir: DATA_DIR, config })
 // `config/hooks/skill-lint.mjs`, contador de uso en `hub-data/skills.usage.json` y
 // detección de duplicados con `buscar` (tipo=skill, R1).
 const skills = crearSkills({ dataDir: DATA_DIR, skillsDir: SKILLS_DIR, aprobaciones, buscar })
+
+// ----------------------------------------------------------------- cron (R6 · spec 10)
+// Planificador persistente (`hub-data/cron/jobs.json`): el hub reclama cada job vencido con
+// un claim de TTL y lo lanza por la API V1 con `config/hub/lib/lanzador.mjs` (R0). Los avisos
+// (fallos, reintentos) quedan en `hub-data/cron/avisos.json` para la barra del panel. El tope
+// de coste sale de `reglas.json` (`presupuestos[agente]`).
+const lanzador = crearLanzador({ systemDir: SYSTEM_DIR, host: OPENCODE_HOST })
+const cron = crearCron({ dataDir: DATA_DIR, lanzador, reglas })
+try { cron.recuperar() } catch { /* nada */ } // recupera claims caducados al arrancar (R6.6)
+function cicloCron() {
+  try {
+    const p = cron.tick()
+    if (p && typeof p.catch === 'function') {
+      p.catch((e) => { try { logErrores.registrar({ origen: 'cron', severidad: 'aviso', mensaje: `Ciclo del cron falló: ${e?.message || e}` }) } catch { /* nada */ } })
+    }
+  } catch (e) {
+    try { logErrores.registrar({ origen: 'cron', severidad: 'aviso', mensaje: `Ciclo del cron falló: ${e?.message || e}` }) } catch { /* nada */ }
+  }
+}
+setInterval(cicloCron, 30 * 1000).unref?.()
 
 // ---------------------------------------------------------------- hallazgos (buscar antes de crear)
 const HALLAZGOS_JSONL = path.join(DATA_DIR, 'hallazgos.jsonl')
@@ -641,6 +663,48 @@ const servidor = http.createServer(async (req, res) => {
     if (ruta === '/api/skills/archivo' && req.method === 'GET') {
       const dias = u.searchParams.get('dias') || 60
       return enviarJson(res, { ok: true, candidatos: skills.candidatosArchivo(dias) })
+    }
+    // ------------------------------------------------ cron (R6 · spec 10)
+    if (ruta === '/api/cron' && req.method === 'GET') {
+      // Jobs programados + avisos (fallos y reintentos) para la barra del panel.
+      return enviarJson(res, { ok: true, jobs: cron.listar(), avisos: cron.avisos() })
+    }
+    if (ruta === '/api/cron' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.prompt !== 'string' || !b.prompt.trim()) return enviarJson(res, { ok: false, error: 'falta prompt' }, 400)
+      let schedule = b.schedule
+      if (!schedule && typeof b.cuando === 'string') {
+        const p = parsearSchedule(b.cuando)
+        if (!p.ok) return enviarJson(res, { ok: false, error: p.error, ejemplo: p.ejemplo }, 400)
+        schedule = p.schedule
+      }
+      if (!schedule) {
+        return enviarJson(res, { ok: false, error: 'falta cuando o schedule', ejemplo: 'p. ej. «laborables 9:00», «cada 30m» o «0 9 * * 1-5»' }, 400)
+      }
+      const agente = b.agente || (b.destino && b.destino.agente)
+      const directory = b.directory != null ? b.directory : (b.destino && b.destino.directory)
+      const r = cron.crear({
+        nombre: b.nombre,
+        schedule,
+        destino: { agente, directory },
+        prompt: b.prompt,
+        aprobado_usuario: b.aprobado_usuario === true,
+      })
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if ((ruta === '/api/cron/pausar' || ruta === '/api/cron/reanudar' || ruta === '/api/cron/borrar') && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.id !== 'string' || !b.id.trim()) return enviarJson(res, { ok: false, error: 'falta id' }, 400)
+      const r = ruta.endsWith('/pausar') ? cron.pausar(String(b.id))
+        : ruta.endsWith('/reanudar') ? cron.reanudar(String(b.id))
+          : cron.borrar(String(b.id))
+      return enviarJson(res, r, r.ok ? 200 : 400)
+    }
+    if (ruta === '/api/cron/ejecutar' && req.method === 'POST') {
+      const b = await cuerpoJson(req)
+      if (typeof b.id !== 'string' || !b.id.trim()) return enviarJson(res, { ok: false, error: 'falta id' }, 400)
+      const r = await cron.ejecutar(String(b.id))
+      return enviarJson(res, { ok: r.ok, resultado: r, jobs: cron.listar(), avisos: cron.avisos() }, r.ok ? 200 : 400)
     }
     if (ruta === '/api/proyectos') return enviarJson(res, { ok: true, proyectos: memoria.proyectos() })
     if (ruta === '/api/memoria/proyecto') {

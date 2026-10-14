@@ -143,6 +143,32 @@ palabras y vía `buscar` (y `proponer` avisa `duplicado` en vez de apilar); que
 Limitación (R5.5): el contador solo ve lo que pasa por Claude Code (hooks `Stop`/`SessionEnd`
 de `skills-uso.mjs`); los usos fuera de Claude Code (OpenCode, ejecución directa) no se cuentan.
 
+## Cron y tareas programadas (spec 10 · R6)
+
+```bash
+node scripts/test-cron.mjs
+```
+
+Prueba sin dependencias (directorios temporales, nunca toca `hub-data` real), con reloj y
+**lanzador falsos** (jamás lanza jobs reales): comprueba que `parsearSchedule` traduce
+«cada 30m» / «every 30m» a `interval` 30 y «laborables 9:00» a `0 9 * * 1-5`, «cada lunes a
+las 9» a cron, «en 2h» / ISO a `once`, acepta un cron de 5 campos y rechaza una frase absurda
+con `ejemplo` (y una fecha `once` pasada); que `siguiente()` de cron (en hora local) e interval
+son correctos y que `N/step` (`5/15` → 5, 20, 35, 50) es correcto; que `tick()` ejecuta un vencido
+**una sola vez** aunque se llame dos veces seguidas; que **con el lanzamiento aún en vuelo** una
+segunda instancia sobre el mismo `dataDir` no duplica (claim de TTL 300 s persistido antes de
+esperar); que los **tombstones** entre instancias evitan resucitar un job borrado sin perder el
+alta de la otra instancia; que un claim caducado se recupera; que un `once` se completa y no se
+repite tras un reinicio; que el preflight es **fail-closed** con agente inexistente (no lanza,
+`fallido` + aviso) y **fail-open** con OpenCode caído (avisa y sigue); que los reintentos por
+`servidor_inalcanzable` van a 5, 15 y 30 min y luego `fallido` con aviso; que el **tope de coste
+real** (R6.4) aborta la sesión una sola vez al alcanzar el presupuesto, anota el evento y limpia
+la vigilancia (y que al terminar la sesión anota el coste final); que un **cron imposible** se
+rechaza con error claro; que un **id no seguro** no se ejecuta ni escribe salida; que el DST
+*fall-back* no repite la misma hora local; que la salida se escribe en `cron/salida/<id>/`; y la
+consigna R6.7 (los agentes que escriben exigen `aprobado_usuario`). `verificar.sh` / `verificar.ps1`
+la ejecutan como un paso más.
+
 ## Prueba de fuego sugerida
 
 En una carpeta vacía:
