@@ -3,6 +3,52 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado semántico (MAJOR.MINOR.PATCH).
 
+## [0.8.0] - 2026-10-14
+
+### Añadido (spec 14 · comunicación entre agentes y reparto)
+
+- **C1 · Directorio de agentes** (`config/hub/lib/a2a.mjs` + `GET /api/a2a/agentes`): Agent Card ligera por agente — `{name, description, version, skills[{id,name,description}], modelo, esfuerzo, capa, solo_lectura, coste_estimado, salud}`, a partir del frontmatter de `config/opencode/agents/*.md` y `config/claude/agents/*.md`, `reglas.json` y `salud-agentes`. Sin dependencias nuevas.
+- **C2 · Consulta síncrona mediada** (`POST /api/a2a/consultar`): valida (`para` de lectura, `pregunta` ≤ 2000, `directory` absoluto y existente), antepone la instrucción fija («responde en ≤ 10 líneas…»), lanza el job con `lanzador.mjs`, espera hasta 120 s vigilando el tope de coste de `presupuestos` (aborta la sesión al superarlo) y devuelve `{ok, jobId, respuesta (≤ 1200, con «…»), coste, ms}`. Rechaza con 409 si `de` ya está dentro de una consulta (profundidad 1) o si hay más de 3 en curso. Deja job en el ledger y evento `a2a` en métricas.
+- **C3 · Buzón asíncrono por tarea** (`POST/GET /api/a2a/mensajes`, `POST /api/a2a/mensajes/responder`): estados `pendiente|respondido|expirado`, TTL 30 min, máx. 20 pendientes por destinatario (429) y persistencia atómica read-merge-write en `hub-data/a2a.json`. Una respuesta no genera otro mensaje de tipo `pregunta`.
+- **C4 · Triaje en el camino**: la consulta mediada y el lanzamiento de jobs del hub registran la decisión de triaje (`decisiones.jsonl`) si no hay una reciente para el mismo encargo; `cerebro` y `cerebro-oc` pasan a decir «antes de delegar, `triaje_decidir`; para lecturas largas, `a2a/consultar` en vez de leer tú».
+- **C5 · Reparto medido** (`GET /api/reparto?dias=7`): agrega ledger + métricas (spec 11) + `decisiones.jsonl` en `{trabajos, completados, fallidos, cancelados, coste, mediaMs}` por agente y por capa, `%` de jobs con decisión de triaje previa y `consultasA2A {total, coste, mediaRespuestaChars}`. Tarjeta «Reparto» en el panel y evento de métricas `a2a` (consulta|mensaje; sin texto).
+- **C6 · Limpiar el ruido del ledger**: las entradas se creaban sin `agente` cuando el fichero del job aún no exponía `agent`/`session.agent` (o lo traía como `"Object"`); `reconciliar()` ahora **completa** `agente`/`directorio` con el registro del job aunque la entrada sea terminal (el estado sigue inmutable).
+- **C7 · Guías, docs y pruebas**: sección A2A en los agentes de OpenCode de lectura y en `implementador`/`debugger` (cuándo usar `consultar` por curl y sus límites), `docs/arquitectura.md` (diagrama del mediador), `docs/pruebas.md` y `scripts/test-a2a.mjs` (lanzador simulado, todo en `os.tmpdir()`) enganchado en `verificar.sh/.ps1`.
+
+## [0.7.0] - 2026-10-14
+
+### Añadido (spec 13 · guía de uso de MCPs)
+
+- **N1 · Plantilla de guía** (`config/hub/plantillas/mcps-guia.md`, ≤ 4000 caracteres): en español, con la tabla «Si necesitas X → usa Y» (docs de librería → `context7`; web/JS → `playwright` o `claude-in-chrome`; búsqueda → `web-search`; repo/PR/issue → `github`; servidor → `ssh`; OpenCode → `opencode`/`triaje`), una ficha por MCP (`Úsalo cuando`, `No lo uses para`, ejemplo y herramientas reales) y 3 reglas finales.
+- **N2 · Copia sin pisar** (`config/hub/mcps.mjs`): copia la plantilla a `hub-data/memoria/global/MCPS-GUIA.md` **solo si no existe** (lo editado por el usuario se conserva); `--forzar-guia` la regenera. `MCPS.md` y `mcps.json` se generan exactamente igual. El instalador deja la plantilla en `~/.sistema-cerebro-agentes/hub/plantillas/`.
+- **N3 · Contexto para Claude**: `session-start.mjs` añade al briefing un resumen ≤ 1200 caracteres de la guía (tabla + reglas, vía `config/hooks/mcps-guia.mjs`); `CLAUDE.md`, `cerebro`, `explorador` y `analista` apuntan a `MCPS-GUIA.md`.
+- **N4 · Contexto para OpenCode**: una línea en `explorador-ds`, `implementador`, `debugger`, `redactor-ds`, `revisor` y `cerebro-oc` para leer `MCPS-GUIA.md` antes de buscar datos externos (`local-codigo` no).
+- **N5 · Pruebas y docs**: `scripts/test-mcps-guia.mjs` (enganchado en `verificar.sh/.ps1`) comprueba que la copia no pisa la guía editada, que `--forzar-guia` la regenera, que `MCPS.md` es idéntico con y sin guía y que el resumen respeta el tope; `docs/arquitectura.md` y `docs/pruebas.md` actualizados.
+
+## [0.6.0] - 2026-10-14
+
+### Añadido (spec 12 · agente local `local-codigo` y respaldo automático)
+
+- **L1 · Catálogo y reglas**: `local-codigo` entra en `CATALOGO_AGENTES` y en `presupuestos` (coste 0); en `reglas.json` la regla de `implementador` elige `local-codigo` cuando el encargo es **acotado** (archivo/función/test/spec/criterio y sin arquitectura/migración/refactor global/varios módulos/todo el), y depuración, revisión y arquitectura (`prioridad`) no cambian.
+- **L2/L3 · Salud por agente** (`lib/salud-agentes.mjs`): `crearSaludAgentes({ledger, reglas})` calcula sobre los últimos N trabajos terminales (excluye `cancelado`) la tasa de fallo (`fallido`+`atascado`) y los fallos seguidos; `resolver` degrada al sustituto configurado en `reglas.json` → `respaldo`, permite **una prueba** (`prueba:true`) tras el enfriamiento y se limpia solo con un acierto. Todo se deriva del ledger (sin fichero propio): sobrevive a reinicios.
+- **L4 · Triaje**: `triaje.decidir` (Laya o reglas) aplica `resolver()` a la decisión final, lo explica en `motivo` («local-codigo degradado a implementador: 3 de 5 fallaron») y lo registra en `decisiones.jsonl` con `degradado`.
+- **L5 · API y panel**: `GET /api/agentes/salud` devuelve `{agentes:[{agente, muestras, tasaFallo, fallosSeguidos, degradado, proximaPrueba}]}` y la pestaña «Triaje·Laya» muestra una línea por agente con respaldo («local-codigo · 4/6 OK · activo» o «degradado hasta HH:MM»).
+- **L6 · Guía a los cerebros**: `cerebro` y `cerebro-oc` usan `local-codigo` para código acotado y bien especificado antes que `implementador` (spec con archivos, cambio exacto y comando de comprobación; verificación siempre con tests/`revisor`) y aceptan la degradación sin discutir.
+- **L7 · Docs y pruebas**: `docs/arquitectura.md` y `docs/pruebas.md` actualizados, y `scripts/test-salud-agentes.mjs` enganchado en `verificar.sh/.ps1`.
+
+## [0.5.0] - 2026-10-14
+
+### Añadido (spec 11 · métricas de uso)
+
+- **M1 · Módulo `lib/metricas.mjs`**: `crearMetricas({dirLogs})` escribe `hub-data/logs/metricas.jsonl` (una línea JSON por evento `{ts, tipo, …}`), con rotación a `metricas.1.jsonl` al pasar de 8 MB, poda por retención y **saneo** (se descartan `prompt`, `texto`, `respuesta`, `contenido` —y por defensa `comando`, `command`, `consulta`— y cualquier campo string > 200 chars). Nunca lanza: un fallo de escritura va al registro central como `aviso`.
+- **M2 · Eventos de trabajo**: al pasar a `completado | fallido | cancelado | atascado`, un evento `job` con `jobId`, `agente`, `modelo`, `directorio`, `estado`, `duracionMs`, `coste` y `pasos`; **idempotente por `jobId`** incluso tras reiniciar el hub.
+- **M3 · Contexto y memoria**: `briefing` (chars por sesión y proyecto), `nudge` (disparado/descartado), `compresion` (chars antes/después y modo `resumen|fallback`) y `busqueda` (nº de consultas, resultados y ms, sin la consulta), más los límites 422 (fichero y chars).
+- **M4 · Decisiones**: `aprobacion` (nivel, decisión, alcance, modo efectivo), `guardian` (veredicto y ms), `skill` (propuesto/aprobado/rechazado/usado) y `cron` (ejecución: id, agente, estado). Nunca el comando ni la consulta.
+- **M5 · API**: `GET /api/metricas?tipo=&desde=&limite=` (máx. 1000), `GET /api/metricas/exportar` (descarga el JSONL completo, rotado + actual) y `GET /api/metricas/resumen` (conteos, rango, bytes y `porTipo`).
+- **M6 · Configuración**: `metricas_activas` (defecto `true`) y `metricas_retencion_dias` (90) en `hub-data/config.json`; al arrancar el hub se poda lo más viejo que la retención.
+- **M7 · Panel**: tarjeta «Métricas» en «Datos» con interruptor activar/desactivar, tamaño, nº de eventos y botón «Exportar .jsonl» (sin gráficas).
+- **M8 · Documentación y pruebas**: `docs/arquitectura.md` y `docs/pruebas.md` (formato de cada evento y qué NO se guarda) y `scripts/test-metricas.mjs` enganchado en `verificar.sh/.ps1`.
+
 ## [0.4.0] - 2026-10-14
 
 ### Añadido (spec 10 · patrones de Hermes Agent, reimplementados)

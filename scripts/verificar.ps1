@@ -250,6 +250,31 @@ $compresionPruebas = Join-Path $RepoRoot 'scripts\test-compresion.mjs'
 & node $compresionPruebas | Out-Null
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de compresión (troceo, poda, verbatim, fallback, episódica)' 'Ejecuta: node scripts\test-compresion.mjs'
 
+Write-Step 'Métricas de uso (spec 11)'
+$metricasPruebas = Join-Path $RepoRoot 'scripts\test-metricas.mjs'
+& node $metricasPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de métricas (JSONL, saneo, rotación, poda, job idempotente)' 'Ejecuta: node scripts\test-metricas.mjs'
+
+Write-Step 'Agente local-codigo y su respaldo (spec 12)'
+$saludPruebas = Join-Path $RepoRoot 'scripts\test-salud-agentes.mjs'
+& node $saludPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de salud de agentes (degradación, reintento, código acotado)' 'Ejecuta: node scripts\test-salud-agentes.mjs'
+
+Write-Step 'Guía de uso de MCPs (spec 13)'
+$guiaPruebas = Join-Path $RepoRoot 'scripts\test-mcps-guia.mjs'
+& node $guiaPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de la guía de MCPs (copia sin pisar, --forzar-guia, MCPS.md idéntico, resumen)' 'Ejecuta: node scripts\test-mcps-guia.mjs'
+
+Write-Step 'Comunicación entre agentes y reparto (spec 14)'
+$a2aPruebas = Join-Path $RepoRoot 'scripts\test-a2a.mjs'
+& node $a2aPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de A2A-lite (directorio, consulta, buzón, triaje, reparto)' 'Ejecuta: node scripts\test-a2a.mjs'
+
+Write-Step 'Barra de estado: modo normal vs cerebro'
+$modoPruebas = Join-Path $RepoRoot 'scripts	est-modo.mjs'
+& node $modoPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas del modo normal/cerebro en la barra de estado' 'Ejecuta: node scripts	est-modo.mjs'
+
 if ($Smoke) {
   Write-Step 'Smoke test del MCP (arranque real por stdio)'
   $smokeScript = Join-Path $RepoRoot 'scripts\smoke-mcp.mjs'

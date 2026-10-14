@@ -271,6 +271,41 @@ else
   test_item 1 'Pruebas de compresión (troceo, poda, verbatim, fallback, episódica)' 'Ejecuta: node scripts/test-compresion.mjs'
 fi
 
+step 'Métricas de uso (spec 11)'
+if node "$REPO_ROOT/scripts/test-metricas.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de métricas (JSONL, saneo, rotación, poda, job idempotente)'
+else
+  test_item 1 'Pruebas de métricas (JSONL, saneo, rotación, poda, job idempotente)' 'Ejecuta: node scripts/test-metricas.mjs'
+fi
+
+step 'Agente local-codigo y su respaldo (spec 12)'
+if node "$REPO_ROOT/scripts/test-salud-agentes.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de salud de agentes (degradación, reintento, código acotado)'
+else
+  test_item 1 'Pruebas de salud de agentes (degradación, reintento, código acotado)' 'Ejecuta: node scripts/test-salud-agentes.mjs'
+fi
+
+step 'Guía de uso de MCPs (spec 13)'
+if node "$REPO_ROOT/scripts/test-mcps-guia.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de la guía de MCPs (copia sin pisar, --forzar-guia, MCPS.md idéntico, resumen)'
+else
+  test_item 1 'Pruebas de la guía de MCPs (copia sin pisar, --forzar-guia, MCPS.md idéntico, resumen)' 'Ejecuta: node scripts/test-mcps-guia.mjs'
+fi
+
+step 'Comunicación entre agentes y reparto (spec 14)'
+if node "$REPO_ROOT/scripts/test-a2a.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de A2A-lite (directorio, consulta, buzón, triaje, reparto)'
+else
+  test_item 1 'Pruebas de A2A-lite (directorio, consulta, buzón, triaje, reparto)' 'Ejecuta: node scripts/test-a2a.mjs'
+fi
+
+step 'Barra de estado: modo normal vs cerebro'
+if node "$REPO_ROOT/scripts/test-modo.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas del modo normal/cerebro en la barra de estado'
+else
+  test_item 1 'Pruebas del modo normal/cerebro en la barra de estado' 'Ejecuta: node scripts/test-modo.mjs'
+fi
+
 if [ "$SMOKE" -eq 1 ]; then
   step 'Smoke test del MCP (arranque real por stdio)'
   if [ "$ASK" -eq 1 ]; then

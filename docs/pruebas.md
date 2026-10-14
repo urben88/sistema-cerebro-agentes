@@ -199,6 +199,62 @@ compresión del mismo día (`ya_comprimido_hoy`) y vuelve a permitirla al día s
 inyectable); y que un **slug con `../`** se rechaza. `verificar.sh` / `verificar.ps1` la ejecutan
 como un paso más.
 
+## Métricas de uso (spec 11 · M1–M8)
+
+```bash
+node scripts/test-metricas.mjs
+```
+
+Prueba sin dependencias (directorios temporales, nunca toca `hub-data` real) con reloj y
+umbrales cortos inyectados: comprueba que `registrar` escribe una línea JSON por evento con
+`ts` ISO; que el **saneo** descarta `prompt`/`texto`/`respuesta`/`contenido`/`comando` y los
+strings de más de 200 caracteres (también anidados) sin que la cadena sensible llegue al
+disco; que con `activas:false` el fichero **no crece** (y se puede reactivar en caliente); que
+al pasar de `maxBytes` rota a `metricas.1.jsonl` sin perder eventos con una sola rotación; que
+`podar()` descarta lo más viejo que la retención; que el evento `job` es **idempotente por
+`jobId`** y no se duplica al recrear la instancia («reinicio»); que `leer` filtra por
+`tipo`/`desde`, ordena de más reciente a más antiguo y topa en 1000; que `exportar` devuelve
+rotado + actual y **cada línea parsea como JSON**; que `resumen`/`tamano` dan conteos, rango,
+bytes y `porTipo`; y que un **fallo de escritura** (directorio no creable) no lanza y reporta
+un `aviso` a `logErrores`. `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
+
+Formato de cada evento y qué **no** se guarda: ver
+[arquitectura.md](arquitectura.md#métricas-de-uso-spec-11).
+
+## Agente local-codigo y su respaldo (spec 12 · L1–L5)
+
+```bash
+node scripts/test-salud-agentes.mjs
+```
+
+Prueba sin dependencias (ledger falso en memoria y reloj inyectado; nunca toca `hub-data`
+real): comprueba que sin historial `resolver('local-codigo')` devuelve el agente original; que
+3 fallos seguidos lo degradan a `implementador` (con el motivo «…: 3 de 3 fallaron»); que pasado
+el enfriamiento permite **una prueba** (`prueba:true`), que un acierto limpia el contador y que
+un fallo reabre el enfriamiento; que los `cancelado` no cuentan; que un encargo acotado («crea
+la función X en el archivo Y con test») enruta a `local-codigo` mientras depuración, revisión y
+arquitectura no cambian; y que `decidir` aplica el respaldo, lo explica en `motivo` y lo registra
+en `decisiones.jsonl` con `degradado`. La respuesta de `GET /api/agentes/salud` y la línea del
+panel se comprueban a mano. `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
+
+## Guía de uso de MCPs (spec 13 · N1–N4)
+
+```bash
+node scripts/test-mcps-guia.mjs
+```
+
+Prueba sin dependencias (directorio temporal; copia `mcps.mjs` a un `hub/` propio, apunta `HUB_DATA_DIR`/`OPENCODE_DIR`/`CLAUDE_DIR` al temporal y deja un `claude` de mentira para que el inventario sea determinista; nunca toca `hub-data` real ni configura ningún MCP): comprueba que la plantilla cabe en 4000 caracteres y trae la tabla, las fichas y las reglas; que la primera ejecución crea `MCPS-GUIA.md`; que editar la guía y re-ejecutar **no** la pisa y `--forzar-guia` sí; que `MCPS.md` es **idéntico con y sin guía**; que `resumenGuia` extrae la tabla y las reglas, respeta el tope de 1200 caracteres y es vacío sin guía; y que los agentes indicados apuntan a `MCPS-GUIA.md` (y `local-codigo` no). `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
+
+## Comunicación entre agentes y reparto (spec 14 · C1–C7)
+
+```bash
+node scripts/test-a2a.mjs
+```
+
+Prueba sin dependencias (todo en `os.tmpdir()`; el `lanzador` va **simulado** —no se lanza ningún job ni servidor real—): comprueba la Agent Card ligera (C1); la consulta mediada válida (≤ 1200 chars con «…», coste y ms, job con `agente` en el ledger y evento `a2a` en métricas **sin** la pregunta ni la respuesta) y sus rechazos (agente no de lectura, pregunta > 2000, `directory` relativo o inexistente); la **profundidad 1** y el **límite de 3 consultas** (409); el **tope de coste** (aborta la sesión); el buzón (estados, TTL 30 min, 20 pendientes → 429, «una respuesta no genera preguntas» y persistencia read-merge-write en `a2a.json`); el triaje registrado una sola vez por encargo/ventana (C4); y `reparto()` por agente, por capa, `%` con triaje previo y `consultasA2A` (C5). `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
+
+El fix del ledger (C6) se prueba además en `node scripts/test-ledger.mjs`: `reconciliar()` completa el `agente` de entradas que se crearon sin él (terminales incluidas) sin cambiar el estado ni pisar un agente ya conocido.
+
 ## Prueba de fuego sugerida
 
 En una carpeta vacía:

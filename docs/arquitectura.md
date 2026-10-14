@@ -25,9 +25,9 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
 └───────────────┬─────────────────────────────────────────────────────────────────────┘
                 │ (nativo, en el host: trabaja sobre tus carpetas)
                 ▼
-        opencode-mcp → servidor OpenCode V1 → agentes DeepSeek por esfuerzo:
+        opencode-mcp → servidor OpenCode V1 → agentes por esfuerzo:
         planificador · implementador · debugger · revisor · testeador ·
-        explorador-ds · redactor-ds · local
+        explorador-ds · redactor-ds · local · local-codigo (Ornith 9B local, gratis)
 ```
 
 ## Responsabilidades
@@ -44,7 +44,7 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
 
 | Componente | Dónde vive | Lo despliega |
 |---|---|---|
-| Agentes de OpenCode (9, por esfuerzo) | `~/.config/opencode/agents/` | `install.ps1` / `install.sh` |
+| Agentes de OpenCode (10, por esfuerzo) | `~/.config/opencode/agents/` | `install.ps1` / `install.sh` |
 | Agente `cerebro` + 7 subagentes (MCPs inline) | `~/.claude/agents/` | ídem |
 | Barra de estado de Claude (modelo · contexto · trabajo OpenCode) | `~/.sistema-cerebro-agentes/hub/estado-linea.mjs` + `settings.json` | ídem |
 | Rol Cerebro + skill `delegar-a-opencode` | `~/.claude/CLAUDE.md` (bloque) y `~/.claude/skills/` | ídem |
@@ -119,6 +119,62 @@ Consigna R6.7: el hub **no** limita los jobs a agentes de lectura (lo consigna e
 ## Compresión de bitácora (spec 10 · R7)
 
 `config/hub/lib/compresion.mjs` cubre las **notas del hub** (no sustituye la compactación de Claude Code). Cuando `BITACORA.md` supera `bitacora_max_chars` (`reglas.json`, 60 000 por defecto) se trocea por las cabeceras `## YYYY-MM-DD HH:MM — título` (ignorando las que caen dentro de un bloque de código cercado ``` … ```, para no partir ningún apunte) y se **archiva lo intermedio** (protegidos los **3 primeros** y los **20 últimos** apuntes) en `BITACORA-archivo/<YYYY-MM-DD>-<n>.md` (carpeta nueva, `tmp`+`rename`), conservando ahí el **original íntegro**. En `BITACORA.md` queda un bloque `## Resumen (comprimido <fecha>)` en su lugar. Antes de resumir se hace una **poda determinista**: los volcados/código > 1500 chars se cortan a `[volcado de N chars omitido]` (solo para el prompt; el archivo conserva el original). El resumen lo hace `redactor-ds` por la **API V1** (`lanzador.lanzarJob` + `esperarJob`, timeout 3 min) pidiéndole **solo el markdown** de las secciones `Objetivo`, `Restricciones y preferencias`, `Hecho`, `Estado activo`, `Bloqueos`, `Decisiones clave`, `Archivos relevantes`. Si el resumidor falla o no hay OpenCode, hay **fallback determinista**: anclas locales (peticiones del usuario, acciones, archivos, errores) con tope de **8000 chars** y **secretos redactados** (`sk-…`, `ghp_…`, `Bearer …`, `clave api=…`, `password=…`). Se conserva **verbatim** lo escrito por el usuario (`Usuario:` / `> `) y las decisiones marcadas (`**Decisión**` / `DECISIÓN:`), anexado en una sección «Verbatim» (con los secretos igualmente redactados). Es **episódica**: máximo una compresión por proyecto y día **local** (`memoria/proyectos/<slug>/.compresion.json`, `tmp`+`rename` y merge); si ya se hizo hoy devuelve `{ok:true, omitido:'ya_comprimido_hoy'}` y `ultima` solo se graba cuando todo salió bien. Un **lock en proceso** por proyecto evita que dos compresiones concurrentes se pisen (la segunda devuelve `{ok:true, omitido:'en_curso'}`). Protocolo **fail-closed y anti-carrera** (nunca se pierden datos): (1) se escribe `BITACORA-archivo/<…>.md` y se **verifica releyéndolo** (contenido idéntico al tramo original íntegro) antes de tocar nada más; si falla → aborta sin reescribir `BITACORA.md` ni grabar `ultima`; (2) tras obtener el resumen (que puede tardar minutos) se **relee `BITACORA.md` del disco** y se sustituye **únicamente el tramo exacto archivado** por el bloque `## Resumen (comprimido <fecha>)`, conservando todo lo demás (apuntes nuevos añadidos durante la espera incluidos); (3) si el tramo ya no aparece literal y contiguo en la bitácora releída → **aborta** con `{ok:false, motivo:'bitacora_cambio'}` sin modificar nada (el archivo creado es inofensivo); la secuencia relectura→reemplazo→escritura `tmp`+`rename` es **síncrona** (sin `await`). Tanto el prompt que recibe `redactor-ds` como el resumen que devuelve pasan por `redactarSecretos` antes de escribirse; el archivo conserva el original íntegro (es el respaldo local, no se redacta). Tras comprimir reindexa en `buscar` (R1) de forma best-effort. Rutas: `POST /api/memoria/comprimir {proyecto, forzar?}` (400 si la entrada es inválida; un slug con traversal se rechaza) y `GET /api/memoria/compresion?proyecto=`; tras `POST /api/memoria/bitacora` el hub comprime **en segundo plano** si supera el umbral, sin bloquear la respuesta. El panel muestra el tamaño de la bitácora y el botón «Comprimir ahora» en la vista del proyecto.
+
+## Métricas de uso (spec 11)
+
+`config/hub/lib/metricas.mjs` (M1) recopila datos de uso y coste del **hub + OpenCode** en el log JSONL local `hub-data/logs/metricas.jsonl`, para analizarlos más adelante con una IA. Una línea por evento `{ts (ISO), tipo, …}`; rotación a `metricas.1.jsonl` al pasar de **8 MB**; poda por retención (**90 días** por defecto, `metricas_retencion_dias`) al arrancar el hub; nunca lanza (un fallo de escritura va al registro central como `aviso`). Se puede desactivar con `metricas_activas:false` en `hub-data/config.json` (o con el interruptor del panel), y entonces `registrar` no hace nada.
+
+Saneado (M1): se descartan las claves `prompt`, `texto`, `respuesta` y `contenido` (y, por defensa, `comando`, `command` y `consulta`) y cualquier campo **string de más de 200 caracteres**, en cualquier nivel del objeto. **Nunca** se guarda el texto de un prompt, una respuesta, un comando ni una consulta literal, y tampoco los tokens de Claude (transcripts): fuera de alcance en v1.
+
+| Evento | Cuándo | Campos (además de `ts` y `tipo`) |
+|---|---|---|
+| `job` | al pasar a `completado\|fallido\|cancelado\|atascado` (M2) | `jobId, agente, modelo?, directorio, estado, duracionMs, coste?, pasos?` |
+| `briefing` | al generar el briefing de sesión (M3) | `proyecto?, sesion?, chars` |
+| `nudge` | al decidir un nudge de memoria (M3) | `estado (disparado\|descartado), proyecto?, sesion?` |
+| `compresion` | al comprimir una bitácora (M3) | `proyecto?, antes, despues, modo (resumen\|fallback)` |
+| `busqueda` | al consultar `/api/buscar` (M3) | `consultas, resultados, ms, proyecto?` |
+| `limite` | al rechazar por límite R2 (422) (M3) | `fichero, chars` |
+| `aprobacion` | al clasificar/allowlist (M4) | `nivel?, decision, alcance?, modoEfectivo?, persistido?` |
+| `guardian` | al reportar un veredicto del guardián (M4) | `veredicto, ms` |
+| `skill` | propuesto/aprobado/rechazado/usado (M4) | `estado, nombre?, uso?` |
+| `cron` | al ejecutar un job programado (M4) | `id, agente?, estado, coste?` |
+
+El evento `job` es **idempotente por `jobId`**: `registrar` rehidrata del disco los `jobId` ya registrados al arrancar, de modo que un reinicio del hub no duplica el evento de un trabajo que ya terminó. API (M5): `GET /api/metricas?tipo=&desde=&limite=` (máx. 1000), `GET /api/metricas/exportar` (JSONL completo, rotado + actual, con `Content-Disposition`) y `GET /api/metricas/resumen` (solo conteos: `{eventos, desde, hasta, bytes, porTipo}`); `GET/POST /api/metricas/activas` lee/cambia el interruptor. El panel (M7) muestra una tarjeta pequeña «Métricas» en la pestaña «Datos»: interruptor, tamaño, nº de eventos y botón «Exportar .jsonl», sin gráficas.
+
+## Agente `local-codigo` y degradación automática (spec 12)
+
+`config/hub/lib/salud-agentes.mjs` deriva del **ledger** la salud de cada agente con respaldo configurado en `reglas.json` → `respaldo` (`local-codigo` → `implementador` por defecto). Sobre sus últimos `ventana` (6) trabajos **terminales** (excluye `cancelado`) calcula la tasa de fallo (`fallido` + `atascado`) y los fallos seguidos; con ≥ `minimoMuestras` (3) y (tasa > `maxTasaFallo`, 0.5, o fallos seguidos ≥ `maxFallosSeguidos`, 2) `resolver('local-codigo')` lo **degrada** a `implementador` (`{agente, degradado:true, motivo}` — «local-codigo degradado a implementador: 3 de 5 fallaron»). Pasado `enfriamientoMin` (60) desde el último fallo devuelve el original **a modo de prueba** (`prueba:true`); un acierto limpia el contador y un fallo reinicia el enfriamiento. Sin fichero propio: **todo se deriva del ledger**, así que sobrevive a reinicios.
+
+El triaje (`lib/triaje.mjs`) aplica ese `resolver()` a la decisión final —tanto por Laya como por reglas— y lo explica en `motivo`; `logs/decisiones.jsonl` incluye `degradado`. En `reglas.json`, la regla de `implementador` elige `local-codigo` cuando el encargo es **acotado** (contiene `archivo`/`fichero`/`función`/`test`/`spec`/`criterio` y no `arquitectura`/`migración`/`refactor global`/`varios módulos`/`todo el`); depuración, revisión y arquitectura (`prioridad`) no cambian. `GET /api/agentes/salud` devuelve `{agentes:[{agente, muestras, tasaFallo, fallosSeguidos, degradado, proximaPrueba}]}` y el panel lo muestra en «Triaje·Laya» («local-codigo · 4/6 OK · activo» o «degradado hasta HH:MM»).
+
+## Guía de uso de MCPs (spec 13)
+
+El inventario automático (`memoria/global/MCPS.md`) dice **qué** MCPs hay; la guía dice **cuándo** usarlos. `config/hub/mcps.mjs` copia la plantilla `config/hub/plantillas/mcps-guia.md` (en el hub instalado, `hub/plantillas/mcps-guia.md`) a `hub-data/memoria/global/MCPS-GUIA.md` **solo si no existe** (lo que edite el usuario se conserva); `node mcps.mjs --forzar-guia` la regenera. Generar `MCPS.md`/`mcps.json` no cambia.
+
+La guía trae la tabla «Si necesitas X → usa Y», una ficha por MCP (cuándo usarlo, cuándo no, ejemplo y herramientas) y 3 reglas (consultarla antes de decir «no se puede»; si el MCP falta o falla, decirlo y seguir sin inventar; citar la fuente). El hook `session-start.mjs` añade al briefing un resumen ≤ 1200 caracteres (tabla + reglas) leyéndola con `config/hooks/mcps-guia.mjs`; los agentes de Claude (`CLAUDE.md`, `cerebro`, `explorador`, `analista`) y los de OpenCode que buscan datos externos (`explorador-ds`, `implementador`, `debugger`, `redactor-ds`, `revisor`, `cerebro-oc`) apuntan a `MCPS-GUIA.md` con una línea, sin duplicar el contenido.
+
+## Comunicación entre agentes y reparto (spec 14 · A2A-lite por el hub)
+
+Los agentes **no se hablan entre sí**: el hub media (no hay servidores A2A reales por agente; se deja el formato compatible con Agent Card por si algún día se quiere interoperar). Todo mensaje pasa por el hub, que impone límites y deja rastro.
+
+```
+  agente A ──POST /api/a2a/consultar──▶  CEREBRO HUB (mediador)
+      {de,para,pregunta,directory}        · valida (agente de lectura, pregunta ≤ 2000, dir absoluto)
+                                          · profundidad 1 (A no consulta si ya consulta) y ≤ 3 en curso
+                                          · antepone instrucción fija y lanza el job (lanzador) al agente B
+                                          · espera (timeout 120 s) vigilando el tope de coste (aborta la sesión)
+  agente A ◀── {ok, jobId, respuesta ≤ 1200, coste, ms} ──  · deja job en el ledger + evento a2a (sin texto)
+```
+
+`config/hub/lib/a2a.mjs` (sin dependencias; lanzador, ledger, métricas y salud inyectados) implementa:
+
+- **C1 · Directorio (`GET /api/a2a/agentes`)** — Agent Card ligera de cada agente del catálogo: frontmatter de `config/opencode/agents/*.md` y `config/claude/agents/*.md` + `reglas.json` + salud del ledger (`{name, description, version, skills, modelo, esfuerzo, capa, solo_lectura, coste_estimado, salud}`).
+- **C2 · Consulta (`POST /api/a2a/consultar`)** — síncrona y mediada: solo agentes de **lectura** (`explorador-ds`, `revisor`, `testeador`, `redactor-ds`); profundidad 1 y máx. 3 en curso (409); tope de coste por `presupuestos` (aborta la sesión al superarlo); timeout 120 s; respuesta recortada a 1200 con «…».
+- **C3 · Buzón (`POST/GET /api/a2a/mensajes`, `POST /api/a2a/mensajes/responder`)** — asíncrono por tarea en `hub-data/a2a.json` (read-merge-write): estados `pendiente|respondido|expirado`, TTL 30 min y máx. 20 pendientes por destinatario (429). Una respuesta no genera otro mensaje de tipo `pregunta`.
+- **C4 · Triaje en el camino** — la consulta y el lanzamiento de jobs del hub registran la decisión de triaje (`decisiones.jsonl`) si no hay una reciente para el mismo encargo.
+- **C5 · Reparto (`GET /api/reparto?dias=7`)** — agrega ledger + métricas (spec 11) + decisiones: `{trabajos, completados, fallidos, cancelados, coste, mediaMs}` por agente, por capa, `%` de jobs con triaje previo y `consultasA2A {total, coste, mediaRespuestaChars}`. Tarjeta «Reparto» en el panel (pestaña «Datos»). Evento de métricas `a2a` (`subtipo consulta|mensaje`, `de`, `para`, `estado`, `chars`, `coste`, `ms`; **sin prompts ni respuestas**).
+
+El `%` con triaje previo es una heurística: cuenta un job si existe una decisión con `fecha` ≤ su `creado` y a menos de 30 min antes, del mismo agente (o de su original si se degradó). El **origen del agente `?` en el ledger (C6)**: las entradas se creaban sin `agente` cuando el fichero del job aún no exponía `agent`/`session.agent` (o lo traía como `"Object"`); al reconciliar, el ledger ahora **completa** `agente`/`directorio` con el registro del job aunque el estado sea terminal (que sigue siendo inmutable). Quedan sin resolver los jobs cuyo fichero **nunca** registró el agente (p. ej. cancelados con `session.agent` ausente o `"Object"`): no hay dato del que deducirlo y **no se inventa** (aparecen como `?` en el reparto).
 
 ## Evolución
 

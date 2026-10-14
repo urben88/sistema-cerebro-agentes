@@ -257,6 +257,40 @@ prueba('merge por relectura (dos escritores secuenciales no se pisan)', () => {
   assert.ok(ids2.has('deL2'), 'actualizar una entrada borró la del otro escritor')
 })
 
+// 7b · C6 (spec 14) · completar `agente`/`directorio` al reconciliar con el registro del job.
+prueba('C6: reconciliar() completa el agente de entradas sin agente (terminales incluidas)', () => {
+  const dir = path.join(raiz, 't7b')
+  const T = 3_000_000_000_000
+  const sinAgente = (jobId, status, updatedAt, extra = {}) => ({ jobId, status, updatedAt, createdAt: updatedAt - 5 * MIN, directory: extra.directory || null, agent: extra.agent ?? null, title: null, ...extra })
+  const l = crearLedger({ dirDatos: dir, ahora: () => T })
+  // Entrada ya terminal creada SIN agente (el fichero del job aún no lo exponía).
+  l.registrar(sinAgente('t-completado', 'completed', T))
+  assert.equal(l.leer().find((e) => e.jobId === 't-completado').agente, null)
+  // Al reconciliar con el registro del job (ya con agente), se completa aunque sea terminal.
+  l.reconciliar([sinAgente('t-completado', 'completed', T + MIN, { agent: 'revisor', directory: 'C:/repo/uno' })])
+  const e1 = l.leer().find((e) => e.jobId === 't-completado')
+  assert.equal(e1.estado, 'completado', 'lo terminal no debía cambiar de estado')
+  assert.equal(e1.agente, 'revisor', 'el agente conocido debía completarse')
+  assert.equal(e1.directorio, 'C:/repo/uno', 'el directorio conocido debía completarse')
+  // Un job visto vivo sin agente y luego cancelado con agente también se completa.
+  l.registrar(sinAgente('t-cancel', 'running', T))
+  assert.equal(l.leer().find((e) => e.jobId === 't-cancel').agente, null)
+  l.reconciliar([sinAgente('t-cancel', 'cancelled', T + MIN, { agent: 'testeador', directory: 'C:/repo/dos' })])
+  const e2 = l.leer().find((e) => e.jobId === 't-cancel')
+  assert.equal(e2.estado, 'cancelado')
+  assert.equal(e2.agente, 'testeador')
+  // Un `unknown` del MCP también completa el agente antes de marcarlo desconocido.
+  l.registrar(sinAgente('t-desc', 'running', T))
+  l.reconciliar([sinAgente('t-desc', 'unknown', T + MIN, { agent: 'debugger' })])
+  const e3 = l.leer().find((e) => e.jobId === 't-desc')
+  assert.equal(e3.estado, 'desconocido')
+  assert.equal(e3.agente, 'debugger')
+  // No pisa un agente ya conocido por uno distinto.
+  l.registrar(sinAgente('t-fijo', 'completed', T, { agent: 'implementador' }))
+  l.reconciliar([sinAgente('t-fijo', 'completed', T + MIN, { agent: 'otro' })])
+  assert.equal(l.leer().find((e) => e.jobId === 't-fijo').agente, 'implementador')
+})
+
 // 8 · Medición de concurrencia y profundidad (mide y avisa, no impone).
 prueba('medir(): concurrencia y profundidad con aviso, sin imponer', () => {
   const dir = path.join(raiz, 't8')

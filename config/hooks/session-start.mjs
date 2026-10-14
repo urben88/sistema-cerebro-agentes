@@ -13,10 +13,17 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { reportarError } from './reportar.mjs'
+import { resumenGuia } from './mcps-guia.mjs'
 
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
 const SYSTEM_DIR = process.env.SISTEMA_CEREBRO_DIR || path.join(os.homedir(), '.sistema-cerebro-agentes')
 const DATA_DIR = process.env.HUB_DATA_DIR || path.join(SYSTEM_DIR, 'hub-data')
+const GUIA_MCPS = path.join(DATA_DIR, 'memoria', 'global', 'MCPS-GUIA.md')
+
+// Spec 13 · N3 · resumen (tabla + reglas) de la guía de uso de MCPs, si existe.
+function resumenGuiaMcps() {
+  try { return resumenGuia(fs.readFileSync(GUIA_MCPS, 'utf8')) } catch { return '' }
+}
 
 const normalizar = (r) => String(r || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 
@@ -68,7 +75,9 @@ try {
   // Solo actuamos si el proyecto tiene memoria: en repos sin memoria no estorbamos.
   let briefing = null
   try {
-    const r = await fetch(`${HUB}/api/briefing?cwd=${encodeURIComponent(cwd)}`, { signal: AbortSignal.timeout(2500) })
+    // La sesión viaja para que el hub registre el briefing por sesión y proyecto (spec 11 · M3).
+    const sesion = datos.session_id || datos.sessionId || ''
+    const r = await fetch(`${HUB}/api/briefing?cwd=${encodeURIComponent(cwd)}${sesion ? `&sesion=${encodeURIComponent(sesion)}` : ''}`, { signal: AbortSignal.timeout(2500) })
     if (r.ok) {
       const j = await r.json()
       if (j.ok && j.proyecto) briefing = j.texto
@@ -76,6 +85,10 @@ try {
   } catch { /* hub apagado */ }
   if (!briefing) briefing = briefingLocal(cwd)
   if (!briefing) salir(null)
+
+  // Spec 13 · N3 · añade al briefing el resumen de la guía de MCPs, si el fichero existe.
+  const guiaMcps = resumenGuiaMcps()
+  if (guiaMcps) briefing = `${briefing}\n\n${guiaMcps}`
 
   const cierre = [
     '',

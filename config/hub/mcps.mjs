@@ -10,22 +10,29 @@
  *     y `claude mcp list` (registro global)
  *
  * Salidas (fuera de tus repos):
- *   · hub-data/mcps.json               (datos para el panel y la API)
- *   · hub-data/memoria/global/MCPS.md  (inventario legible + prioridad de uso)
+ *   · hub-data/mcps.json                       (datos para el panel y la API)
+ *   · hub-data/memoria/global/MCPS.md          (inventario legible + prioridad de uso)
+ *   · hub-data/memoria/global/MCPS-GUIA.md     (guía de uso; solo si no existe)
  *
- * Uso: node mcps.mjs [--print]
+ * Uso: node mcps.mjs [--print] [--forzar-guia]
+ *   --print         imprime el inventario por stdout
+ *   --forzar-guia   regenera MCPS-GUIA.md aunque ya exista (por defecto se conserva)
  * Re-ejecútalo cuando instales o quites MCPs (o deja que lo haga `adaptador-mcps`).
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { execSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 
 const HOME = os.homedir()
 const SYSTEM_DIR = process.env.SISTEMA_CEREBRO_DIR || path.join(HOME, '.sistema-cerebro-agentes')
 const DATA_DIR = process.env.HUB_DATA_DIR || path.join(SYSTEM_DIR, 'hub-data')
 const OPENCODE_DIR = process.env.OPENCODE_DIR || path.join(HOME, '.config', 'opencode')
 const CLAUDE_DIR = process.env.CLAUDE_DIR || path.join(HOME, '.claude')
+// Spec 13 · N2 · la plantilla de la guía viaja dentro del hub instalado (`hub/plantillas/`).
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const PLANTILLA_GUIA = path.join(__dirname, 'plantillas', 'mcps-guia.md')
 
 // Capacidades por patrón (genérico y ampliable: se añaden patrones, no servidores)
 const CAPACIDADES = [
@@ -149,6 +156,17 @@ const guia = [
 fs.mkdirSync(path.join(DATA_DIR, 'memoria', 'global'), { recursive: true })
 fs.writeFileSync(path.join(DATA_DIR, 'memoria', 'global', 'MCPS.md'), guia)
 
+// Spec 13 · N2 · guía de uso: copia la plantilla SOLO si no existe (lo que edite el
+// usuario se conserva); `--forzar-guia` la regenera. No afecta a MCPS.md ni mcps.json.
+const GUIA_DST = path.join(DATA_DIR, 'memoria', 'global', 'MCPS-GUIA.md')
+let guiaEscrita = false
+try {
+  if (process.argv.includes('--forzar-guia') || !fs.existsSync(GUIA_DST)) {
+    fs.writeFileSync(GUIA_DST, fs.readFileSync(PLANTILLA_GUIA, 'utf8'))
+    guiaEscrita = true
+  }
+} catch { /* sin plantilla: el inventario sigue generándose igual */ }
+
 if (process.argv.includes('--print')) {
   console.log(guia)
 } else {
@@ -156,4 +174,5 @@ if (process.argv.includes('--print')) {
   for (const m of lista) console.log(`  · ${m.nombre} (${m.origen}) → ${m.capacidades.join(', ')}`)
   console.log(`Escrito: ${path.join(DATA_DIR, 'mcps.json')}`)
   console.log(`Escrito: ${path.join(DATA_DIR, 'memoria', 'global', 'MCPS.md')}`)
+  if (fs.existsSync(GUIA_DST)) console.log(`${guiaEscrita ? 'Escrito' : 'Conservado'}: ${GUIA_DST}`)
 }

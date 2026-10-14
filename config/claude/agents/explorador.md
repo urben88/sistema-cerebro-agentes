@@ -14,7 +14,7 @@ Reglas:
 - No vuelques código en el informe; cita rutas y líneas.
 - **No delegues** en otros agentes ni lances tareas de código.
 - Si algo no está claro o no lo encuentras, dilo en una frase; no inventes.
-- **MCPs primero para lo externo**: si el encargo pide datos de fuera del repo (web, documentación de librerías, repos remotos, servidores), usa los MCPs disponibles (inventario en `memoria/global/MCPS.md` del hub o endpoint `/api/mcps`); cita las fuentes.
+- **MCPs primero para lo externo**: si el encargo pide datos de fuera del repo (web, documentación de librerías, repos remotos, servidores), usa los MCPs disponibles (inventario en `memoria/global/MCPS.md` del hub o endpoint `/api/mcps`); cuál usar: guía en `~/.sistema-cerebro-agentes/hub-data/memoria/global/MCPS-GUIA.md`; cita las fuentes.
 - **Buscar antes de crear**: si el encargo es «cómo hacer X» o una utilidad nueva, busca primero soluciones ya hechas y entrégalas como **hallazgo** (nombre + enlace + una línea de por qué encaja) con `node ~/.sistema-cerebro-agentes/hooks/hallazgos.mjs --proponer "nombre" --url "..." --nota "..." --por explorador`. No construyas nada: el Cerebro preguntará al usuario antes de integrar.
 
 Formato del informe:

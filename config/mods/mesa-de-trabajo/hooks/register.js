@@ -106,17 +106,7 @@ async function datosBanda($) {
       salida.lineas.push(`👥 ${s.agente}${s.modelo ? ` (${s.modelo})` : ''} · ${minutos(s.desde || s.ts)}${s.tarea ? ` · ${recortar(s.tarea, 60)}` : ''}`)
     }
   } catch { /* hub apagado */ }
-  try {
-    const uso = await $.session.usage()
-    const pct = uso && uso.context && typeof uso.context.percent === 'number' ? Math.round(uso.context.percent) : null
-    const ventanas = []
-    for (const rl of (uso && uso.rateLimits) || []) {
-      if (rl && typeof rl.percentUsed === 'number' && rl.kind) ventanas.push(`${rl.kind} ${Math.round(rl.percentUsed)}%`)
-    }
-    if (pct != null || ventanas.length) {
-      salida.lineas.unshift(`🧠 ctx ${pct != null ? `${pct}%` : '?'}${ventanas.length ? ` · ${ventanas.join(' · ')}` : ''}`)
-    }
-  } catch { /* sin uso */ }
+  // El contexto y las ventanas de 5 h / 7 d ya salen en la barra de estado: aquí no se repiten.
   return salida
 }
 
@@ -146,14 +136,44 @@ function subagentesVivos(l) {
     .sort((a, b) => (b.ts || 0) - (a.ts || 0))
 }
 
-function formatearAgentes(l) {
+function trabajosVivos(v) {
+  return ((v && v.trabajos) || []).filter((j) => EN_CURSO.includes(j.status))
+}
+
+function formatearAgentes(l, v) {
   const subs = subagentesVivos(l)
-  if (!subs.length) return 'No hay subagentes de Claude en marcha ahora mismo.'
-  const filas = subs.map((x, i) => {
-    const etiqueta = [x.modelo, x.esfuerzo ? nombreEsfuerzo(x.esfuerzo) : null].filter(Boolean).join('·')
-    return `${i + 1}. ${x.agente}${etiqueta ? ` (${etiqueta})` : ''} · ${minutos(x.desde || x.ts, Date.now())}${x.tarea ? ` · «${recortar(x.tarea, 80)}»` : ''}`
-  })
-  return [`Subagentes en marcha (${subs.length}):`, ...filas, '', 'Detalle: /agentes <número>'].join('\n')
+  const jobs = trabajosVivos(v)
+  if (!subs.length && !jobs.length) return 'No hay agentes en marcha ahora mismo (ni subagentes de Claude ni trabajos de OpenCode).'
+  const salida = []
+  if (subs.length) {
+    salida.push(`Subagentes de Claude (${subs.length}):`)
+    subs.forEach((x, i) => {
+      const etiqueta = [x.modelo, x.esfuerzo ? nombreEsfuerzo(x.esfuerzo) : null].filter(Boolean).join('·')
+      salida.push(`${i + 1}. ${x.agente}${etiqueta ? ` (${etiqueta})` : ''} · ${minutos(x.desde || x.ts, Date.now())}${x.tarea ? ` · «${recortar(x.tarea, 80)}»` : ''}`)
+    })
+  }
+  if (jobs.length) {
+    if (salida.length) salida.push('')
+    salida.push(`Agentes de OpenCode · DeepSeek (${jobs.length}):`)
+    jobs.forEach((j, i) => {
+      const esfuerzo = j.variant ? ` (${nombreEsfuerzo(j.variant)})` : ''
+      const coste = typeof j.cost === 'number' ? ` · ${j.cost.toFixed(3)} $` : ''
+      const estado = avisoEstancado(j) ? `${j.status} ⚠ sin actividad hace ${minutos(j.updatedAt)}` : j.status
+      salida.push(`${subs.length + i + 1}. ${j.agent || '?'}${esfuerzo} · ${estado} · ${minutos(j.createdAt, j.updatedAt)}${coste} · ${recortar(j.title || '(sin título)', 80)}`)
+    })
+  }
+  return [...salida, '', 'Detalle: /agentes <número>'].join('\n')
+}
+
+function formatearDetalleJob(j) {
+  const esfuerzo = j.variant ? ` (${nombreEsfuerzo(j.variant)})` : ''
+  return [
+    `${j.agent || '?'}${esfuerzo} · OpenCode · ${j.status} · ${minutos(j.createdAt, j.updatedAt)}`,
+    `Tarea: ${recortar(j.title || '(sin título)', 200)}`,
+    typeof j.cost === 'number' ? `Coste: ${j.cost.toFixed(3)} $` : null,
+    `Job: ${j.jobId} · ${j.directory || ''}`,
+    'Más detalle: /trabajos o el panel del hub.',
+  ].filter(Boolean).join('\n')
 }
 
 function formatearDetalleAgente(x, vivo) {
@@ -169,7 +189,7 @@ function formatearDetalleAgente(x, vivo) {
 export function register(on) {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'trabajos', description: 'Ver los trabajos de OpenCode en vivo (Cerebro Hub)' })
-    await $.command.register({ name: 'agentes', description: 'Ver los subagentes en marcha y su actividad (Cerebro Hub): /agentes o /agentes <n>' })
+    await $.command.register({ name: 'agentes', description: 'Ver los agentes en marcha (subagentes de Claude y trabajos de OpenCode) (Cerebro Hub): /agentes o /agentes <n>' })
     await $.command.register({ name: 'errores', description: 'Ver los últimos errores registrados (Cerebro Hub)' })
     await $.command.register({ name: 'parar-todo', description: 'Parar TODOS los trabajos de OpenCode en segundo plano', immediate: true })
     // La banda se refresca sola (los datos vienen del hub).
@@ -188,13 +208,21 @@ export function register(on) {
   on("command.run", { command: "agentes" }, async ($, e) => {
     try {
       const l = await pedirJson($, "/api/latidos")
+      let v = null
+      try { v = await pedirJson($, "/api/vigilante") } catch { /* sin trabajos */ }
       const n = parseInt(String(e.args || "").trim(), 10)
-      if (!Number.isFinite(n)) return { text: formatearAgentes(l) }
-      const x = subagentesVivos(l)[n - 1]
-      if (!x) return { text: `No hay un subagente número ${n}. ${formatearAgentes(l)}` }
-      let vivo = null
-      if (x.sesion) { try { vivo = (await pedirJson($, `/api/vivo/agente?sesion=${encodeURIComponent(x.sesion)}`)).vivo } catch { /* sin vista viva */ } }
-      return { text: formatearDetalleAgente(x, vivo) }
+      if (!Number.isFinite(n)) return { text: formatearAgentes(l, v) }
+      const subs = subagentesVivos(l)
+      const jobs = trabajosVivos(v)
+      if (n >= 1 && n <= subs.length) {
+        const x = subs[n - 1]
+        let vivo = null
+        if (x.sesion) { try { vivo = (await pedirJson($, `/api/vivo/agente?sesion=${encodeURIComponent(x.sesion)}`)).vivo } catch { /* sin vista viva */ } }
+        return { text: formatearDetalleAgente(x, vivo) }
+      }
+      const j = jobs[n - subs.length - 1]
+      if (!j) return { text: `No hay un agente número ${n}. ${formatearAgentes(l, v)}` }
+      return { text: formatearDetalleJob(j) }
     } catch {
       return { text: "El Cerebro Hub no responde (127.0.0.1:4597). Arráncalo o revisa `hub.ps1 status`." }
     }
