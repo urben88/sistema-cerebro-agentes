@@ -32,6 +32,7 @@ Un job de prueba que verifique que el hub **puede crear sesión y enviar mensaje
 
 - Si el spike **pasa**: R6 y R7.2 lanzan los jobs por la API V1 directa.
 - Si el spike **falla**: R6 se convierte en «tareas vencidas» inyectadas en el briefing y lanzadas por el **cerebro**, y R7.2 usa un job lanzado por el cerebro.
+- Resultado (2026-10-14): PASA — `config/hub/lib/lanzador.mjs` y `scripts/spike-lanzamiento.mjs` crean la sesión y envían el mensaje con `agente` y `directory` por la API V1 (`POST /session`, `POST /session/:id/prompt_async`), leen la respuesta (`GET /session/:id/message`) con «PONG» y confirman FTS5 en `node:sqlite`. Hallazgo: el parámetro `directory` de la query **debe ir con barras normales** (`C:/ruta`); con `\` el servidor lo corrompe.
 
 ## Fase 1 · Directo (esfuerzo bajo-medio)
 
