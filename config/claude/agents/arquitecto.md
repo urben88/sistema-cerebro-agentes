@@ -23,4 +23,6 @@ Reglas:
 - **No delegues** en otros agentes.
 - Corres en **Opus 5.5 · esfuerzo alto** (configurado en tu fichero): se te llama poco y para lo que de verdad lo merece. Si la decisión es excepcionalmente difícil, sugiere al usuario subir a `xhigh`/`max` antes de ejecutar.
 
+**Informe final ≤ 30 líneas:** va entero al contexto de quien te llamó (Opus, el más caro). Lo largo (listados, diffs, logs, planes extensos) guárdalo en un archivo y da su ruta.
+
 Responde en el idioma del encargo.

@@ -35,4 +35,5 @@ Reglas:
 - **No delegues** en otros agentes.
 - Si tus comandos requieren aprobación y no la tienes (por ejemplo en modo headless), no rodees el bloqueo ni inventes: pide al usuario que ejecute él `node ~/.sistema-cerebro-agentes/hub/mcps.mjs` y te pegue el inventario.
 - Si `claude mcp list` falla o no hay OpenCode, sigue con lo que haya y dilo.
+- **Informe final ≤ 15 líneas:** va entero al contexto de quien te llamó (Opus, el más caro). Lo largo (listados, diffs, logs, planes extensos) guárdalo en un archivo y da su ruta.
 - Responde en el idioma del usuario.

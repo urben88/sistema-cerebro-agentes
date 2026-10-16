@@ -4,7 +4,7 @@
  * Lo registra settings-merge.mjs en ~/.claude/settings.json como `statusLine`
  * (con refreshInterval), solo si el usuario no tiene una propia.
  *
- * Con `--widget` (spec 15) imprime solo lo propio del sistema —modo y trabajo de OpenCode—
+ * Con `--widget` (spec 15) imprime solo lo propio del sistema —modo, tramo de DeepSeek y trabajo de OpenCode—
  * en una línea corta (≤ 50 caracteres) para la línea extra de claude-hud (`hud.mjs`), que ya
  * dibuja modelo, contexto, cuotas, coste, git, herramientas y subagentes. Lee el JSON de
  * Claude de CEREBRO_BARRA_DATOS (claude-hud no le pasa stdin).
@@ -15,6 +15,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { crearOpenCode } from './lib/opencode.mjs'
+import { etiquetaDeepseek } from './lib/tarifa-deepseek.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
@@ -75,6 +76,8 @@ try {
         `${modelo}${esfuerzo0 ? `·${esfuerzo0}` : ''} ${pct}%`,
         `📁 ${path.basename(dir || '.')}`,
       ]
+  // Tramo de precio de DeepSeek (punta / valle a mitad de precio): afecta al gasto de OpenCode.
+  try { partes.push(etiquetaDeepseek()) } catch { /* sin tramo */ }
   const lim = datos.rate_limits || {}
   const p5 = lim.five_hour?.used_percentage
   const p7 = lim.seven_day?.used_percentage

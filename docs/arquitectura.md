@@ -69,6 +69,7 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
 - **Reparto en Claude**: Opus 5.5 dirige (sesión principal, `cerebro`, `arquitecto`); `resolutor` (Sonnet · high) resuelve el cómo de un área acotada; Haiku hace lo ligero y `ayudante` (Haiku · low) los cambios ya decididos. Regla de coste: el agente más barato que pueda hacer la tarea.
 - **PLAN / EJECUTAR**: sin indicación se trabaja en PLAN (investigar y proponer sin cambiar nada); el modo viaja en cada encargo al `resolutor`. El `ayudante` solo se usa en EJECUTAR.
 - **Aviso de contexto** (`aviso-contexto.mjs`): mide tokens reales de la última respuesta, avisa desde 100k y cada +50k (`CONTEXTO_AVISO`, `CONTEXTO_PASO`), y lo muestra también en la consola del usuario.
+- **Freno a bucles de error** (`errores-repetidos.mjs`): si el mismo comando de Bash falla 2 veces seguidas avisa al modelo (y a la 3.ª al usuario); un éxito reinicia la cuenta.
 - **Nota de última sesión** (`session-end.mjs` → `resumir-sesion.mjs`): al cerrar o hacer `/clear`, Haiku resume la sesión en ≤ 5 líneas en `hub-data/memoria/ultima-sesion/<proyecto>.md`; `session-start.mjs` la carga al volver.
 
 ## Ciclo de vida de los servicios

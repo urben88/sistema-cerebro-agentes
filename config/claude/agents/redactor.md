@@ -18,4 +18,6 @@ Reglas:
 - **No delegues** en otros agentes.
 - Salida breve: qué redactaste, dónde y qué queda pendiente.
 
+**Informe final ≤ 10 líneas:** va entero al contexto de quien te llamó (Opus, el más caro). Lo largo (listados, diffs, logs, planes extensos) guárdalo en un archivo y da su ruta.
+
 Responde en el idioma del encargo (por defecto, el del repositorio).

@@ -5,6 +5,7 @@
  *   · modelo principal Opus (spec 15: Opus dirige; solo si no hay uno elegido)
  *   · los hooks de contexto (SessionStart, PreCompact, SessionEnd)
  *   · los hooks de latido de actividad (UserPromptSubmit, Stop, SubagentStart, SubagentStop)
+ *   · el freno a comandos que fallan en bucle (PostToolUse + PostToolUseFailure, solo Bash)
  *
  * Uso: node settings-merge.mjs [directorio-de-hooks]
  * Lo llaman install.ps1 e install.sh (el backup lo hace el instalador antes).
@@ -36,7 +37,7 @@ if (s.advisorModel === undefined) s.advisorModel = 'opus'
 s.hooks = s.hooks || {}
 
 /** Ficheros que gestiona el sistema: se registran solo si existen en disco. */
-const GESTIONADOS = ['session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'skills-uso.mjs']
+const GESTIONADOS = ['session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'skills-uso.mjs', 'errores-repetidos.mjs']
 const existe = (f) => fs.existsSync(path.join(hooksDir, f))
 const comando = (f) => `node "${path.join(hooksDir, f)}"`
 const faltan = []
@@ -106,6 +107,19 @@ if (existe('aviso-contexto.mjs')) {
   if (!yaEsta) grupos.push({ hooks: [{ type: 'command', command: comando('aviso-contexto.mjs') }] })
   s.hooks.UserPromptSubmit = grupos
 } else faltan.push('aviso-contexto.mjs')
+
+// Freno a bucles de error: avisa cuando el mismo comando de Bash falla 2-3 veces seguidas.
+// Va en PostToolUseFailure (comandos con exit ≠ 0) y PostToolUse (éxitos, que reinician el
+// contador). Idempotente y sin pisar otros hooks del usuario.
+if (existe('errores-repetidos.mjs')) {
+  const cmdErrores = comando('errores-repetidos.mjs')
+  for (const evento of ['PostToolUse', 'PostToolUseFailure']) {
+    const grupos = Array.isArray(s.hooks[evento]) ? s.hooks[evento] : []
+    const yaEsta = grupos.some((g) => Array.isArray(g?.hooks) && g.hooks.some((h) => typeof h?.command === 'string' && h.command.includes('errores-repetidos.mjs')))
+    if (!yaEsta) grupos.push({ matcher: 'Bash', hooks: [{ type: 'command', command: cmdErrores }] })
+    s.hooks[evento] = grupos
+  }
+} else faltan.push('errores-repetidos.mjs')
 
 // Barra de estado (spec 15 · O8): claude-hud si el plugin está instalado (hub/hud.mjs le
 // añade la línea del sistema: modo y OpenCode); si no, el indicador propio (estado-linea.mjs).
