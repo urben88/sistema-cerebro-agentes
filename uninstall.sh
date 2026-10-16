@@ -84,7 +84,7 @@ else
 fi
 
 # 3c. Subagentes de Claude
-for name in subdirector.md explorador.md redactor.md analista.md arquitecto.md adaptador-mcps.md planificador.md; do
+for name in subdirector.md explorador.md redactor.md analista.md arquitecto.md adaptador-mcps.md planificador.md resolutor.md ayudante.md; do
   p="$HOME/.claude/agents/$name"
   if [ -e "$p" ]; then backup_item "$p"; rm -f "$p"; ok "Eliminado: $p"; fi
 done
@@ -128,7 +128,7 @@ if [ -f "$SETTINGS" ]; then
       }
       if (!Object.keys(s.hooks).length) delete s.hooks;
     }
-    if (s.statusLine && typeof s.statusLine.command === "string" && s.statusLine.command.includes("estado-linea.mjs")) delete s.statusLine;
+    if (s.statusLine && typeof s.statusLine.command === "string" && (/estado-linea.mjs|hud.(mjs|cmd)/.test(s.statusLine.command)||(s.statusLine.command.trim()==="ccstatusline"&&(()=>{try{return fs.readFileSync(require("path").join(require("os").homedir(),".config","ccstatusline","settings.json"),"utf8").includes("sistema-cerebro")}catch{return false}})()))) delete s.statusLine;
     if (s.env && typeof s.env.CLAUDE_CODE_PLUGIN_DIRS === "string") {
       const pt = require("path");
       const ps = s.env.CLAUDE_CODE_PLUGIN_DIRS.split(pt.delimiter).filter(x => x && !x.toLowerCase().includes("mesa-de-trabajo"));

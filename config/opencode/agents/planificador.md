@@ -1,5 +1,5 @@
 ---
-description: Planificación previa — pregunta lo mínimo que cambia el trabajo, propone supuestos, plan por pasos y criterios de aceptación antes de generar. Como subagente lo usa cerebro-oc en tareas ambiguas; como agente principal es una entrevista que termina en spec. No escribe código.
+description: ★ MÍO · Planificación previa — pregunta lo mínimo que cambia el trabajo, propone supuestos, plan por pasos y criterios de aceptación antes de generar. Como subagente lo usa cerebro-oc en tareas ambiguas; como agente principal es una entrevista que termina en spec. No escribe código.
 mode: all
 model: deepseek/deepseek-flash
 variant: high

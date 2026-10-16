@@ -149,7 +149,7 @@ if ($hubOk) {
   Test-Item $latidosOk 'GET /api/latidos responde (subagentes en vivo)' 'Revisa hub.mjs / latido.mjs'
   Test-Item (Test-Path -LiteralPath (Join-Path $sysDir 'hub\errores.mjs')) 'CLI de errores instalada (hub/errores.mjs)' 'Ejecuta install.ps1'
 }
-foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'estado.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'hallazgos.mjs', 'buscar.mjs')) {
+foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'estado.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'ultima-sesion.mjs', 'resumir-sesion.mjs', 'hallazgos.mjs', 'buscar.mjs')) {
   Test-Item (Test-Path -LiteralPath (Join-Path $sysDir "hooks\$f")) "Hook $f instalado" 'Ejecuta install.ps1'
 }
 $hookLatido = Join-Path $sysDir 'hooks\latido.mjs'
@@ -192,7 +192,7 @@ $settingsPath = Join-Path $UserHome '.claude\settings.json'
 $setTxt = if (Test-Path -LiteralPath $settingsPath) { [System.IO.File]::ReadAllText($settingsPath) } else { '' }
 Test-Item ($setTxt -match 'session-start\.mjs') 'Hooks registrados en settings.json' 'Ejecuta install.ps1'
 Test-Item ($setTxt -match 'claude-haiku-5-5') 'modelSettings de Haiku 5.5 configurado' 'Ejecuta install.ps1'
-Test-Item ($setTxt -match 'estado-linea\.mjs') 'Barra de estado registrada en settings.json' 'Ejecuta install.ps1 (o quita tu statusLine propia)'
+Test-Item ($setTxt -match 'estado-linea\.mjs|hud\.(mjs|cmd)') 'Barra de estado registrada en settings.json' 'Ejecuta install.ps1 (o quita tu statusLine propia)'
 Test-Item ($setTxt -match 'cerrar-trabajos\.mjs') 'Apagado de trabajos registrado al cerrar sesion' 'Ejecuta install.ps1'
 Test-Item ($setTxt -match 'mesa-de-trabajo') 'Mod cargado en settings (CLAUDE_CODE_PLUGIN_DIRS)' 'Ejecuta install.ps1'
 $autoTarea = $false
@@ -201,7 +201,7 @@ $autoInicio = Test-Path -LiteralPath (Join-Path $env:APPDATA 'Microsoft\Windows\
 Test-Item ($autoTarea -or $autoInicio) 'Autoarranque del hub configurado (tarea o carpeta de Inicio)' 'Ejecuta install.ps1'
 
 Write-Step 'Agente cerebro en Claude Code'
-foreach ($f in @('cerebro.md', 'subdirector.md', 'explorador.md', 'redactor.md', 'analista.md', 'arquitecto.md', 'adaptador-mcps.md', 'planificador.md')) {
+foreach ($f in @('cerebro.md', 'subdirector.md', 'explorador.md', 'redactor.md', 'analista.md', 'arquitecto.md', 'adaptador-mcps.md', 'planificador.md', 'resolutor.md', 'ayudante.md')) {
   Test-Item (Test-Path -LiteralPath (Join-Path $UserHome ".claude\agents\$f")) "Subagente $f instalado" 'Ejecuta install.ps1'
 }
 $agentDst = Join-Path $UserHome '.claude\agents\cerebro.md'
@@ -271,9 +271,14 @@ $a2aPruebas = Join-Path $RepoRoot 'scripts\test-a2a.mjs'
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de A2A-lite (directorio, consulta, buzón, triaje, reparto)' 'Ejecuta: node scripts\test-a2a.mjs'
 
 Write-Step 'Barra de estado: modo normal vs cerebro'
-$modoPruebas = Join-Path $RepoRoot 'scripts	est-modo.mjs'
+$modoPruebas = Join-Path $RepoRoot 'scripts\test-modo.mjs'
 & node $modoPruebas | Out-Null
-Test-Item ($LASTEXITCODE -eq 0) 'Pruebas del modo normal/cerebro en la barra de estado' 'Ejecuta: node scripts	est-modo.mjs'
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas del modo normal/cerebro en la barra de estado' 'Ejecuta: node scripts\test-modo.mjs'
+
+Write-Step 'Opus dirige y configurar-claude (spec 15)'
+$opusPruebas = Join-Path $RepoRoot 'scripts\test-opus-reparto.mjs'
+& node $opusPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de la spec 15 (reparto Opus/Sonnet/Haiku, aviso en consola, nota de última sesión)' 'Ejecuta: node scripts\test-opus-reparto.mjs'
 
 if ($Smoke) {
   Write-Step 'Smoke test del MCP (arranque real por stdio)'

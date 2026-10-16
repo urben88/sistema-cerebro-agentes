@@ -1,5 +1,5 @@
 ---
-description: Exploración barata del repositorio — busca archivos, resume módulos y extrae contexto en informes de una página. Solo lectura; no escribe ni delega.
+description: ★ MÍO · Exploración barata del repositorio — busca archivos, resume módulos y extrae contexto en informes de una página. Solo lectura; no escribe ni delega.
 mode: all
 model: deepseek/deepseek-flash
 variant: low

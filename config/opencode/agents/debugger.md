@@ -1,5 +1,5 @@
 ---
-description: Depura errores y fallos reproducibles — diagnóstico, corrección mínima y verificación, con máximo 2 ciclos de corrección. No delega.
+description: ★ MÍO · Depura errores y fallos reproducibles — diagnóstico, corrección mínima y verificación, con máximo 2 ciclos de corrección. No delega.
 mode: all
 model: deepseek/deepseek-flash
 variant: high

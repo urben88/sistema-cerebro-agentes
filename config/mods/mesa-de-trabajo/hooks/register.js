@@ -5,7 +5,7 @@
 //     contexto/ventanas de la sesión. Lee del Cerebro Hub (127.0.0.1:4597).
 //   · Comandos: /trabajos, /errores y /parar-todo.
 //   · Guardián de subagentes: fija el modelo de cada subagente según su
-//     definición (haiku/sonnet) y deja constancia de cada lanzamiento en el
+//     definición (haiku/sonnet/opus) y deja constancia de cada lanzamiento en el
 //     registro del hub.
 //
 // Sin dependencias: corre dentro de Claude Code y solo usa la API de mods.
@@ -21,7 +21,9 @@ const MODELO_RESPALDO = {
   subdirector: 'haiku',
   planificador: 'haiku',
   'adaptador-mcps': 'haiku',
-  arquitecto: 'sonnet',
+  ayudante: 'haiku',
+  resolutor: 'sonnet',
+  arquitecto: 'opus',
 }
 
 const ESFUERZO = { low: 'bajo', medium: 'medio', high: 'alto', max: 'máximo', default: 'def' }

@@ -1,5 +1,5 @@
 ---
-description: Revisa cambios de código contra su especificación (diff + requisitos, no todo el repo). No edita archivos — informa hallazgos por severidad con archivo y línea, y un veredicto final. No delega.
+description: ★ MÍO · Revisa cambios de código contra su especificación (diff + requisitos, no todo el repo). No edita archivos — informa hallazgos por severidad con archivo y línea, y un veredicto final. No delega.
 mode: subagent
 model: deepseek/deepseek-flash
 variant: max

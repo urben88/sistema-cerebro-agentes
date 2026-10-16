@@ -15,6 +15,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { reportarError } from './reportar.mjs'
 
+if (process.env.ULTIMA_SESION_RESUMIENDO) process.exit(0) // sesión interna del resumidor (spec 15)
+
 const RAIZ = process.env.SISTEMA_CEREBRO_DIR || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
 

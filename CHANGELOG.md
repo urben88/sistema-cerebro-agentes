@@ -3,6 +3,29 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado semántico (MAJOR.MINOR.PATCH).
 
+## [0.9.0] - 2026-10-15
+
+### Cambiado (spec 15 · Opus dirige y lo mejor de `configurar-claude.ps1`)
+
+- **O1 · Opus 5.5 dirige en los dos modos.** Reparto Opus → Sonnet → Haiku → OpenCode: la sesión principal y `cerebro` en **Opus 5.5 · medium**, `arquitecto` en **Opus 5.5 · high**. `settings-merge.mjs` deja `model: "opus"` y `effortLevel: medium` para `claude-opus-5-5` solo si faltan (lo elegido por el usuario se respeta).
+- **Agentes nuevos:** `resolutor` (Sonnet · high; decide el cómo de un área acotada; en el cerebro, solo si OpenCode falla dos veces) y `ayudante` (Haiku · low; cambios ya decididos con instrucciones exactas, solo en EJECUTAR). Todos los subagentes con `disallowedTools: Agent` (la delegación se corta en ellos), `maxTurns` y `color`.
+- **O2 · Triaje del modo normal** (`config/hub/lib/reparto-claude.mjs`, usado por el MCP `triaje` 0.4.0): implementar/depurar → `resolutor` (Sonnet), mecánico → `ayudante` (Haiku), revisión delicada → `arquitecto` (Opus), lo global → «hazlo tú» (Opus). El mod fija el modelo de los agentes nuevos.
+- **O3 · Modos PLAN / EJECUTAR** en `CLAUDE.md` y `cerebro`: sin indicación, PLAN salvo lo trivial; en el cerebro, PLAN = spec propuesta sin delegar código.
+- **O4 · Aviso de contexto en consola** (`aviso-contexto.mjs`): cuenta **tokens reales** (uso de la última respuesta) en vez de MB; avisa a los 100k y cada +50k (`CONTEXTO_AVISO`, `CONTEXTO_PASO`), una vez por nivel y sesión, al usuario (`systemMessage`) y al modelo (`additionalContext`).
+- **Límite de turnos amplio:** `maxTurns: 200` en todos los subagentes de Claude (antes 20–60), para que no se corten a mitad de tarea y pierdan el contexto; se mantiene como freno anti-bucle.
+- **O6 · Carga mental y estilo** en `CLAUDE.md`: nota «🧠 Merece que lo mires tú» solo cuando aporte, el porqué de las decisiones, puntos de control y estilo por defecto.
+
+### Añadido
+
+- **O5 · Nota de última sesión**: al cerrar o hacer `/clear`, `session-end.mjs` lanza en segundo plano `resumir-sesion.mjs`, que resume la sesión con Haiku en ≤ 5 líneas en `hub-data/memoria/ultima-sesion/<proyecto>.md`; `session-start.mjs` la inyecta (espera si el resumen sigue en curso). La sesión interna del resumidor lleva `ULTIMA_SESION_RESUMIENDO=1` y todos los hooks la ignoran. `SessionEnd` se registra ahora para cualquier motivo (el checkpoint sigue solo en `/clear`).
+- **O8 · Barra de estado con [claude-hud](https://github.com/jarrodwatts/claude-hud)** (la más recomendada por la comunidad; sustituye al indicador «normal/cerebro»): el instalador añade el plugin (`claude plugin install claude-hud@claude-hud`) y `settings-merge.mjs` apunta la barra a `hub/hud.mjs` (vía `hud.cmd` con Git Bash), que lanza la versión más nueva de claude-hud y le añade la línea del sistema con `--extra-cmd` (`estado-linea.mjs --widget`: modo y trabajo de OpenCode, con el JSON de Claude en `CEREBRO_BARRA_DATOS`). Config inicial en `~/.claude/plugins/claude-hud/config.json` (herramientas, subagentes, tareas, coste, duración, esfuerzo) solo si no existe. Sin plugin o con `SIN_CLAUDE_HUD=1`, queda el indicador propio; el desinstalador la retira.
+- **O7 · Pruebas:** `scripts/test-opus-reparto.mjs` (reparto, aviso, nota, agentes y barra) enganchado en `verificar.sh/.ps1`.
+
+### Corregido
+
+- Hub en Docker: `lib/skills.mjs` importaba `hooks/skill-lint.mjs`, que no está en la imagen; ahora lo carga del volumen `/sistema/hooks` si no lo encuentra al lado (el contenedor entraba en bucle de reinicios al reconstruirse).
+- `verificar.ps1`: la ruta de `test-modo.mjs` llevaba un tabulador en lugar de `\` y la prueba de la barra no se ejecutaba.
+
 ## [0.8.0] - 2026-10-14
 
 ### Añadido (spec 14 · comunicación entre agentes y reparto)

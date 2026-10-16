@@ -311,7 +311,7 @@ foreach ($f in @('cerebro.md', 'subdirector.md')) {
   [System.IO.File]::WriteAllText($dst, $tpl, (New-Object System.Text.UTF8Encoding($false)))
   Write-Ok "Agente instalado: $dst"
 }
-foreach ($f in @('explorador.md', 'redactor.md', 'analista.md', 'arquitecto.md', 'adaptador-mcps.md', 'planificador.md')) {
+foreach ($f in @('explorador.md', 'redactor.md', 'analista.md', 'arquitecto.md', 'adaptador-mcps.md', 'planificador.md', 'resolutor.md', 'ayudante.md')) {
   $dst = Join-Path $agentDir $f
   Backup-Item $dst
   Copy-Item -LiteralPath (Join-Path $agentSrcDir $f) -Destination $dst -Force
@@ -347,6 +347,13 @@ Write-Ok "Skill instalada: $skillDst"
 Write-Step 'Esfuerzos y hooks de contexto en Claude (settings.json)'
 $settingsPath = Join-Path $UserHome '.claude\settings.json'
 Backup-Item $settingsPath
+# Barra de estado (spec 15): plugin claude-hud; si no se puede instalar, queda el indicador propio.
+if ($env:SIN_CLAUDE_HUD) { Write-Note 'SIN_CLAUDE_HUD: se mantiene el indicador propio' }
+else {
+  Invoke-Cli 'claude' @('plugin', 'marketplace', 'add', 'jarrodwatts/claude-hud') | Out-Null
+  $hud = Invoke-Cli 'claude' @('plugin', 'install', 'claude-hud@claude-hud')
+  if ($hud.Code -eq 0) { Write-Ok 'Plugin claude-hud instalado (barra de estado)' } else { Write-Note 'No se pudo instalar claude-hud; se usa el indicador propio' }
+}
 $mergeRes = Invoke-Cli 'node' @((Join-Path $SystemDir 'hub\settings-merge.mjs'), $hooksDst)
 if ($mergeRes.Code -eq 0) { Write-Ok ($mergeRes.Output.Trim()) }
 else { Write-Warn 'No se pudo actualizar settings.json'; Write-Host $mergeRes.Output -ForegroundColor DarkGray }

@@ -202,7 +202,7 @@ for f in cerebro.md subdirector.md; do
   node -e 'const fs=require("fs");const [src,dst,cmd,args,mcp]=process.argv.slice(1);let t=fs.readFileSync(src,"utf8");t=t.replace("__COMANDO__",cmd).replace("__ARGUMENTOS_JSON__",args).replace("__TRIAJE_MCP__",mcp);fs.writeFileSync(dst,t)' "$CONFIG_ROOT/claude/agents/$f" "$dst" "bash" "$ARGS_JSON" "$TRIAJE_MCP"
   ok "Agente instalado: $dst"
 done
-for f in explorador.md redactor.md analista.md arquitecto.md adaptador-mcps.md planificador.md; do
+for f in explorador.md redactor.md analista.md arquitecto.md adaptador-mcps.md planificador.md resolutor.md ayudante.md; do
   backup_item "$AGENT_DIR/$f"
   cp -f "$CONFIG_ROOT/claude/agents/$f" "$AGENT_DIR/$f"
   ok "Subagente instalado: $AGENT_DIR/$f"
@@ -275,6 +275,13 @@ ok "Skill instalada: $SKILL_DST"
 # ---------------------------------------------------------------- 5b. Ajustes de Claude (esfuerzos + hooks)
 step 'Esfuerzos y hooks de contexto en Claude (settings.json)'
 backup_item "$HOME/.claude/settings.json"
+# Barra de estado (spec 15): plugin claude-hud; si no se puede instalar, queda el indicador propio.
+if [ -n "${SIN_CLAUDE_HUD:-}" ]; then
+  note 'SIN_CLAUDE_HUD: se mantiene el indicador propio'
+else
+  claude plugin marketplace add jarrodwatts/claude-hud >/dev/null 2>&1 || true
+  if claude plugin install claude-hud@claude-hud >/dev/null 2>&1; then ok 'Plugin claude-hud instalado (barra de estado)'; else note 'No se pudo instalar claude-hud; se usa el indicador propio'; fi
+fi
 if node "$SYSTEM_DIR/hub/settings-merge.mjs" "$SYSTEM_DIR/hooks"; then
   ok 'settings.json actualizado'
 else

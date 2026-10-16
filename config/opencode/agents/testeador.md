@@ -1,5 +1,5 @@
 ---
-description: Escribe y ejecuta pruebas para los cambios implementados, guiándose por la spec. Informa resultados reales con salidas y pasos de reproducción. No delega.
+description: ★ MÍO · Escribe y ejecuta pruebas para los cambios implementados, guiándose por la spec. Informa resultados reales con salidas y pasos de reproducción. No delega.
 mode: subagent
 model: deepseek/deepseek-flash
 variant: low

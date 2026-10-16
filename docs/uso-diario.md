@@ -7,6 +7,12 @@
 3. Pide lo que quieras en lenguaje natural.
 4. El Cerebro investigará, escribirá la especificación en `docs/specs/`, delegará el código a OpenCode y vigilará el trabajo. Al terminar te dará un resumen.
 
+## Modos PLAN y EJECUTAR
+
+- **PLAN** («plan», «planifica», «propón»…): Claude investiga y te presenta una propuesta. No cambia nada hasta que digas que ejecute.
+- **EJECUTAR** («ejecuta», «hazlo», «aplica»…): resuelve y verifica.
+- **Sin indicación**: trabaja en PLAN y pregunta si ejecuta. Excepción: cambios triviales o preguntas rápidas.
+
 Si la petición es ambigua o grande, **primero te preguntará**: el `planificador` (Haiku) prepara hasta 5 preguntas que cambian el trabajo, con supuestos por defecto, y el Cerebro te las enseña antes de escribir nada. También puedes abrir el planificador cuando quieras (`@planificador …` en Claude; en OpenCode, cámbialo con Tab).
 
 Fuera del agente `cerebro`, Claude funciona con normalidad y **no tiene** las herramientas de OpenCode (no puede delegar por accidente): el MCP vive dentro del agente.
@@ -43,7 +49,7 @@ opencode_fire({
 - **Trabajos largos:** puedes seguir hablando con el Cerebro mientras OpenCode trabaja; el `jobId` mantiene la referencia.
 - **Paralelizar:** para dos tareas independientes del mismo repo, mejor una después de otra o en worktrees/ramas separadas (dos sesiones que tocan los mismos archivos se pisan).
 - **Pregunta antes de generar.** Si algo no está claro, el planificador te sacará las preguntas que de verdad cambian el trabajo; respóndele o deja que tire con los supuestos que te proponga (te los dice antes).
-- **Costes.** Claude (suscripción) piensa; OpenCode gasta tokens baratos. Los subagentes baratos de Claude son **Haiku** (`planificador`, `explorador`, `redactor`, `analista`, `subdirector`); solo `arquitecto` usa Sonnet a propósito. `local` (Ollama) es gratis y solo se usa si lo pides.
+- **Costes.** Claude (suscripción) piensa; OpenCode gasta tokens baratos. La sesión principal y `cerebro` van en **Opus 5.5** (medium). Los subagentes baratos de Claude son **Haiku** (`planificador`, `explorador`, `redactor`, `analista`, `subdirector`, `ayudante`); solo `resolutor` usa Sonnet a propósito y `arquitecto` va en Opus. `local` (Ollama) es gratis y solo se usa si lo pides.
 - **Ver estado sin Claude:** `scripts/verificar.ps1` / `verificar.sh`.
 
 ## Pararlo todo de golpe
@@ -62,11 +68,12 @@ opencode_fire({
 
 ## Ver quién hace qué (modelos, esfuerzo y progreso)
 
-**Subagentes de Claude** (`planificador`, `explorador`, `redactor`, `analista`, `subdirector`; `arquitecto` es el único Sonnet):
+**Subagentes de Claude** (`planificador`, `explorador`, `redactor`, `analista`, `subdirector`, `ayudante`, `resolutor`, `arquitecto`):
 
 - **`/tasks`** dentro de Claude Code: lista los subagentes con su **modelo y esfuerzo**; Enter abre su transcript en vivo.
-- Mientras corren aparecen en el **panel de subagentes** bajo el prompt; el Cerebro te anuncia al lanzarlos el tipo y su modelo («explorador · Haiku»). Si ves un subagente en Sonnet sin querer, es que se lanzó como `general-purpose`/`fork`: pide el tipo por su nombre (desde v0.3.0 el Cerebro ya lo hace).
-- Todos son Haiku salvo `arquitecto` (Sonnet · high, solo para lo difícil).
+- Mientras corren aparecen en el **panel de subagentes** bajo el prompt; el Cerebro te anuncia al lanzarlos el tipo y su modelo («explorador · Haiku»). Pide el tipo por su nombre (desde v0.3.0 el Cerebro ya lo hace).
+- Haiku salvo `resolutor` (Sonnet · high: resuelve un área acotada) y `arquitecto` (Opus 5.5 · high: solo para lo difícil).
+- Si ves un subagente en Opus sin querer, se lanzó como `general-purpose`/`fork` (heredan el modelo principal).
 
 **Manos de OpenCode** (`implementador`, `debugger`, `revisor`, `testeador`, exploradores…):
 

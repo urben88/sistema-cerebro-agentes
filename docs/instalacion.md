@@ -38,7 +38,7 @@ bash install.sh
 4. Instala el rol Cerebro en `~/.claude/CLAUDE.md` dentro de un **bloque gestionado** (entre marcadores). Si ya tienes contenido propio, no se toca.
 5. Copia la skill a `~/.claude/skills/delegar-a-opencode/`.
 6. Copia los agentes de OpenCode (`cerebro-oc`, `planificador`, `implementador`, `debugger`, `revisor`, `testeador`, `explorador-ds`, `redactor-ds`, `local`) a `~/.config/opencode/agents/` (y retira el antiguo `constructor.md` si existe: ese nombre es una palabra reservada de JavaScript y rompía el servidor).
-7. Instala los subagentes de Claude (`planificador`, `explorador`, `redactor`, `analista`, `arquitecto`, `subdirector`, `adaptador-mcps`), el hub, los hooks y una **barra de estado** (modelo · contexto · trabajo de OpenCode) en `settings.json`; si ya tenías una `statusLine` propia, no se toca.
+7. Instala los subagentes de Claude (`planificador`, `explorador`, `redactor`, `analista`, `ayudante`, `resolutor`, `arquitecto`, `subdirector`, `adaptador-mcps`), el hub, los hooks y una **barra de estado con [claude-hud](https://github.com/jarrodwatts/claude-hud)** (plugin; modelo · esfuerzo · carpeta · git · modo y trabajo de OpenCode · duración · coste / barra de contexto y de uso / herramientas, subagentes y tareas en curso). Si ya tenías una `statusLine` propia, no se toca; sin el plugin (o con `SIN_CLAUDE_HUD=1`) queda el indicador sencillo del sistema. Para cambiar qué enseña: `/claude-hud:configure` dentro de Claude. Deja el modelo por defecto en `opus` con esfuerzo `medium`, solo si no tienes ninguno configurado.
 8. Hace copia de seguridad de todo lo reemplazado en `~/.sistema-cerebro-agentes/backups/<fecha>/`.
 
 ### Después de instalar
@@ -70,8 +70,9 @@ bash install.sh
 | Las manos fallan con error de proveedor | Proveedor desconectado | `opencode auth login` → DeepSeek (o el que uses) |
 | «requires more credits, or fewer max_tokens» | El modelo va vía OpenRouter y la cuenta no tiene crédito | Recarga tu cuenta de OpenRouter o vuelve a `deepseek/deepseek-flash` |
 | «No model is available» | Proveedor desconectado o modelo mal escrito | Ejecuta `opencode models` y comprueba que aparece `deepseek/deepseek-flash` |
-| Un subagente de Claude corre en Sonnet | Se lanzó sin `subagent_type` (cae en `general-purpose`) o como `fork` | Pide el subagente por su nombre (`explorador`, `planificador`…); el Cerebro ya lo hace en v0.3.0. Comprueba el modelo con `/tasks` |
+| Un subagente de Claude corre en Opus sin que lo pidieras | Se lanzó sin `subagent_type` (cae en `general-purpose`) o como `fork`: heredan el modelo principal | Pide el subagente por su nombre (`explorador`, `resolutor`…); el Cerebro ya lo hace en v0.3.0. Comprueba el modelo con `/tasks` |
 | No veo la barra de estado de Claude | El instalador no la registra si ya tienes una `statusLine` propia | Quita la tuya de `~/.claude/settings.json` si prefieres la del sistema; el indicador es opcional |
+| La barra muestra el indicador sencillo y no claude-hud | El plugin no está instalado | `claude plugin install claude-hud@claude-hud` y vuelve a ejecutar el instalador |
 | Quiero ver los trabajos recientes | — | En Claude Code pídelo (el Cerebro usa `trabajo_estado`), o miráis juntos `~/.local/state/opencode-mcp/tasks` |
 | Conflictos raros con la TUI a la vez | Dos servidores OpenCode compartiendo almacenamiento (incidencia conocida de opencode-mcp) | Cierra uno de los dos mientras trabajas; si es habitual, pasad a servidor único persistente (ver arquitectura) |
 

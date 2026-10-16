@@ -28,9 +28,13 @@
  * Sin dependencias (Node >= 22).
  */
 import fs from 'node:fs'
+import { pathToFileURL } from 'node:url'
 import os from 'node:os'
 import path from 'node:path'
-import { lintSkill, NOMBRE_RE } from '../../hooks/skill-lint.mjs'
+// En el repo y en la instalación, hooks/ está junto a hub/. En Docker la imagen solo lleva hub/:
+// hooks/ llega por el volumen /sistema (SISTEMA_CEREBRO_DIR).
+const { lintSkill, NOMBRE_RE } = await import(new URL('../../hooks/skill-lint.mjs', import.meta.url).href)
+  .catch(() => import(pathToFileURL(path.join(process.env.SISTEMA_CEREBRO_DIR || '/sistema', 'hooks', 'skill-lint.mjs')).href))
 
 const TIPOS_USO = ['uso', 'visto', 'parcheado']
 

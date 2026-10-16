@@ -4,7 +4,7 @@ Arquitectura de IA para desarrollo **instalable en Windows, macOS y Linux**, pen
 
 | Capa | Quién | Qué hace | Coste |
 |---|---|---|---|
-| 🧠 **Cerebro** | Claude Code (tu suscripción) | Piensa, decide, escribe specs y revisa. Los subagentes Haiku hacen lo barato (leer, resumir, documentar). | Suscripción de Claude (20 $) |
+| 🧠 **Cerebro** | Claude Code (tu suscripción) | Opus 5.5 piensa, decide, escribe specs y revisa. Sonnet resuelve áreas acotadas y Haiku hace lo barato (leer, resumir, documentar). | Suscripción de Claude (20 $) |
 | 🖥️ **Cerebro Hub** | App local (Docker) | Memoria compartida de todos los proyectos, contexto de sesiones (briefing/checkpoints), vigilante de trabajos, triaje de tareas y panel. | Gratis (Docker local) |
 | 🧭 **Laya** | Modelo local de decisiones (Docker) | Decide en milisegundos **qué agente y qué esfuerzo** toca cada tarea, con probabilidades calibradas. | Gratis (CPU) |
 | 🤖 **Manos** | OpenCode + **DeepSeek V4.1 Flash** (oficial) | Escribe, depura, prueba y revisa el código siguiendo las specs, por céntimos. | Tokens de DeepSeek |
@@ -19,9 +19,10 @@ El puente entre capas es **[opencode-mcp](https://github.com/AlaeddineMessari/op
   │  (hablas en lenguaje natural)
   ▼
 ┌──────────────────────────── Claude Code (cerebro) ────────────────────────────┐
-│  · decide, escribe specs, revisa            · subagentes Haiku: explorador,   │
-│  · MCP `opencode` → código en DeepSeek        redactor, analista, arquitecto, │
-│  · MCP `triaje`   → ¿a quién le toca?         subdirector (control/gasto)     │
+│  · Opus 5.5: decide, escribe specs, revisa   · Sonnet: resolutor (cómo)       │
+│  · MCP `opencode` → código en DeepSeek       · Haiku: explorador, redactor,   │
+│  · MCP `triaje`   → ¿a quién le toca?        · analista, ayudante, subdirector│
+│                                              · Opus 5.5: arquitecto           │
 └───────┬───────────────────────────────────────────────────────────────┬───────┘
         │ hooks (briefing/checkpoints)                                  │ MCP
         ▼                                                               ▼
@@ -41,10 +42,11 @@ El puente entre capas es **[opencode-mcp](https://github.com/AlaeddineMessari/op
 
 - **Briefing automático**: al abrir cualquier sesión de Claude en un proyecto con memoria, el hub le inyecta el estado (tarea activa, quién la tiene, siguiente paso, alertas y trabajos en curso). Verificado: Claude responde "¿en qué estamos?" sin que se lo cuentes.
 - **Planifica antes de gastar**: en tareas ambiguas, el subagente `planificador` (Haiku) saca las preguntas mínimas que cambian el trabajo (máx. 5) con supuestos por defecto; el Cerebro te las pregunta antes de escribir la spec o delegar código.
-- **Ves a las manos trabajar**: el Cerebro te cuenta el progreso de cada job de OpenCode (agente · esfuerzo, estado, tiempo, coste y último paso) sin volcar conversaciones; la barra de estado de Claude Code muestra el modelo, el contexto y el trabajo en curso. Y en el panel, al pinchar en un agente, ves su **razonamiento en directo**, su actividad y sus siguientes pasos.
+- **Ves a las manos trabajar**: el Cerebro te cuenta el progreso de cada job de OpenCode (agente · esfuerzo, estado, tiempo, coste y último paso) sin volcar conversaciones; la barra de estado ([claude-hud](https://github.com/jarrodwatts/claude-hud)) muestra modelo, esfuerzo, git, contexto, uso con reinicio, coste, el modo, el trabajo de OpenCode y las herramientas, subagentes y tareas en curso. Y en el panel, al pinchar en un agente, ves su **razonamiento en directo**, su actividad y sus siguientes pasos.
 - **Nada sigue en segundo plano**: al cerrar la sesión de Claude (o hacer `/clear`) se cancelan los trabajos de OpenCode de ese proyecto; y con `cerebro-parar` (o pidiendo «para todo» al Cerebro) los apagas todos de golpe. `cerebro-parar --seco` te enseña antes lo que haría.
 - **Todo dentro de Claude**: el mod «mesa de trabajo» dibuja una **banda sobre el prompt** con los trabajos y subagentes en vivo (con su modelo: Haiku visible) y añade **`/trabajos`**, **`/errores`** y **`/parar-todo`**; además fija el modelo de cada subagente según su definición.
 - **`/clear` sin miedo**: al ~70 % de contexto, el agente vuelca el estado; al abrir la siguiente sesión, todo está de vuelta. Antes de compactar, un hook guarda un checkpoint solo.
+- **Avisos y nota de sesión**: el aviso de contexto (desde 100k tokens y cada +50k) también sale en tu consola, y al cerrar o hacer `/clear` Haiku deja una nota de 5 líneas que se carga sola al volver.
 - **Reparto por esfuerzos**: DeepSeek low/high/max según el trabajo (`testeador` low, `implementador`/`debugger` high, `revisor` max); Claude medium por defecto; el código **no consume tu ventana de Claude**.
 - **Triaje local (Laya)**: decide a quién mandar cada tarea; si duda (confianza < 0,60), mandan las reglas; **cada decisión queda registrada** para afinar Laya con tu uso real.
 - **Vigilante**: detecta trabajos atascados o permisos colgados y avisa (histórico silencioso al arrancar).
@@ -87,7 +89,8 @@ bash scripts/verificar.sh --smoke                                          # mac
 
 | Quieres | Haz esto | Qué pasa por detrás |
 |---|---|---|
-| Trabajar con Claude | Abre Claude Code en tu proyecto y escribe `cerebro` (o `@cerebro …`) | Briefing inyectado; planificación si hace falta; reparto automático Sonnet → Haiku → OpenCode; revisión y cierre |
+| Trabajar con Claude | Abre Claude Code en tu proyecto y escribe `cerebro` (o `@cerebro …`) | Briefing inyectado; planificación si hace falta; reparto automático Opus → Sonnet → Haiku → OpenCode; revisión y cierre |
+| Que investigue sin tocar nada | Pide `plan …` o «propón…»; para ejecutar, di «ejecuta» o «hazlo» | Sin indicación trabaja en **PLAN** (salvo cambios triviales) y pregunta antes de ejecutar |
 | Planificar algo grande o ambiguo | Pide `planifica …` o abre el `planificador` (Claude: `@planificador …`; OpenCode: cámbialo con Tab) | Entrevista: hasta 5 preguntas que cambian el trabajo + supuestos + plan/spec antes de generar |
 | Parar algo que se quedó corriendo | `cerebro-parar` (o pídele «para todo» al Cerebro) | Cancela los trabajos de OpenCode al momento; `cerebro-parar --seco` solo los lista |
 | Verlo dentro de Claude | `/trabajos`, `/errores` o `/parar-todo` en cualquier sesión | El mod «mesa de trabajo» lo muestra en la banda y responde en el transcript |
@@ -101,13 +104,15 @@ Reglas de oro para que la ventana de Claude dure: **`/clear` al cambiar de tarea
 
 | Familia | Agente | Modelo · esfuerzo | Cuándo |
 |---|---|---|---|
-| Dirección | `cerebro` (Claude) | Sonnet · medium | Decide, specs, desbloquea, revisión final |
-| Dirección intensa | `arquitecto` (Claude) | Sonnet · **high** | Arquitectura compleja, migraciones |
+| Dirección | `cerebro` (Claude) y sesión principal | Opus 5.5 · medium | Decide dónde profundizar, orquesta, specs, revisión final |
+| Dirección intensa | `arquitecto` (Claude) | Opus 5.5 · **high** | Decisiones globales difíciles: arquitectura, migraciones, contratos |
 | Planificación | `planificador` (Claude) / `planificador` (OC) | Haiku · medium / DeepSeek · high | Preguntas mínimas (máx. 5) antes de generar en tareas ambiguas |
 | Exploración | `explorador` (Claude) / `explorador-ds` (OC) | Haiku · **low** / DeepSeek · low | Buscar, resumir, extraer contexto |
 | Documentación | `redactor` / `redactor-ds` | Haiku · **low** / DeepSeek · low | README, docs, changelog |
 | Verificación | `analista` (Claude) | Haiku · medium | Requisitos vs realidad, checklists |
 | Control | `subdirector` (Claude) | Haiku · medium | Bucles y gasto de los trabajos |
+| Resolución (Claude) | `resolutor` | Sonnet · **high** | Decide el cómo de un área acotada y la resuelve; en el cerebro, solo si OpenCode falla dos veces |
+| Cambio mecánico (Claude) | `ayudante` | Haiku · **low** | Cambios ya decididos con instrucciones exactas (solo en modo EJECUTAR) |
 | Implementación | `implementador` (OC) | DeepSeek · high | Código delimitado por una spec |
 | Depuración | `debugger` (OC) | DeepSeek · high | Fallos reproducibles (máx. 2 ciclos) |
 | Revisión técnica | `revisor` (OC) | DeepSeek · max | Diff + edge cases |

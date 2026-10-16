@@ -19,7 +19,7 @@
     "local-codigo": { "a": "implementador", "ventana": 6, "minimoMuestras": 3, "maxTasaFallo": 0.5, "maxFallosSeguidos": 2, "enfriamientoMin": 60 }
   },
   "reglas": [
-    { "claves": ["arquitectura", "migracion", "migración", "contrato", "diseno global", "diseño global", "decision tecnica", "decisión técnica"], "capa": "claude", "agente": "arquitecto", "prioridad": true, "esfuerzo": "high", "motivo": "decisión de alto valor: la paga el cerebro con Sonnet" },
+    { "claves": ["arquitectura", "migracion", "migración", "contrato", "diseno global", "diseño global", "decision tecnica", "decisión técnica"], "capa": "claude", "agente": "arquitecto", "prioridad": true, "esfuerzo": "high", "motivo": "decisión de alto valor: la paga el arquitecto con Opus" },
     { "claves": ["spec", "especifica", "planifica", "planificar", "requisitos", "desglosa"], "capa": "claude", "agente": "cerebro", "prioridad": true, "esfuerzo": "medium", "motivo": "pensar, decidir y documentar" },
     { "claves": ["explorar", "explora", "buscar", "busca", "resumir", "resume", "localiza", "encuentra"], "capa": "opencode", "agente": "explorador-ds", "prioridad": true, "esfuerzo": "low", "motivo": "lectura barata: no gasta la ventana de Claude" },
     { "claves": ["documenta", "documentar", "readme", "changelog", "manual", "guia", "guía"], "capa": "opencode", "agente": "redactor-ds", "prioridad": true, "esfuerzo": "low", "motivo": "redacción barata" },

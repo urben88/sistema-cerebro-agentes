@@ -255,6 +255,14 @@ Prueba sin dependencias (todo en `os.tmpdir()`; el `lanzador` va **simulado** �
 
 El fix del ledger (C6) se prueba además en `node scripts/test-ledger.mjs`: `reconciliar()` completa el `agente` de entradas que se crearon sin él (terminales incluidas) sin cambiar el estado ni pisar un agente ya conocido.
 
+## Equipo Opus y reparto (spec 15 · O1–O7)
+
+```bash
+node scripts/test-opus-reparto.mjs
+```
+
+Prueba sin dependencias (datos en una carpeta temporal): comprueba el reparto del modo normal (implementar → `resolutor` Sonnet, mecánico → `ayudante` Haiku, delicado → `arquitecto` Opus, global → «hazlo tú»); el aviso de contexto por tokens reales (`systemMessage` + `additionalContext`, una vez por nivel); la nota de última sesión (slug estable, lectura y espera de la marca «pendiente»); y el frontmatter de los agentes (modelos y sin delegación).
+
 ## Prueba de fuego sugerida
 
 En una carpeta vacía:

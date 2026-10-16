@@ -4,6 +4,11 @@
  * Lo registra settings-merge.mjs en ~/.claude/settings.json como `statusLine`
  * (con refreshInterval), solo si el usuario no tiene una propia.
  *
+ * Con `--widget` (spec 15) imprime solo lo propio del sistema —modo y trabajo de OpenCode—
+ * en una línea corta (≤ 50 caracteres) para la línea extra de claude-hud (`hud.mjs`), que ya
+ * dibuja modelo, contexto, cuotas, coste, git, herramientas y subagentes. Lee el JSON de
+ * Claude de CEREBRO_BARRA_DATOS (claude-hud no le pasa stdin).
+ *
  * Silencioso y a prueba de fallos: si los trabajos no se pueden leer, imprime
  * solo la parte de Claude; si todo falla, no imprime nada.
  */
@@ -13,6 +18,7 @@ import { crearOpenCode } from './lib/opencode.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
+const WIDGET = process.argv.includes('--widget')
 
 function leerStdin() {
   return new Promise((res) => {
@@ -37,7 +43,8 @@ function duracion(desde, hasta) {
 }
 
 try {
-  const bruto = await leerStdin()
+  // Dentro de claude-hud (--extra-cmd) no hay stdin: el lanzador deja el JSON en el entorno.
+  const bruto = (WIDGET && process.env.CEREBRO_BARRA_DATOS) || await leerStdin()
   let datos = {}
   try { datos = JSON.parse(String(bruto || '{}').replace(/^﻿/, '')) } catch { /* payload no JSON */ }
 
@@ -61,15 +68,17 @@ try {
   const modoCerebro = String(datos.agent?.name || '').toLowerCase() === 'cerebro' ||
     latidos.some((l) => l.sesion && l.sesion === datos.session_id && String(l.agenteDeclarado || '').toLowerCase() === 'cerebro')
   const esfuerzo0 = datos.effort?.level ? nombreEsfuerzo(datos.effort.level) : ''
-  const partes = [
-    modoCerebro ? '🧠 CEREBRO' : '💬 normal',
-    `${modelo}${esfuerzo0 ? `·${esfuerzo0}` : ''} ${pct}%`,
-    `📁 ${path.basename(dir || '.')}`,
-  ]
+  const partes = WIDGET
+    ? [modoCerebro ? '🧠 cerebro' : '💬 normal']
+    : [
+        modoCerebro ? '🧠 CEREBRO' : '💬 normal',
+        `${modelo}${esfuerzo0 ? `·${esfuerzo0}` : ''} ${pct}%`,
+        `📁 ${path.basename(dir || '.')}`,
+      ]
   const lim = datos.rate_limits || {}
   const p5 = lim.five_hour?.used_percentage
   const p7 = lim.seven_day?.used_percentage
-  if (typeof p5 === 'number' || typeof p7 === 'number') {
+  if (!WIDGET && (typeof p5 === 'number' || typeof p7 === 'number')) {
     partes.push(`⏱ ${typeof p5 === 'number' ? `5h ${Math.round(p5)}%` : ''}${typeof p5 === 'number' && typeof p7 === 'number' ? ' · ' : ''}${typeof p7 === 'number' ? `7d ${Math.round(p7)}%` : ''}`)
   }
 
@@ -97,7 +106,7 @@ try {
 
   // Subagentes de Claude en marcha (latidos vivos del hub, solo de este proyecto):
   // hasta 3 con modelo · esfuerzo y tiempo de cada uno; con terminal ancha, la tarea.
-  try {
+  if (!WIDGET) try {
     const subs = latidos
       .filter((l) => l.agente && l.agente !== 'cerebro' && l.evento !== 'SubagentStop' && norm(l.cwd) === norm(dir))
       // Primero los que tienen modelo conocido (explorador, planificador…), luego el resto.
@@ -112,14 +121,14 @@ try {
       if (subs.length > visibles.length) seg += ` (+${subs.length - visibles.length})`
       const cols = parseInt(process.env.COLUMNS || '0', 10)
       const conTarea = visibles.find((l) => l.tarea)
-      if (cols >= 115 && conTarea) seg += ` · «${recortar(conTarea.tarea, 52)}»`
+      if (!WIDGET && cols >= 115 && conTarea) seg += ` · «${recortar(conTarea.tarea, 52)}»`
       partes.push(seg)
     }
   } catch { /* hub apagado: sin subagentes */ }
 
   // Consumo de la sesión por modelo: subagentes lanzados (Haiku / Sonnet). Es un conteo de
   // lanzamientos, no de tokens.
-  try {
+  if (!WIDGET) try {
     const u = usoModelos[datos.session_id] || null
     if (u) {
       const trozos = [["haiku", u.haiku], ["sonnet", u.sonnet], ["opus", u.opus]].filter(([, n]) => n > 0).map(([m, n]) => `${m}×${n}`)

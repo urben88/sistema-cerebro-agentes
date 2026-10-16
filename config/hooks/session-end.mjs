@@ -2,13 +2,15 @@
 /**
  * Hook `SessionEnd` de Claude Code.
  *
- * Cuando la sesión termina por `/clear` (o se cierra), guarda un checkpoint de
- * seguridad en la memoria del hub para que la siguiente sesión lo tenga todo.
- * Silencioso y sin efectos si el hub está apagado.
+ * · Siempre (cierre o `/clear`): lanza en segundo plano la nota de última sesión
+ *   resumida por Haiku (spec 15 · O5); la siguiente sesión la carga sola.
+ * · Solo en `/clear`: guarda un checkpoint de seguridad en la memoria del hub.
+ * Silencioso: sin hub o sin `claude` en el PATH, no pasa nada.
  */
 import path from 'node:path'
 import os from 'node:os'
 import { reportarError } from './reportar.mjs'
+import { lanzarResumen } from './ultima-sesion.mjs'
 
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
 
@@ -21,13 +23,16 @@ function leerStdin() {
   })
 }
 
+if (process.env.ULTIMA_SESION_RESUMIENDO) process.exit(0) // sesión interna del resumidor
+
 try {
   const bruto = await leerStdin()
   let datos = {}
   try { datos = JSON.parse(bruto || '{}') } catch { /* payload no JSON */ }
   const reason = datos.reason || 'other'
-  if (reason !== 'clear') process.exit(0)
   const cwd = datos.cwd || process.cwd()
+  try { lanzarResumen(datos.transcript_path, cwd) } catch { /* sin nota */ }
+  if (reason !== 'clear') process.exit(0)
   try {
     await fetch(`${HUB}/api/memoria/checkpoint`, {
       method: 'POST',

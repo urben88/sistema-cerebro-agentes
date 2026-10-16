@@ -10,6 +10,8 @@ import path from 'node:path'
 import os from 'node:os'
 import { reportarError } from './reportar.mjs'
 
+if (process.env.ULTIMA_SESION_RESUMIENDO) process.exit(0) // sesión interna del resumidor (spec 15)
+
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
 
 function leerStdin() {

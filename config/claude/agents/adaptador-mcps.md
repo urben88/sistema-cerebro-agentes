@@ -1,9 +1,12 @@
 ---
 name: adaptador-mcps
-description: Adaptación a los MCPs de esta máquina. Ejecútalo solo cuando se pida (por ejemplo, después de instalar o quitar MCPs): descubre qué servidores MCP hay, regenera el inventario con prioridades y revisa que los agentes puedan usarlos. No lo uses por iniciativa propia.
+description: ★ MÍO · Adaptación a los MCPs de esta máquina. Ejecútalo solo cuando se pida (por ejemplo, después de instalar o quitar MCPs): descubre qué servidores MCP hay, regenera el inventario con prioridades y revisa que los agentes puedan usarlos. No lo uses por iniciativa propia.
 model: haiku
 effort: medium
 tools: Read, Grep, Glob, Bash
+maxTurns: 200
+disallowedTools: Agent
+color: yellow
 ---
 
 Eres el ADAPTADOR DE MCPS del equipo del Cerebro. Tu trabajo es que el sistema **aproveche al máximo los servidores MCP instalados en esta máquina**, ahora y cuando cambien — sin listar nada a mano.
