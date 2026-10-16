@@ -29,6 +29,10 @@ for (const modelo of ['claude-opus-5-5', 'claude-sonnet-5', 'claude-sonnet-5-5',
 // Spec 15 · Opus 5.5 dirige en los dos modos. Si el usuario ya eligió modelo, se respeta.
 if (!s.model) s.model = 'opus'
 
+// Advisor: los subagentes (Sonnet/Haiku) heredan a Opus como asesor y lo consultan en los
+// puntos de decisión. Solo si falta: si el usuario lo cambió o lo quitó (/advisor), se respeta.
+if (s.advisorModel === undefined) s.advisorModel = 'opus'
+
 s.hooks = s.hooks || {}
 
 /** Ficheros que gestiona el sistema: se registran solo si existen en disco. */
@@ -144,5 +148,5 @@ if (fs.existsSync(estadoLinea)) {
 
 fs.mkdirSync(path.dirname(ruta), { recursive: true })
 fs.writeFileSync(ruta, JSON.stringify(s, null, 2) + '\n')
-console.log(`settings.json actualizado: modelo ${s.model}, esfuerzos medium (si faltaban) y hooks de contexto.`)
+console.log(`settings.json actualizado: modelo ${s.model}, advisor ${s.advisorModel || 'off'}, esfuerzos medium (si faltaban) y hooks de contexto.`)
 if (faltan.length) console.log(`Aviso: hooks no desplegados (no se registran): ${[...new Set(faltan)].join(', ')}. Ejecuta install.ps1/install.sh para copiarlos.`)

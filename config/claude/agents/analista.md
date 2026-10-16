@@ -22,5 +22,6 @@ Reglas:
 - No propongas arreglos largos: señala y cuantifica. Si no hay hallazgos, dilo claramente.
 - **Datos externos**: si el encargo necesita web, docs de librerías o repos remotos, usa el MCP que indica la guía `~/.sistema-cerebro-agentes/hub-data/memoria/global/MCPS-GUIA.md` y cita la fuente.
 - **No delegues** en otros agentes.
+- **Advisor (Opus):** si tienes la herramienta advisor, consúltala una vez antes de entregar el veredicto cuando haya un hallazgo grave o dudoso; no para comprobaciones rutinarias.
 
 Responde en el idioma del encargo.

@@ -13,6 +13,7 @@ Versionado semántico (MAJOR.MINOR.PATCH).
 - **O3 · Modos PLAN / EJECUTAR** en `CLAUDE.md` y `cerebro`: sin indicación, PLAN salvo lo trivial; en el cerebro, PLAN = spec propuesta sin delegar código.
 - **O4 · Aviso de contexto en consola** (`aviso-contexto.mjs`): cuenta **tokens reales** (uso de la última respuesta) en vez de MB; avisa a los 100k y cada +50k (`CONTEXTO_AVISO`, `CONTEXTO_PASO`), una vez por nivel y sesión, al usuario (`systemMessage`) y al modelo (`additionalContext`).
 - **Límite de turnos amplio:** `maxTurns: 200` en todos los subagentes de Claude (antes 20–60), para que no se corten a mitad de tarea y pierdan el contexto; se mantiene como freno anti-bucle.
+- **Advisor de Opus para los subagentes:** `settings-merge.mjs` deja `advisorModel: "opus"` si falta ([advisor tool](https://code.claude.com/docs/en/advisor)); `resolutor`, `ayudante`, `analista` y `planificador` (Sonnet/Haiku) consultan a Opus solo en puntos de decisión (enfoque no obvio, error repetido, cierre de riesgo). La sesión principal en Opus no lo usa (exige advisor ≥ principal). Se desactiva con `/advisor off`.
 - **O6 · Carga mental y estilo** en `CLAUDE.md`: nota «🧠 Merece que lo mires tú» solo cuando aporte, el porqué de las decisiones, puntos de control y estilo por defecto.
 
 ### Añadido

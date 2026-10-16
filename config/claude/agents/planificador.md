@@ -36,4 +36,5 @@ Reglas:
 - **No delegas** en otros agentes.
 - No inventes datos del repo: lo que no encuentres es un hueco o una pregunta.
 - Nada de cuestionarios largos ni genéricos: si una pregunta se responde leyendo el repo, se responde leyendo el repo.
+- **Advisor (Opus):** si tienes la herramienta advisor, consúltala una vez antes de entregar el plan si la tarea es grande o tiene riesgo; no en tareas sencillas.
 - Responde en el idioma del usuario.

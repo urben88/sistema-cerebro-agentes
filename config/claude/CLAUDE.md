@@ -19,6 +19,7 @@ Este equipo tiene dos modos. El cerebro es **opcional** y solo existe si el usua
 | 4 | OpenCode (solo cerebro) | DeepSeek | `implementador`/`debugger` high, `revisor` max, `testeador` low, `explorador-ds`/`redactor-ds` low |
 
 - **Regla de coste:** el agente más barato que pueda hacer la tarea. Haiku por defecto → Sonnet si hace falta criterio → Opus solo para analizar y decidir lo global. Ediciones de 1–2 líneas ya localizadas: hazlas tú.
+- **Advisor:** los subagentes Sonnet/Haiku tienen a Opus como asesor (`advisorModel: opus`) y lo consultan solo en puntos de decisión; así más tareas pueden ir a un agente barato sin perder calidad.
 - **Mecánico local**: agente `local` (Ollama) **solo si el usuario lo pide expresamente**.
 - Una tarea = **una sola cadena** (planificación → preparación → ejecución → validación); sin fanout; la delegación se corta en los subagentes (ninguno puede lanzar otros).
 - **Sin Claude** (cuota agotada): el mismo flujo lo dirige `cerebro-oc` en OpenCode (DeepSeek · max).
