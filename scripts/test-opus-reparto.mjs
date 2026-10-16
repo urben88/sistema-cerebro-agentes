@@ -45,7 +45,7 @@ assert.equal(tri.clasificarPorReglas('valida la decisión técnica del contrato'
 // el catálogo de Laya incluye los roles nuevos, en la capa Claude
 assert.ok(CATALOGO_AGENTES.includes('retocador') && CATALOGO_AGENTES.includes('consultor'))
 assert.ok(AGENTES_CLAUDE.has('retocador') && AGENTES_CLAUDE.has('consultor'))
-assert.equal(reglas.reglas.find((r) => r.agente === 'implementador').esfuerzo, 'high')
+assert.equal(reglas.reglas.find((r) => r.agente === 'implementador').esfuerzo, 'low')
 assert.equal(reglas.reglas.find((r) => r.agente === 'debugger').esfuerzo, 'high')
 assert.equal(reglas.reglas.find((r) => r.agente === 'revisor').esfuerzo, 'max')
 assert.deepEqual([aClaude({ agente: 'local' }).subagente, aClaude({ agente: 'local' }).modelo], ['ayudante', 'haiku'])
@@ -98,9 +98,15 @@ assert.match(fm('retocador'), /^effort: low$/m)
 assert.match(fm('consultor'), /^model: opus$/m)
 assert.match(fm('consultor'), /^effort: low$/m)
 const oc = (n) => fs.readFileSync(path.join(raiz, 'config/opencode/agents', `${n}.md`), 'utf8')
-assert.match(oc('implementador'), /^variant: high$/m)
+assert.match(oc('implementador'), /^variant: low$/m)
 assert.match(oc('debugger'), /^variant: high$/m)
 assert.match(oc('revisor'), /^variant: max$/m)
+// Ningún `variant` de OpenCode se sale de la escalera de DeepSeek (low/high/max).
+for (const n of ['cerebro-oc', 'implementador', 'debugger', 'revisor', 'testeador', 'explorador-ds', 'redactor-ds', 'planificador']) {
+  const m = oc(n).match(/^variant:\s*(\S+)$/m)
+  assert.ok(m, `${n}: sin variant`)
+  assert.ok(['low', 'high', 'max'].includes(m[1]), `${n}: variant inválido (${m[1]})`)
+}
 for (const n of ['explorador', 'redactor', 'analista', 'planificador', 'subdirector', 'ayudante']) assert.match(fm(n), /^model: haiku$/m, n)
 for (const n of ['explorador', 'redactor', 'analista', 'planificador', 'subdirector', 'ayudante', 'resolutor', 'arquitecto', 'retocador', 'consultor']) assert.match(fm(n), /^disallowedTools: Agent$/m, n)
 

@@ -77,11 +77,11 @@ opencode_fire({
 
 **Manos de OpenCode** (`implementador`, `debugger`, `revisor`, `testeador`, exploradores…):
 
-- **Barra de estado** de Claude Code, en el proyecto donde trabaja: `🤖 implementador (high) · 12m · $0.08` (o `⏳ pregunta` si te necesita; `✅/❌` al cerrar).
+- **Barra de estado** de Claude Code, en el proyecto donde trabaja: `🤖 implementador (low) · 12m · $0.08` (o `⏳ pregunta` si te necesita; `✅/❌` al cerrar).
 - **En el chat**: el Cerebro te cuenta hitos cada ~1 min; pregúntale «¿cómo va?» cuando quieras — saca el resumen con `trabajo_estado` (estado, tiempo, coste, tokens, último paso y herramientas usadas).
 - **Panel del hub** (`http://127.0.0.1:4597`): «La oficina» y la tarjeta de trabajos en vivo; el vigilante avisa de atascos.
 
-Reparto de esfuerzos en OpenCode: `implementador` y `debugger` **high** · `revisor` **max** · `testeador` **low** · `explorador-ds`/`redactor-ds` **low** · `planificador` **high** · `cerebro-oc` **max**.
+Reparto de esfuerzos en OpenCode: `implementador` **low**, `debugger` **high** · `revisor` **max** · `testeador` **low** · `explorador-ds`/`redactor-ds` **low** · `planificador` **high** · `cerebro-oc` **max**.
 
 ## Cambiar el modelo de un agente
 

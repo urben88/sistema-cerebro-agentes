@@ -4,7 +4,7 @@
 Que cada rol gaste lo justo: bajar los esfuerzos que estaban por encima de lo necesario y añadir dos roles que hoy no existen (uno barato para cambios pequeños y otro para una segunda opinión rápida). El triaje local (**Laya**) debe poder elegir los dos, no solo las palabras clave.
 
 ## Decisiones del usuario (2026-10-16)
-- Bajar esfuerzos: `resolutor` a **Sonnet · medium** (high al depurar o si es delicado). `implementador` iba a bajar a **DeepSeek · medium**, pero **DeepSeek no tiene `medium`** (su escalera es `low`/`high`/`max`, comprobado en el catálogo de opencode), así que se queda en **high**. `debugger` sigue en high; `revisor` sigue en max, pero solo cuando hay código con lógica que revisar.
+- Bajar esfuerzos: `resolutor` a **Sonnet · medium** (high al depurar o si es delicado) e `implementador` a **DeepSeek · low**. DeepSeek no tiene `medium` (su escalera es `low`/`high`/`max`, comprobado en el catálogo de opencode), así que la bajada va al escalón barato. `debugger` sigue en high; `revisor` sigue en max, pero solo cuando hay código con lógica que revisar.
 - `cerebro` sigue en **Opus · medium**; el esfuerzo lo sube el usuario a mano (`/effort high`); el agente no lo sube solo.
 - Dos roles nuevos: **`retocador`** (Sonnet · low) y **`consultor`** (Opus · low, solo lectura).
 - **Laya debe poder elegirlos.** Hasta ahora su catálogo trata como OpenCode todo lo que no sea `cerebro` o `arquitecto` (la spec 15 lo dejaba expresamente fuera de alcance); esto lo revierte.
@@ -14,7 +14,7 @@ Que cada rol gaste lo justo: bajar los esfuerzos que estaban por encima de lo ne
 | Rol | Antes | Ahora |
 |---|---|---|
 | `resolutor` | Sonnet · high | Sonnet · **medium** (high al depurar o si es delicado) |
-| `implementador` | DeepSeek · high | **sin cambios**: DeepSeek no tiene `medium` (solo `low`/`high`/`max`) |
+| `implementador` | DeepSeek · high | DeepSeek · **low** (no hay `medium`: la escalera es `low`/`high`/`max`) |
 | `debugger` | DeepSeek · high | sin cambios |
 | `revisor` | DeepSeek · max | max, **solo con código con lógica** que revisar |
 | `cerebro` | Opus · medium | sin cambios (lo sube el usuario con `/effort high`) |
@@ -34,7 +34,7 @@ Que cada rol gaste lo justo: bajar los esfuerzos que estaban por encima de lo ne
 3. `CATALOGO_AGENTES` incluye `retocador` y `consultor`, y ambos caen en la capa `claude`.
 4. «un cambio pequeño en el botón» → `retocador`; «ajusta los esfuerzos de los agentes» y «retoca el README» → **no** `retocador`; «retoca este fallo» → `debugger`; «valida la decisión técnica del contrato» → `arquitecto`.
 5. `node scripts/test-opus-reparto.mjs` y `scripts/verificar` pasan. Antes de desplegar, los dos únicos fallos esperados de `verificar` son los agentes `retocador` y `consultor` sin instalar.
-6. Ningún `variant` de `config/opencode/agents/*.md` usa `medium` (inválido para DeepSeek): `implementador`/`debugger`/`planificador` `high`, `revisor`/`cerebro-oc` `max` y el resto `low`.
+6. Ningún `variant` de `config/opencode/agents/*.md` se sale de `low`/`high`/`max` (el único juego válido para DeepSeek): `debugger`/`planificador` `high`, `revisor`/`cerebro-oc` `max` y el resto `low`. `test-opus-reparto.mjs` lo comprueba.
 
 ## Fuera de alcance
 - Que el triaje sepa el modo (normal/cerebro): Laya sigue devolviendo la capa en `capa` y el MCP traduce en modo normal.
