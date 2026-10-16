@@ -8,7 +8,7 @@ Versionado semántico (MAJOR.MINOR.PATCH).
 ### Cambiado (esfuerzos más bajos)
 
 - `resolutor` baja a **Sonnet · medium**; sube a **high** al depurar o en tareas delicadas (`reparto-claude.mjs`: si el origen es `debugger` o hay `escalar`/`riesgo`, devuelve esfuerzo high).
-- `implementador` (OpenCode) baja a **DeepSeek · medium** (agente y regla de `reglas.json`). `debugger` sigue en high y `revisor` en max.
+- `implementador` (OpenCode) **se queda en DeepSeek · high**: DeepSeek solo tiene `low`/`high`/`max` —no existe `medium` (comprobado en el catálogo de opencode: `reasoning_options` de `deepseek/deepseek-flash`)—, así que la bajada prevista no es expresable. `debugger` sigue en high y `revisor` en max.
 - `revisor` solo cuando hay código con lógica que revisar; en cambios mecánicos, de docs o de configuración trivial bastan los tests o el `analista` (pauta en `cerebro`, `cerebro-oc` y el skill `delegar-a-opencode`).
 - `cerebro` sigue en Opus · medium; el esfuerzo lo sube el usuario a mano (p. ej. `/effort high`), el agente no lo sube solo.
 

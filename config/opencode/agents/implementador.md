@@ -2,7 +2,7 @@
 description: ★ MÍO · Implementa código delimitado por una spec (del Cerebro de Claude o de cerebro-oc). Ejecuta cambios, compila y pasa pruebas. No delega en otros agentes.
 mode: all
 model: deepseek/deepseek-flash
-variant: medium
+variant: high
 permission:
   bash:
     "rm -rf /": deny

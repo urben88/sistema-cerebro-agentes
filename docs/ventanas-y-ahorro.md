@@ -18,7 +18,7 @@ Cómo hacer que la suscripción de Claude (20 $) rinda al máximo, con las condi
 | Resolver el cómo de un área acotada | `resolutor` (Claude) | Sonnet · medium (high al depurar o si es delicado; en el cerebro, solo si OpenCode falla dos veces) |
 | Cambios pequeños con algo de criterio (1–2 archivos) | `retocador` (Claude) | Sonnet · low |
 | Leer, buscar, resumir, redactar, checklists, cambios ya decididos | subagentes Haiku (Claude) | Haiku · low/medium (`ayudante` · low) |
-| Escribir, depurar, probar, revisar código | OpenCode | DeepSeek · low/medium/high/max según rol (`revisor` max solo con código con lógica) |
+| Escribir, depurar, probar, revisar código | OpenCode | DeepSeek · low/high/max según rol (`revisor` max solo con código con lógica) |
 | Mecánico explícito | `local` (Ollama) | gratis |
 
 **Hábitos que estiran la ventana**
