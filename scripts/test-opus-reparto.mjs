@@ -12,7 +12,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -86,7 +86,14 @@ for (const c of ['ccstatusline', 'node "C:/x/hub/estado-linea.mjs"', 'exec "C:/x
 assert.ok(!barra.statusLineEsNuestra({ command: 'mi-barra.sh' }))
 const estadoLinea = path.join(raiz, 'config/hub/estado-linea.mjs')
 const widget = spawnSync(process.execPath, [estadoLinea, '--widget'], { input: '', encoding: 'utf8', env: { ...process.env, HUB_URL: 'http://127.0.0.1:1', CEREBRO_BARRA_DATOS: JSON.stringify({ session_id: 'w', agent: { name: 'cerebro' }, workspace: { current_dir: tmp } }) } }).stdout.trim()
-assert.equal(widget, '🧠 cerebro', 'el widget lee el JSON del entorno (claude-hud no le pasa stdin)')
+assert.match(widget, /^🧠 cerebro · (🔥 DS punta|🌙 DS valle ½)/, 'el widget lee el JSON del entorno (claude-hud no le pasa stdin)')
+
+// Tramo de DeepSeek: punta L–V 01–04 y 06–10 UTC; el resto, valle.
+const { tramoDeepseek } = await import(pathToFileURL(path.join(raiz, 'config/hub/lib/tarifa-deepseek.mjs')).href)
+assert.deepEqual(tramoDeepseek(new Date('2026-10-16T02:00:00Z')), { punta: true, cambiaEnMin: 120 })
+assert.deepEqual(tramoDeepseek(new Date('2026-10-16T04:10:00Z')), { punta: false, cambiaEnMin: 110 })
+assert.equal(tramoDeepseek(new Date('2026-10-17T07:00:00Z')).punta, false, 'sábado: valle')
+assert.deepEqual(tramoDeepseek(new Date('2026-10-19T00:59:00Z')), { punta: false, cambiaEnMin: 1 })
 
 fs.rmSync(tmp, { recursive: true, force: true })
 console.log('OK  spec 15: reparto Opus/Sonnet/Haiku, aviso de contexto en consola, nota de última sesión, agentes y barra claude-hud')

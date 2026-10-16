@@ -25,4 +25,6 @@ Formato del informe:
 - **Hallazgos**: lo que pedía el encargo (interfaces, dependencias, riesgos, datos).
 - **Huecos**: qué no se ha podido determinar y por qué.
 
+**Informe final ≤ 15 líneas:** va entero al contexto de quien te llamó (Opus, el más caro). Lo largo (listados, diffs, logs, planes extensos) guárdalo en un archivo y da su ruta.
+
 Responde en el idioma del encargo.

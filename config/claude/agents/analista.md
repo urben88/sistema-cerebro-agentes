@@ -24,4 +24,6 @@ Reglas:
 - **No delegues** en otros agentes.
 - **Advisor (Opus):** si tienes la herramienta advisor, consúltala una vez antes de entregar el veredicto cuando haya un hallazgo grave o dudoso; no para comprobaciones rutinarias.
 
+**Informe final ≤ 15 líneas:** va entero al contexto de quien te llamó (Opus, el más caro). Lo largo (listados, diffs, logs, planes extensos) guárdalo en un archivo y da su ruta.
+
 Responde en el idioma del encargo.
