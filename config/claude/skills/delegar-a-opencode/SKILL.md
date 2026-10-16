@@ -34,7 +34,7 @@ El briefing de sesión ya te trae los hallazgos **pendientes de validar**: preg�
 - **Una sola cadena por tarea**: planificación → preparación → ejecución → validación. Sin fanout ni ramas paralelas salvo tareas independientes (máx. 2, en directorios/worktrees distintos).
 - **La delegación se corta** en los subagentes: solo tú (y `cerebro-oc` sin Claude) delegas.
 - Los topes por job son orientativos y los vigila el hub (avisa al 80 %; puede cortar al límite).
-- **Subagentes de Claude**: pasa siempre `subagent_type` explícito (`planificador`, `explorador`, `redactor`, `analista`, `arquitecto`, `subdirector`). No lo omitas (cae en `general-purpose`, que corre en Sonnet) ni pidas `fork` (hereda tu modelo y todo el contexto). Solo `arquitecto` usa Sonnet a propósito.
+- **Subagentes de Claude**: pasa siempre `subagent_type` explícito (`planificador`, `explorador`, `redactor`, `analista`, `ayudante`, `resolutor`, `arquitecto`, `subdirector`). No lo omitas (cae en `general-purpose`, que hereda el modelo principal: Opus) ni pidas `fork` (hereda tu modelo y todo el contexto). Solo `resolutor` usa Sonnet a propósito; `arquitecto` es Opus.
 
 ## Herramientas MCP disponibles
 

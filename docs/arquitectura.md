@@ -8,9 +8,9 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
  Tú
   │
   ├──── PUERTA 1 · con Claude (suscripción que se estira) ──────────────────────────┐
-  │     Claude Code → agente `cerebro` (Sonnet · medium; `arquitecto` para lo duro) │
-  │       · subagentes Haiku: planificador · explorador · redactor · analista ·     │
-│         subdirector (y arquitecto Sonnet para lo duro)                         │
+  │   Claude Code → agente `cerebro` (Opus 5.5 · medium; `arquitecto` para lo duro) │
+  │       · Haiku: planificador · explorador · redactor · analista · ayudante       │
+  │       · subdirector · Sonnet: resolutor (cómo) · Opus: arquitecto (lo duro)     │
   │       · MCP `opencode` → código en DeepSeek   · MCP `triaje` → ¿quién y cuánto? │
   │       · hooks → briefing, checkpoints, /clear sin pérdidas                      │
   │                                                                                 │
@@ -45,7 +45,7 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
 | Componente | Dónde vive | Lo despliega |
 |---|---|---|
 | Agentes de OpenCode (10, por esfuerzo) | `~/.config/opencode/agents/` | `install.ps1` / `install.sh` |
-| Agente `cerebro` + 7 subagentes (MCPs inline) | `~/.claude/agents/` | ídem |
+| Agente `cerebro` + 9 subagentes (MCPs inline) | `~/.claude/agents/` | ídem |
 | Barra de estado de Claude (modelo · contexto · trabajo OpenCode) | `~/.sistema-cerebro-agentes/hub/estado-linea.mjs` + `settings.json` | ídem |
 | Rol Cerebro + skill `delegar-a-opencode` | `~/.claude/CLAUDE.md` (bloque) y `~/.claude/skills/` | ídem |
 | Hooks de contexto + CLI `estado` | `~/.sistema-cerebro-agentes/hooks/` | ídem |
@@ -63,6 +63,13 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
 5. **Triaje**: si hay duda de a quién mandar algo, Laya decide (con reglas de respaldo); queda registrado.
 6. **Vigilancia y visibilidad**: el hub avisa de atascos; el Cerebro te enseña hitos del job con `trabajo_estado` (estado, tiempo, coste, último paso) y la barra de estado de Claude muestra el trabajo en curso; el `subdirector` (Haiku) puede revisar extractos y cancelar/redirigir.
 7. **Cierre**: veredicto del `revisor` contra la spec, resumen al usuario y `ESTADO.md` al día; al ~70 % de contexto, `/clear` sin pérdidas.
+
+## Modos, contexto y nota de sesión (spec 15)
+
+- **Reparto en Claude**: Opus 5.5 dirige (sesión principal, `cerebro`, `arquitecto`); `resolutor` (Sonnet · high) resuelve el cómo de un área acotada; Haiku hace lo ligero y `ayudante` (Haiku · low) los cambios ya decididos. Regla de coste: el agente más barato que pueda hacer la tarea.
+- **PLAN / EJECUTAR**: sin indicación se trabaja en PLAN (investigar y proponer sin cambiar nada); el modo viaja en cada encargo al `resolutor`. El `ayudante` solo se usa en EJECUTAR.
+- **Aviso de contexto** (`aviso-contexto.mjs`): mide tokens reales de la última respuesta, avisa desde 100k y cada +50k (`CONTEXTO_AVISO`, `CONTEXTO_PASO`), y lo muestra también en la consola del usuario.
+- **Nota de última sesión** (`session-end.mjs` → `resumir-sesion.mjs`): al cerrar o hacer `/clear`, Haiku resume la sesión en ≤ 5 líneas en `hub-data/memoria/ultima-sesion/<proyecto>.md`; `session-start.mjs` la carga al volver.
 
 ## Ciclo de vida de los servicios
 

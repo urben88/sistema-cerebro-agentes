@@ -1,5 +1,5 @@
 ---
-description: Agente local gratuito (Ollama/Qwen3.5 9B, 16k). Solo bajo petición explícita del usuario: clasificar, renombrar, transformar y tareas mecánicas ya especificadas. Nunca automático.
+description: ★ MÍO · Agente local gratuito (Ollama/Qwen3.5 9B, 16k). Solo bajo petición explícita del usuario: clasificar, renombrar, transformar y tareas mecánicas ya especificadas. Nunca automático.
 mode: all
 model: ollama/hf.co/bartowski/Qwen_Qwen3.5-9B-GGUF:IQ4_XS
 permission:

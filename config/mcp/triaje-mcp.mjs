@@ -17,9 +17,10 @@
 import readline from 'node:readline'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { aClaude } from '../hub/lib/reparto-claude.mjs'
 
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
-const VERSION = '0.3.0'
+const VERSION = '0.4.0'
 const RAIZ = process.env.SISTEMA_CEREBRO_DIR || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const TOOLS = [
@@ -31,7 +32,7 @@ const TOOLS = [
       properties: {
         tarea: { type: 'string', description: 'Descripción breve de la tarea (una o dos frases).' },
         contexto: { type: 'string', description: 'Contexto opcional: proyecto, ficheros, complejidad.' },
-        solo_claude: { type: 'boolean', description: 'true en modo normal (sin OpenCode): traduce la decisión a un subagente de Claude (Haiku o Sonnet) con su modelo y esfuerzo.' },
+        solo_claude: { type: 'boolean', description: 'true en modo normal (sin OpenCode): traduce la decisión a un subagente de Claude (Haiku, Sonnet `resolutor` u Opus `arquitecto`) con su modelo y esfuerzo.' },
       },
       required: ['tarea'],
     },
@@ -61,29 +62,7 @@ const TOOLS = [
   },
 ]
 
-// Modo normal: traduce la decisión de Laya (que puede nombrar agentes de OpenCode) a un
-// subagente de Claude con modelo y esfuerzo. Sonnet/Haiku solo; nunca OpenCode.
-const CLAUDE_AGENTES = {
-  explorador: { modelo: 'haiku', esfuerzo: 'low' },
-  redactor: { modelo: 'haiku', esfuerzo: 'low' },
-  analista: { modelo: 'haiku', esfuerzo: 'medium' },
-  subdirector: { modelo: 'haiku', esfuerzo: 'medium' },
-  planificador: { modelo: 'haiku', esfuerzo: 'medium' },
-  arquitecto: { modelo: 'sonnet', esfuerzo: 'high' },
-}
-const OC_A_CLAUDE = {
-  'explorador-ds': 'explorador', local: 'explorador', 'redactor-ds': 'redactor',
-  testeador: 'analista', revisor: 'analista',
-}
-function aClaude(j) {
-  const a = String(j.agente || '').toLowerCase()
-  const dificil = j.escalar === true || j.riesgo === true || /alto|high/i.test(String(j.riesgo))
-  let sub = CLAUDE_AGENTES[a] ? a : OC_A_CLAUDE[a]
-  if (sub === 'analista' && dificil) sub = 'arquitecto'
-  if (sub) return { subagente: sub, ...CLAUDE_AGENTES[sub], nota: dificil ? 'tarea delicada: revisa tú el resultado' : 'delegable; encargo acotado y salida breve' }
-  // implementar/depurar o decisión del cerebro: lo hace el hilo principal (Sonnet).
-  return { subagente: '(ninguno: hazlo tú en el hilo principal)', modelo: 'sonnet', esfuerzo: dificil ? 'high' : 'medium', nota: 'trabajo de código o decisión: no se delega a Haiku' }
-}
+// Modo normal: la traducción a subagentes de Claude (Opus/Sonnet/Haiku) vive en hub/lib/reparto-claude.mjs (spec 15).
 
 function send(obj) { process.stdout.write(JSON.stringify(obj) + '\n') }
 

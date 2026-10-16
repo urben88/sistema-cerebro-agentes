@@ -1,5 +1,5 @@
 ---
-description: Cerebro de sustitución para cuando no hay Claude. Orquesta: reconoce el repositorio, planifica si hace falta, escribe specs en la estructura del proyecto y delega en implementador/debugger/revisor/testeador/explorador-ds/redactor-ds. Solo él delega.
+description: ★ MÍO · Cerebro de sustitución para cuando no hay Claude. Orquesta: reconoce el repositorio, planifica si hace falta, escribe specs en la estructura del proyecto y delega en implementador/debugger/revisor/testeador/explorador-ds/redactor-ds. Solo él delega.
 mode: primary
 model: deepseek/deepseek-flash
 variant: max

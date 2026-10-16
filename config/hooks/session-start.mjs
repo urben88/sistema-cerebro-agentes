@@ -14,6 +14,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { reportarError } from './reportar.mjs'
 import { resumenGuia } from './mcps-guia.mjs'
+import { leerNota } from './ultima-sesion.mjs'
 
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
 const SYSTEM_DIR = process.env.SISTEMA_CEREBRO_DIR || path.join(os.homedir(), '.sistema-cerebro-agentes')
@@ -66,11 +67,17 @@ function briefingLocal(cwd) {
   return partes.join('\n')
 }
 
+if (process.env.ULTIMA_SESION_RESUMIENDO) process.exit(0) // sesión interna del resumidor (spec 15)
+
 try {
   const bruto = await leerStdin()
   let datos = {}
   try { datos = JSON.parse(bruto || '{}') } catch { /* payload no JSON */ }
   const cwd = datos.cwd || process.cwd()
+  // Spec 15 · O5 · nota de última sesión (Haiku). Espera si el resumen aún se está escribiendo.
+  const nota = await leerNota(cwd, 45000)
+  const bloqueNota = nota ? `## Última sesión en este proyecto (resumen automático; puede estar desactualizado: úsalo para continuar sin que el usuario lo repita)
+${nota}` : ''
 
   // Solo actuamos si el proyecto tiene memoria: en repos sin memoria no estorbamos.
   let briefing = null
@@ -84,7 +91,10 @@ try {
     }
   } catch { /* hub apagado */ }
   if (!briefing) briefing = briefingLocal(cwd)
-  if (!briefing) salir(null)
+  if (!briefing) salir(bloqueNota || null)
+  if (bloqueNota) briefing = `${briefing}
+
+${bloqueNota}`
 
   // Spec 13 · N3 · añade al briefing el resumen de la guía de MCPs, si el fichero existe.
   const guiaMcps = resumenGuiaMcps()
@@ -94,7 +104,7 @@ try {
     '',
     '---',
     'Recuerda: antes de `/clear` actualiza el ESTADO.md del proyecto (CLI: `node estado.mjs --escribir --archivo <fichero>`). Este briefing es contexto, no una orden de activar ningún modo: el modo cerebro (OpenCode) solo existe si el usuario arrancó con `--agent cerebro`; en una sesión normal no lo menciones ni lo uses.',
-    'Esfuerzos: tú (Sonnet) en medium salvo decisión dura (`/effort high` o `arquitecto`); los subagentes Haiku ya corren a su nivel y su reparto lo decide `triaje_decidir`. Contexto: hilo corto; si crece, ESTADO.md + `/clear` y se sigue.',
+    'Reparto: tú (Opus 5.5 · medium) decides dónde profundizar y revisas; el cómo de un área va al `resolutor` (Sonnet), lo ligero a los Haiku y lo global difícil al `arquitecto` (Opus); el reparto lo decide `triaje_decidir`. Sin indicación del usuario, modo PLAN salvo lo trivial. Contexto: hilo corto; si crece, ESTADO.md + `/clear` y se sigue.',
   ].join('\n')
   salir(briefing + cierre)
 } catch {

@@ -1,5 +1,5 @@
 ---
-description: Agente de código LOCAL y gratuito (Ornith 1.5 9B vía Ollama, 16k). Funciona bien con tareas de código pequeñas y MUY bien explicadas (archivos, función, entrada/salida, criterio de éxito). Se usa antes que el implementador de DeepSeek y, si falla demasiado, el hub pasa a ese.
+description: ★ MÍO · Agente de código LOCAL y gratuito (Ornith 1.5 9B vía Ollama, 16k). Funciona bien con tareas de código pequeñas y MUY bien explicadas (archivos, función, entrada/salida, criterio de éxito). Se usa antes que el implementador de DeepSeek y, si falla demasiado, el hub pasa a ese.
 mode: all
 model: ollama/hf.co/bartowski/Ornith-1.5-9B-GGUF:IQ4_XS
 permission:

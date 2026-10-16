@@ -14,19 +14,21 @@ Cómo hacer que la suscripción de Claude (20 $) rinda al máximo, con las condi
 
 | Tarea | Quién | Modelo · esfuerzo |
 |---|---|---|
-| Pensar, decidir, especificar, revisar | cerebro (Claude) | Sonnet · medium (high puntual, o `arquitecto`) |
-| Leer, buscar, resumir, redactar, checklists | subagentes (Claude) | Haiku · medium |
+| Analizar, decidir dónde profundizar, orquestar, revisar | sesión principal / cerebro (Claude) | Opus 5.5 · medium (high puntual, o `arquitecto` Opus · high) |
+| Resolver el cómo de un área acotada | `resolutor` (Claude) | Sonnet · high (en el cerebro, solo si OpenCode falla dos veces) |
+| Leer, buscar, resumir, redactar, checklists, cambios ya decididos | subagentes Haiku (Claude) | Haiku · low/medium (`ayudante` · low) |
 | Escribir, depurar, probar, revisar código | OpenCode | DeepSeek · low/high/max según rol |
 | Mecánico explícito | `local` (Ollama) | gratis |
 
 **Hábitos que estiran la ventana**
 
-1. `/clear` al cambiar de tarea — el mayor ahorro; el hub guarda el estado y lo devuelve.
+1. `/clear` al cambiar de tarea — el mayor ahorro; el hub guarda el estado y lo devuelve, y Haiku deja una nota de última sesión que se carga sola al volver. El aviso de contexto (desde 100k tokens) sale en consola: es la señal para planear el `/clear`.
 2. Sin fanout: una sola cadena por tarea (preparación → ejecución → validación).
 3. Esfuerzo `medium` por defecto; `high` solo para el plan/diseño.
 4. Specs en archivo: el cerebro delega con un prompt corto que apunta a `docs/specs/NN.md`.
 5. No reanudar sesiones frías de más de una hora (la caché dura 1 h y el reproceso se paga entero).
 6. Cuando la barra semanal pase de ~80 %, pasa a la **Puerta 2**: OpenCode con `cerebro-oc` hasta el reset.
+7. Modo **PLAN** por defecto: se investiga y se propone antes de gastar en ejecución; ejecutar es una decisión tuya («ejecuta»).
 
 ## Delegación y coste en OpenCode
 

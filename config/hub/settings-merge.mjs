@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Fusiona en ~/.claude/settings.json lo que necesita el sistema:
- *   · modelSettings en «medium» para Sonnet 5/5.5 y Haiku 5.5 (solo si faltan)
+ *   · modelSettings en «medium» para Opus 5.5, Sonnet 5/5.5 y Haiku 5.5 (solo si faltan)
+ *   · modelo principal Opus (spec 15: Opus dirige; solo si no hay uno elegido)
  *   · los hooks de contexto (SessionStart, PreCompact, SessionEnd)
  *   · los hooks de latido de actividad (UserPromptSubmit, Stop, SubagentStart, SubagentStop)
  *
@@ -11,6 +12,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { hudInstalado, escribirConfigHud, statusLineEsNuestra, comandoHud, RUTA_CONFIG_HUD } from './barra-hud.mjs'
 
 const hooksDir = process.argv[2] || path.join(os.homedir(), '.sistema-cerebro-agentes', 'hooks')
 const ruta = path.join(os.homedir(), '.claude', 'settings.json')
@@ -20,9 +22,12 @@ try { s = JSON.parse(fs.readFileSync(ruta, 'utf8')) } catch { s = {} }
 if (typeof s !== 'object' || s === null || Array.isArray(s)) s = {}
 
 s.modelSettings = s.modelSettings || {}
-for (const modelo of ['claude-sonnet-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']) {
+for (const modelo of ['claude-opus-5-5', 'claude-sonnet-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']) {
   if (!s.modelSettings[modelo]) s.modelSettings[modelo] = { effortLevel: 'medium' }
 }
+
+// Spec 15 · Opus 5.5 dirige en los dos modos. Si el usuario ya eligió modelo, se respeta.
+if (!s.model) s.model = 'opus'
 
 s.hooks = s.hooks || {}
 
@@ -49,12 +54,13 @@ function registrarContexto(evento, matcher, archivo) {
 }
 registrarContexto('SessionStart', 'startup|resume|clear|compact', 'session-start.mjs')
 registrarContexto('PreCompact', 'manual|auto', 'pre-compact.mjs')
-// SessionEnd: checkpoint en /clear + apagado de los trabajos de OpenCode al cerrar
-// la sesión (cualquier motivo: prompt_input_exit, logout, other…). El de apagado
-// lleva 8 s de presupuesto para abortar las sesiones en el servidor V1.
+// SessionEnd (cualquier motivo: clear, prompt_input_exit, logout, other…): nota de última
+// sesión con Haiku en segundo plano + checkpoint si es /clear (session-end.mjs) y apagado de
+// los trabajos de OpenCode. El de apagado lleva 8 s de presupuesto para abortar las sesiones
+// en el servidor V1; session-end sale enseguida (el resumen va desacoplado).
 {
   const grupos = []
-  if (existe('session-end.mjs')) grupos.push({ matcher: 'clear', hooks: [{ type: 'command', command: comando('session-end.mjs') }] })
+  if (existe('session-end.mjs')) grupos.push({ hooks: [{ type: 'command', command: comando('session-end.mjs'), timeout: 10 }] })
   else faltan.push('session-end.mjs')
   if (existe('cerrar-trabajos.mjs')) grupos.push({ hooks: [{ type: 'command', command: comando('cerrar-trabajos.mjs'), timeout: 8 }] })
   else faltan.push('cerrar-trabajos.mjs')
@@ -97,15 +103,21 @@ if (existe('aviso-contexto.mjs')) {
   s.hooks.UserPromptSubmit = grupos
 } else faltan.push('aviso-contexto.mjs')
 
-// Barra de estado: modelo + contexto + trabajo de OpenCode en curso. Se registra
-// solo si el usuario no tiene una propia (nunca se pisa la suya); el fichero vive
-// en hub/estado-linea.mjs (el instalador copia hub/ antes de llamar aquí).
-const estadoLinea = path.join(path.dirname(hooksDir), 'hub', 'estado-linea.mjs')
+// Barra de estado (spec 15 · O8): claude-hud si el plugin está instalado (hub/hud.mjs le
+// añade la línea del sistema: modo y OpenCode); si no, el indicador propio (estado-linea.mjs).
+// Nunca se pisa una statusLine del usuario. SIN_CLAUDE_HUD=1 fuerza el indicador propio.
+const dirHub = path.join(path.dirname(hooksDir), 'hub')
+const estadoLinea = path.join(dirHub, 'estado-linea.mjs')
 if (fs.existsSync(estadoLinea)) {
   const actual = s.statusLine
-  const esNuestra = actual && typeof actual.command === 'string' && actual.command.includes('estado-linea.mjs')
-  if (!actual || esNuestra) {
-    s.statusLine = { type: 'command', command: `node "${estadoLinea}"`, refreshInterval: 3 }
+  if (!actual || statusLineEsNuestra(actual)) {
+    if (!process.env.SIN_CLAUDE_HUD && hudInstalado() && fs.existsSync(path.join(dirHub, 'hud.mjs'))) {
+      const r = escribirConfigHud()
+      s.statusLine = { type: 'command', command: comandoHud(dirHub), padding: 0, refreshInterval: 3 }
+      console.log(`Barra de estado: claude-hud (configuración ${r === 'propia' ? 'tuya, sin tocar' : 'creada'}: ${RUTA_CONFIG_HUD}).`)
+    } else {
+      s.statusLine = { type: 'command', command: `node "${estadoLinea}"`, refreshInterval: 3 }
+    }
   } else {
     console.log('Aviso: ya hay una statusLine propia en settings.json; el indicador del sistema no se activa.')
   }
@@ -132,5 +144,5 @@ if (fs.existsSync(estadoLinea)) {
 
 fs.mkdirSync(path.dirname(ruta), { recursive: true })
 fs.writeFileSync(ruta, JSON.stringify(s, null, 2) + '\n')
-console.log('settings.json actualizado: esfuerzos medium (si faltaban) y hooks de contexto.')
+console.log(`settings.json actualizado: modelo ${s.model}, esfuerzos medium (si faltaban) y hooks de contexto.`)
 if (faltan.length) console.log(`Aviso: hooks no desplegados (no se registran): ${[...new Set(faltan)].join(', ')}. Ejecuta install.ps1/install.sh para copiarlos.`)

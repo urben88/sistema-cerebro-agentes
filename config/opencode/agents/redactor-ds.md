@@ -1,5 +1,5 @@
 ---
-description: Redacción de documentación (README, docs, changelog, comentarios) siguiendo el estilo del proyecto. Escribe solo documentación, nunca código; no delega.
+description: ★ MÍO · Redacción de documentación (README, docs, changelog, comentarios) siguiendo el estilo del proyecto. Escribe solo documentación, nunca código; no delega.
 mode: all
 model: deepseek/deepseek-flash
 variant: low

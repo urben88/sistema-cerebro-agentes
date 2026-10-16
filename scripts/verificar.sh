@@ -99,7 +99,7 @@ else
   test_item 1 'Agente cerebro no instalado' 'Ejecuta install.sh'
 fi
 [ -x "$HOME/.local/bin/cerebro" ] && test_item 0 'Comando cerebro instalado (~/.local/bin)' || test_item 1 'Comando cerebro no instalado' 'Ejecuta install.sh'
-for f in subdirector.md explorador.md redactor.md analista.md arquitecto.md adaptador-mcps.md planificador.md; do
+for f in subdirector.md explorador.md redactor.md analista.md arquitecto.md adaptador-mcps.md planificador.md resolutor.md ayudante.md; do
   [ -f "$HOME/.claude/agents/$f" ] && test_item 0 "Subagente $f instalado" || test_item 1 "Subagente $f no instalado" 'Ejecuta install.sh'
 done
 MCP_LIST="$(claude mcp list 2>&1 || true)"
@@ -166,7 +166,7 @@ if [ -f "$HOOK_LATIDO" ]; then
 else
   test_item 1 'Hook latido no instalado' 'Ejecuta install.sh'
 fi
-for f in session-start.mjs pre-compact.mjs session-end.mjs cerrar-trabajos.mjs estado.mjs latido.mjs aviso-contexto.mjs hallazgos.mjs buscar.mjs; do
+for f in session-start.mjs pre-compact.mjs session-end.mjs cerrar-trabajos.mjs estado.mjs latido.mjs aviso-contexto.mjs ultima-sesion.mjs resumir-sesion.mjs hallazgos.mjs buscar.mjs; do
   [ -f "$HOME/.sistema-cerebro-agentes/hooks/$f" ] && test_item 0 "Hook $f instalado" || test_item 1 "Hook $f no instalado" 'Ejecuta install.sh'
 done
 TRIAJE="$HOME/.sistema-cerebro-agentes/mcp/triaje-mcp.mjs"
@@ -193,7 +193,7 @@ if [ -f "$ESTADO_LINEA" ]; then
 else
   test_item 1 'Barra de estado no instalada' 'Ejecuta install.sh'
 fi
-if grep -q 'estado-linea.mjs' "$HOME/.claude/settings.json" 2>/dev/null; then
+if grep -qE 'estado-linea.mjs|hud.(mjs|cmd)' "$HOME/.claude/settings.json" 2>/dev/null; then
   test_item 0 'Barra de estado registrada en settings.json'
 else
   test_item 1 'Barra de estado no registrada' 'Ejecuta install.sh (o quita tu statusLine propia)'
@@ -304,6 +304,13 @@ if node "$REPO_ROOT/scripts/test-modo.mjs" >/dev/null 2>&1; then
   test_item 0 'Pruebas del modo normal/cerebro en la barra de estado'
 else
   test_item 1 'Pruebas del modo normal/cerebro en la barra de estado' 'Ejecuta: node scripts/test-modo.mjs'
+fi
+
+step 'Opus dirige y configurar-claude (spec 15)'
+if node "$REPO_ROOT/scripts/test-opus-reparto.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de la spec 15 (reparto Opus/Sonnet/Haiku, aviso en consola, nota de última sesión)'
+else
+  test_item 1 'Pruebas de la spec 15 (reparto Opus/Sonnet/Haiku, aviso en consola, nota de última sesión)' 'Ejecuta: node scripts/test-opus-reparto.mjs'
 fi
 
 if [ "$SMOKE" -eq 1 ]; then
