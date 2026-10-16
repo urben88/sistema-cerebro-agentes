@@ -3,6 +3,22 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado semántico (MAJOR.MINOR.PATCH).
 
+## [0.10.0] - 2026-10-16
+
+### Cambiado (esfuerzos más bajos)
+
+- `resolutor` baja a **Sonnet · medium**; sube a **high** al depurar o en tareas delicadas (`reparto-claude.mjs`: si el origen es `debugger` o hay `escalar`/`riesgo`, devuelve esfuerzo high).
+- `implementador` (OpenCode) baja a **DeepSeek · medium** (agente y regla de `reglas.json`). `debugger` sigue en high y `revisor` en max.
+- `revisor` solo cuando hay código con lógica que revisar; en cambios mecánicos, de docs o de configuración trivial bastan los tests o el `analista` (pauta en `cerebro`, `cerebro-oc` y el skill `delegar-a-opencode`).
+- `cerebro` sigue en Opus · medium; el esfuerzo lo sube el usuario a mano (p. ej. `/effort high`), el agente no lo sube solo.
+
+### Añadido
+
+- **`retocador`** (Sonnet · low): cambios pequeños y localizados con algo de criterio (1–2 archivos); entre `ayudante` y `resolutor`. Si el cambio crece o exige diseñar, para y lo dice.
+- **`consultor`** (Opus · low, solo lectura): segunda opinión rápida con contexto aislado (≤ 10 líneas); lo difícil sigue en `arquitecto`.
+- Registrados en `reparto-claude.mjs`, en `CLAUDE.md`, README, docs, instaladores y `verificar`; y **en el catálogo de Laya** (`CATALOGO_AGENTES` de `hub/lib/triaje.mjs` + `AGENTES_CLAUDE`, capa `claude`), así que el triaje local también puede elegirlos (esto revierte el «fuera de alcance» de la spec 15).
+- **Palabras clave afinadas**: el `retocador` **solo** se elige si el encargo dice que el cambio es pequeño («cambio pequeño», «pequeño arreglo/ajuste», «un retoque»…); «ajusta» y «retoca» sueltos —demasiado comunes— van a la regla del trabajo que toca (implementar/depurar). Reglas de respaldo en `reglas.json`: «segunda opinión» / «valida la decisión» / «qué opción» → `consultor`, con `arquitecto` por delante de `consultor`.
+
 ## [0.9.0] - 2026-10-15
 
 ### Cambiado (spec 15 · Opus dirige y lo mejor de `configurar-claude.ps1`)

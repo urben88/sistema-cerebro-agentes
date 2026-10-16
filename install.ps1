@@ -311,7 +311,7 @@ foreach ($f in @('cerebro.md', 'subdirector.md')) {
   [System.IO.File]::WriteAllText($dst, $tpl, (New-Object System.Text.UTF8Encoding($false)))
   Write-Ok "Agente instalado: $dst"
 }
-foreach ($f in @('explorador.md', 'redactor.md', 'analista.md', 'arquitecto.md', 'adaptador-mcps.md', 'planificador.md', 'resolutor.md', 'ayudante.md')) {
+foreach ($f in @('explorador.md', 'redactor.md', 'analista.md', 'arquitecto.md', 'adaptador-mcps.md', 'planificador.md', 'resolutor.md', 'ayudante.md', 'retocador.md', 'consultor.md')) {
   $dst = Join-Path $agentDir $f
   Backup-Item $dst
   Copy-Item -LiteralPath (Join-Path $agentSrcDir $f) -Destination $dst -Force

@@ -2,7 +2,7 @@
 
 El sistema instala una **plantilla de roles por defecto** que está disponible en **todos** los proyectos (global):
 
-- **Claude Code** (`~/.claude/agents/`): `cerebro`, `planificador`, `explorador`, `redactor`, `analista`, `arquitecto`, `subdirector`, `resolutor`, `ayudante`, `adaptador-mcps`.
+- **Claude Code** (`~/.claude/agents/`): `cerebro`, `planificador`, `explorador`, `redactor`, `analista`, `arquitecto`, `subdirector`, `resolutor`, `retocador`, `consultor`, `ayudante`, `adaptador-mcps`.
 - **OpenCode** (`~/.config/opencode/agents/`): `cerebro-oc`, `planificador`, `implementador`, `debugger`, `revisor`, `testeador`, `explorador-ds`, `redactor-ds`, `local`.
 
 Encima de eso, **cada proyecto puede añadir sus propios agentes** (aditivos). No hay que copiar ni registrar nada: cada herramienta descubre su carpeta dentro del repositorio.

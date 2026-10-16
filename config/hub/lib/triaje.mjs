@@ -10,7 +10,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-const CATALOGO_AGENTES = ['implementador', 'debugger', 'revisor', 'testeador', 'explorador-ds', 'redactor-ds', 'local', 'local-codigo', 'cerebro', 'arquitecto']
+export const CATALOGO_AGENTES = ['implementador', 'debugger', 'revisor', 'testeador', 'explorador-ds', 'redactor-ds', 'local', 'local-codigo', 'cerebro', 'arquitecto', 'retocador', 'consultor']
+
+/** Agentes que solo existen en la capa Claude (modo normal): si Laya los elige, la capa es `claude`. */
+export const AGENTES_CLAUDE = new Set(['cerebro', 'arquitecto', 'retocador', 'consultor'])
 
 /**
  * `resolver(agente)` (L4 · spec 12): respaldo de salud por agente. Si el agente elegido está
@@ -135,7 +138,7 @@ export function crearTriaje({ url = process.env.LAYA_URL || 'http://127.0.0.1:80
     const ag = opcion(rAg)
     const es = opcion(rEs)
     if (!ag.valor) return null
-    const capa = ['cerebro', 'arquitecto'].includes(ag.valor) ? 'claude' : 'opencode'
+    const capa = AGENTES_CLAUDE.has(ag.valor) ? 'claude' : 'opencode'
     return {
       capa,
       agente: ag.valor,

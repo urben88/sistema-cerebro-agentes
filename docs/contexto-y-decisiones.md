@@ -127,6 +127,12 @@ Petición del usuario: nada debe seguir consumiendo tokens cuando cierra el chat
 ### D33 — Opus 5.5 dirige en los dos modos · 2026-10-15
 Decisión del usuario: Opus 5.5 · medium pasa a ser la inteligencia de la sesión principal y del agente `cerebro` (antes Sonnet), y `arquitecto` pasa a Opus · high. Regla de coste: el agente más barato que pueda hacer la tarea (Haiku por defecto → Sonnet si hace falta criterio, vía el nuevo `resolutor` → Opus solo para analizar y decidir lo global). Ideas tomadas de `configurar-claude.ps1` (equipo Opus → `coder` Sonnet → `explorer`/`helper` Haiku): `resolutor` (Sonnet · high), `ayudante` (Haiku · low, solo en EJECUTAR), modos PLAN/EJECUTAR (sin indicación, PLAN), aviso de contexto por tokens reales en consola y nota de última sesión escrita por Haiku. Detalle en `docs/specs/15-opus-dirige-y-configurar-claude.md`.
 
+### D34 — Esfuerzos más bajos y roles `retocador` y `consultor` · 2026-10-16
+
+Decisión del usuario: `resolutor` pasa a Sonnet · medium (high al depurar o en tareas delicadas); `implementador` a DeepSeek medium (`debugger` sigue en high). `revisor` sigue en max pero solo con código con lógica que revisar (en cambios mecánicos, de docs o de configuración trivial bastan tests o `analista`). `cerebro` sigue en Opus · medium y el esfuerzo lo sube el usuario a mano (`/effort high`); el agente no lo sube solo. Roles nuevos: `retocador` (Sonnet · low, cambios pequeños en 1–2 archivos) y `consultor` (Opus · low, segunda opinión rápida de solo lectura; lo difícil sigue en `arquitecto`).
+
+El **catálogo de Laya** ya incluye `retocador` y `consultor` (`CATALOGO_AGENTES` + `AGENTES_CLAUDE` en `hub/lib/triaje.mjs`, capa `claude`; la spec 15 lo dejaba fuera de alcance), así que el triaje local puede elegirlos y no solo las palabras clave. Esas palabras se afinan: `retocador` exige que el encargo diga que el cambio es pequeño, «ajusta»/«retoca» sueltos no lo capturan, y `arquitecto` pasa delante de `consultor`. Detalle en `docs/specs/19-esfuerzos-y-roles-retocador-consultor.md`.
+
 ## Notas técnicas útiles
 
 - **Herramientas clave del MCP (perfil essential):** `opencode_setup`, `opencode_context`, `opencode_status`, `opencode_ask`, `opencode_fire`, `opencode_run`, `opencode_reply`, `opencode_check`, `opencode_wait`, `opencode_job_get/list/cancel/input`, `opencode_question_*`, `opencode_permission_*`, `opencode_conversation`, `opencode_review_changes`.

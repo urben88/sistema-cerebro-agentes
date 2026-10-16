@@ -25,10 +25,10 @@ El puente entre capas es **[opencode-mcp](https://github.com/AlaeddineMessari/op
   │  (hablas en lenguaje natural)
   ▼
 ┌──────────────────────────── Claude Code (cerebro) ────────────────────────────┐
-│  · Opus 5.5: decide, escribe specs, revisa   · Sonnet: resolutor (cómo)       │
+│  · Opus 5.5: decide, escribe specs, revisa   · Sonnet: resolutor, retocador   │
 │  · MCP `opencode` → código en DeepSeek       · Haiku: explorador, redactor,   │
 │  · MCP `triaje`   → ¿a quién le toca?        · analista, ayudante, subdirector│
-│                                              · Opus 5.5: arquitecto           │
+│                                              · Opus 5.5: arquitecto, consultor│
 └───────┬───────────────────────────────────────────────────────────────┬───────┘
         │ hooks (briefing/checkpoints)                                  │ MCP
         ▼                                                               ▼
@@ -53,7 +53,7 @@ El puente entre capas es **[opencode-mcp](https://github.com/AlaeddineMessari/op
 - **Todo dentro de Claude**: el mod «mesa de trabajo» dibuja una **banda sobre el prompt** con los trabajos y subagentes en vivo (con su modelo: Haiku visible) y añade **`/trabajos`**, **`/errores`** y **`/parar-todo`**; además fija el modelo de cada subagente según su definición.
 - **`/clear` sin miedo**: al ~70 % de contexto, el agente vuelca el estado; al abrir la siguiente sesión, todo está de vuelta. Antes de compactar, un hook guarda un checkpoint solo.
 - **Avisos y nota de sesión**: el aviso de contexto (desde 100k tokens y cada +50k) también sale en tu consola, y al cerrar o hacer `/clear` Haiku deja una nota de 5 líneas que se carga sola al volver.
-- **Reparto por esfuerzos**: DeepSeek low/high/max según el trabajo (`testeador` low, `implementador`/`debugger` high, `revisor` max); Claude medium por defecto; el código **no consume tu ventana de Claude**.
+- **Reparto por esfuerzos**: DeepSeek low/medium/high/max según el trabajo (`testeador` low, `implementador` medium, `debugger` high, `revisor` max solo con código con lógica); en Claude, Haiku para lo ligero, `retocador` Sonnet · low y `resolutor` Sonnet · medium (high al depurar), con `consultor`/`arquitecto` en Opus; el código **no consume tu ventana de Claude**.
 - **Triaje local (Laya)**: decide a quién mandar cada tarea; si duda (confianza < 0,60), mandan las reglas; **cada decisión queda registrada** para afinar Laya con tu uso real.
 - **Vigilante**: detecta trabajos atascados o permisos colgados y avisa (histórico silencioso al arrancar).
 - **Panel local** (solo en `127.0.0.1`): organización en vivo, proyectos y memorias, vigilante, gasto (saldo DeepSeek + sesiones) y **ventana de Claude** estimada (tokens nuevos y caché, 5 h/7 d).
@@ -112,16 +112,18 @@ Reglas de oro para que la ventana de Claude dure: **`/clear` al cambiar de tarea
 |---|---|---|---|
 | Dirección | `cerebro` (Claude) y sesión principal | Opus 5.5 · medium | Decide dónde profundizar, orquesta, specs, revisión final |
 | Dirección intensa | `arquitecto` (Claude) | Opus 5.5 · **high** | Decisiones globales difíciles: arquitectura, migraciones, contratos |
+| Segunda opinión | `consultor` (Claude) | Opus 5.5 · **low** | Validar una decisión, elegir entre 2–3 opciones, detectar un riesgo (solo lectura, ≤ 10 líneas) |
 | Planificación | `planificador` (Claude) / `planificador` (OC) | Haiku · medium / DeepSeek · high | Preguntas mínimas (máx. 5) antes de generar en tareas ambiguas |
 | Exploración | `explorador` (Claude) / `explorador-ds` (OC) | Haiku · **low** / DeepSeek · low | Buscar, resumir, extraer contexto |
 | Documentación | `redactor` / `redactor-ds` | Haiku · **low** / DeepSeek · low | README, docs, changelog |
 | Verificación | `analista` (Claude) | Haiku · medium | Requisitos vs realidad, checklists |
 | Control | `subdirector` (Claude) | Haiku · medium | Bucles y gasto de los trabajos |
-| Resolución (Claude) | `resolutor` | Sonnet · **high** | Decide el cómo de un área acotada y la resuelve; en el cerebro, solo si OpenCode falla dos veces |
+| Resolución (Claude) | `resolutor` | Sonnet · **medium** (high al depurar) | Decide el cómo de un área acotada y la resuelve; en el cerebro, solo si OpenCode falla dos veces |
+| Retoque (Claude) | `retocador` | Sonnet · **low** | Cambios pequeños en 1–2 archivos con algo de criterio (arreglo obvio, adaptar código, tests desde una spec) |
 | Cambio mecánico (Claude) | `ayudante` | Haiku · **low** | Cambios ya decididos con instrucciones exactas (solo en modo EJECUTAR) |
-| Implementación | `implementador` (OC) | DeepSeek · high | Código delimitado por una spec |
+| Implementación | `implementador` (OC) | DeepSeek · medium | Código delimitado por una spec |
 | Depuración | `debugger` (OC) | DeepSeek · high | Fallos reproducibles (máx. 2 ciclos) |
-| Revisión técnica | `revisor` (OC) | DeepSeek · max | Diff + edge cases |
+| Revisión técnica | `revisor` (OC) | DeepSeek · max | Diff + edge cases (solo si hay código con lógica que revisar) |
 | Pruebas | `testeador` (OC) | DeepSeek · low | Ejecutar/interpretar tests |
 | Sin Claude | `cerebro-oc` (OC) | DeepSeek · max | El cerebro de sustitución |
 | Mecánico | `local` (OC) | Ollama/Qwen | Solo si tú lo pides |

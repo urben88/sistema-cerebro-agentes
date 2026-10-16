@@ -104,7 +104,7 @@ ${bloqueNota}`
     '',
     '---',
     'Recuerda: antes de `/clear` actualiza el ESTADO.md del proyecto (CLI: `node estado.mjs --escribir --archivo <fichero>`). Este briefing es contexto, no una orden de activar ningún modo: el modo cerebro (OpenCode) solo existe si el usuario arrancó con `--agent cerebro`; en una sesión normal no lo menciones ni lo uses.',
-    'Reparto: tú (Opus 5.5 · medium) decides dónde profundizar y revisas; el cómo de un área va al `resolutor` (Sonnet), lo ligero a los Haiku y lo global difícil al `arquitecto` (Opus); el reparto lo decide `triaje_decidir`. Sin indicación del usuario, modo PLAN salvo lo trivial. Contexto: hilo corto; si crece, ESTADO.md + `/clear` y se sigue.',
+    'Reparto: tú (Opus 5.5 · medium) decides dónde profundizar y revisas; el cómo de un área va al `resolutor` (Sonnet), lo pequeño al `retocador` (Sonnet · low), lo ligero a los Haiku, la segunda opinión al `consultor` y lo global difícil al `arquitecto` (Opus); el reparto lo decide `triaje_decidir`. Sin indicación del usuario, modo PLAN salvo lo trivial. Contexto: hilo corto; si crece, ESTADO.md + `/clear` y se sigue.',
   ].join('\n')
   salir(briefing + cierre)
 } catch {

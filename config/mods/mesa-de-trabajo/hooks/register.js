@@ -22,7 +22,9 @@ const MODELO_RESPALDO = {
   planificador: 'haiku',
   'adaptador-mcps': 'haiku',
   ayudante: 'haiku',
+  retocador: 'sonnet',
   resolutor: 'sonnet',
+  consultor: 'opus',
   arquitecto: 'opus',
 }
 

@@ -32,7 +32,7 @@ const TOOLS = [
       properties: {
         tarea: { type: 'string', description: 'Descripción breve de la tarea (una o dos frases).' },
         contexto: { type: 'string', description: 'Contexto opcional: proyecto, ficheros, complejidad.' },
-        solo_claude: { type: 'boolean', description: 'true en modo normal (sin OpenCode): traduce la decisión a un subagente de Claude (Haiku, Sonnet `resolutor` u Opus `arquitecto`) con su modelo y esfuerzo.' },
+        solo_claude: { type: 'boolean', description: 'true en modo normal (sin OpenCode): traduce la decisión a un subagente de Claude (Haiku, Sonnet `resolutor`/`retocador` u Opus `arquitecto`/`consultor`) con su modelo y esfuerzo.' },
       },
       required: ['tarea'],
     },

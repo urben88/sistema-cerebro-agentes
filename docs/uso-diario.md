@@ -49,7 +49,7 @@ opencode_fire({
 - **Trabajos largos:** puedes seguir hablando con el Cerebro mientras OpenCode trabaja; el `jobId` mantiene la referencia.
 - **Paralelizar:** para dos tareas independientes del mismo repo, mejor una después de otra o en worktrees/ramas separadas (dos sesiones que tocan los mismos archivos se pisan).
 - **Pregunta antes de generar.** Si algo no está claro, el planificador te sacará las preguntas que de verdad cambian el trabajo; respóndele o deja que tire con los supuestos que te proponga (te los dice antes).
-- **Costes.** Claude (suscripción) piensa; OpenCode gasta tokens baratos. La sesión principal y `cerebro` van en **Opus 5.5** (medium). Los subagentes baratos de Claude son **Haiku** (`planificador`, `explorador`, `redactor`, `analista`, `subdirector`, `ayudante`); solo `resolutor` usa Sonnet a propósito y `arquitecto` va en Opus. `local` (Ollama) es gratis y solo se usa si lo pides.
+- **Costes.** Claude (suscripción) piensa; OpenCode gasta tokens baratos. La sesión principal y `cerebro` van en **Opus 5.5** (medium). Los subagentes baratos de Claude son **Haiku** (`planificador`, `explorador`, `redactor`, `analista`, `subdirector`, `ayudante`); solo `resolutor` y `retocador` usan Sonnet a propósito; `arquitecto` y `consultor` van en Opus. `local` (Ollama) es gratis y solo se usa si lo pides.
 - **Ver estado sin Claude:** `scripts/verificar.ps1` / `verificar.sh`.
 
 ## Pararlo todo de golpe
@@ -68,20 +68,20 @@ opencode_fire({
 
 ## Ver quién hace qué (modelos, esfuerzo y progreso)
 
-**Subagentes de Claude** (`planificador`, `explorador`, `redactor`, `analista`, `subdirector`, `ayudante`, `resolutor`, `arquitecto`):
+**Subagentes de Claude** (`planificador`, `explorador`, `redactor`, `analista`, `subdirector`, `ayudante`, `retocador`, `resolutor`, `consultor`, `arquitecto`):
 
 - **`/tasks`** dentro de Claude Code: lista los subagentes con su **modelo y esfuerzo**; Enter abre su transcript en vivo.
 - Mientras corren aparecen en el **panel de subagentes** bajo el prompt; el Cerebro te anuncia al lanzarlos el tipo y su modelo («explorador · Haiku»). Pide el tipo por su nombre (desde v0.3.0 el Cerebro ya lo hace).
-- Haiku salvo `resolutor` (Sonnet · high: resuelve un área acotada) y `arquitecto` (Opus 5.5 · high: solo para lo difícil).
+- Haiku salvo `resolutor` (Sonnet · medium, high al depurar: resuelve un área acotada), `retocador` (Sonnet · low: cambios pequeños), `consultor` (Opus 5.5 · low: segunda opinión rápida) y `arquitecto` (Opus 5.5 · high: solo para lo difícil).
 - Si ves un subagente en Opus sin querer, se lanzó como `general-purpose`/`fork` (heredan el modelo principal).
 
 **Manos de OpenCode** (`implementador`, `debugger`, `revisor`, `testeador`, exploradores…):
 
-- **Barra de estado** de Claude Code, en el proyecto donde trabaja: `🤖 implementador (high) · 12m · $0.08` (o `⏳ pregunta` si te necesita; `✅/❌` al cerrar).
+- **Barra de estado** de Claude Code, en el proyecto donde trabaja: `🤖 implementador (medium) · 12m · $0.08` (o `⏳ pregunta` si te necesita; `✅/❌` al cerrar).
 - **En el chat**: el Cerebro te cuenta hitos cada ~1 min; pregúntale «¿cómo va?» cuando quieras — saca el resumen con `trabajo_estado` (estado, tiempo, coste, tokens, último paso y herramientas usadas).
 - **Panel del hub** (`http://127.0.0.1:4597`): «La oficina» y la tarjeta de trabajos en vivo; el vigilante avisa de atascos.
 
-Reparto de esfuerzos en OpenCode: `implementador` y `debugger` **high** · `revisor` **max** · `testeador` **low** · `explorador-ds`/`redactor-ds` **low** · `planificador` **high** · `cerebro-oc` **max**.
+Reparto de esfuerzos en OpenCode: `implementador` **medium**, `debugger` **high** · `revisor` **max** · `testeador` **low** · `explorador-ds`/`redactor-ds` **low** · `planificador` **high** · `cerebro-oc` **max**.
 
 ## Cambiar el modelo de un agente
 

@@ -35,7 +35,7 @@ Eres CEREBRO-OC: la dirección del sistema cuando no hay Claude disponible (cuot
 2. **Spec**: escribe o actualiza la spec en la estructura que use el proyecto (si el repo usa OpenSpec, usa OpenSpec).
 3. **Preparación** (solo si falta contexto): `explorador-ds` (lectura/resumen) o `redactor-ds` (documentación).
 4. **Ejecución**: `local-codigo` si el código está **acotado y bien especificado** (antes que `implementador`, mientras el triaje no lo haya degradado); si no, `implementador` (código nuevo) o `debugger` (fallos; máximo 2 ciclos).
-5. **Validación**: `testeador` (pruebas) y/o `revisor` (diff contra la spec).
+5. **Validación**: `testeador` (pruebas) y/o `revisor` (diff contra la spec). El `revisor` (max) solo cuando hay código con lógica que revisar; en cambios mecánicos, de docs o de configuración trivial bastan los tests.
 6. **Cierre**: veredicto, resumen corto para el usuario y estado actualizado (`ESTADO.md`).
 
 ## Reglas

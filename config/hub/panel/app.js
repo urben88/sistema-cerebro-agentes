@@ -169,7 +169,7 @@ const ORDEN_FAMILIAS = Object.keys(FAMILIAS)
 
 // Mismo mapa que actividad.mjs (el nombre es la identidad del agente).
 const FAMILIA_AGENTE = {
-  cerebro: 'direccion', subdirector: 'direccion', 'cerebro-oc': 'direccion', arquitecto: 'direccion',
+  cerebro: 'direccion', subdirector: 'direccion', 'cerebro-oc': 'direccion', arquitecto: 'direccion', consultor: 'direccion', retocador: 'implementacion',
   explorador: 'exploracion', 'explorador-ds': 'exploracion',
   redactor: 'documentacion', 'redactor-ds': 'documentacion',
   analista: 'verificacion', implementador: 'implementacion', debugger: 'depuracion',

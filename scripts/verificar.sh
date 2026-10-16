@@ -99,7 +99,7 @@ else
   test_item 1 'Agente cerebro no instalado' 'Ejecuta install.sh'
 fi
 [ -x "$HOME/.local/bin/cerebro" ] && test_item 0 'Comando cerebro instalado (~/.local/bin)' || test_item 1 'Comando cerebro no instalado' 'Ejecuta install.sh'
-for f in subdirector.md explorador.md redactor.md analista.md arquitecto.md adaptador-mcps.md planificador.md resolutor.md ayudante.md; do
+for f in subdirector.md explorador.md redactor.md analista.md arquitecto.md adaptador-mcps.md planificador.md resolutor.md ayudante.md retocador.md consultor.md; do
   [ -f "$HOME/.claude/agents/$f" ] && test_item 0 "Subagente $f instalado" || test_item 1 "Subagente $f no instalado" 'Ejecuta install.sh'
 done
 MCP_LIST="$(claude mcp list 2>&1 || true)"

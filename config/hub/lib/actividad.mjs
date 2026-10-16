@@ -37,6 +37,8 @@ const FAMILIAS = {
   subdirector: 'direccion',
   'cerebro-oc': 'direccion',
   arquitecto: 'direccion',
+  consultor: 'direccion',
+  retocador: 'implementacion',
   explorador: 'exploracion',
   'explorador-ds': 'exploracion',
   redactor: 'documentacion',

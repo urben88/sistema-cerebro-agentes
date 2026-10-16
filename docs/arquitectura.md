@@ -10,7 +10,8 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
   ├──── PUERTA 1 · con Claude (suscripción que se estira) ──────────────────────────┐
   │   Claude Code → agente `cerebro` (Opus 5.5 · medium; `arquitecto` para lo duro) │
   │       · Haiku: planificador · explorador · redactor · analista · ayudante       │
-  │       · subdirector · Sonnet: resolutor (cómo) · Opus: arquitecto (lo duro)     │
+  │       · subdirector · Sonnet: resolutor (cómo) · retocador (retoques)           │
+  │       · Opus: arquitecto (lo duro) · consultor (segunda opinión)                │
   │       · MCP `opencode` → código en DeepSeek   · MCP `triaje` → ¿quién y cuánto? │
   │       · hooks → briefing, checkpoints, /clear sin pérdidas                      │
   │                                                                                 │
@@ -66,8 +67,8 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
 
 ## Modos, contexto y nota de sesión (spec 15)
 
-- **Reparto en Claude**: Opus 5.5 dirige (sesión principal, `cerebro`, `arquitecto`); `resolutor` (Sonnet · high) resuelve el cómo de un área acotada; Haiku hace lo ligero y `ayudante` (Haiku · low) los cambios ya decididos. Regla de coste: el agente más barato que pueda hacer la tarea.
-- **PLAN / EJECUTAR**: sin indicación se trabaja en PLAN (investigar y proponer sin cambiar nada); el modo viaja en cada encargo al `resolutor`. El `ayudante` solo se usa en EJECUTAR.
+- **Reparto en Claude**: Opus 5.5 dirige (sesión principal, `cerebro`, `arquitecto`); `resolutor` (Sonnet · medium, high al depurar) resuelve el cómo de un área acotada y `retocador` (Sonnet · low) los cambios pequeños con algo de criterio; `consultor` (Opus · low) da segundas opiniones rápidas; Haiku hace lo ligero y `ayudante` (Haiku · low) los cambios ya decididos. Regla de coste: el agente más barato que pueda hacer la tarea.
+- **PLAN / EJECUTAR**: sin indicación se trabaja en PLAN (investigar y proponer sin cambiar nada); el modo viaja en cada encargo al `resolutor` y al `retocador`. El `ayudante` solo se usa en EJECUTAR.
 - **Aviso de contexto** (`aviso-contexto.mjs`): mide tokens reales de la última respuesta, avisa desde 100k y cada +50k (`CONTEXTO_AVISO`, `CONTEXTO_PASO`), y lo muestra también en la consola del usuario.
 - **Freno a bucles de error** (`errores-repetidos.mjs`): si el mismo comando de Bash falla 2 veces seguidas avisa al modelo (y a la 3.ª al usuario); un éxito reinicia la cuenta.
 - **Nota de última sesión** (`session-end.mjs` → `resumir-sesion.mjs`): al cerrar o hacer `/clear`, Haiku resume la sesión en ≤ 5 líneas en `hub-data/memoria/ultima-sesion/<proyecto>.md`; `session-start.mjs` la carga al volver.

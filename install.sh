@@ -202,7 +202,7 @@ for f in cerebro.md subdirector.md; do
   node -e 'const fs=require("fs");const [src,dst,cmd,args,mcp]=process.argv.slice(1);let t=fs.readFileSync(src,"utf8");t=t.replace("__COMANDO__",cmd).replace("__ARGUMENTOS_JSON__",args).replace("__TRIAJE_MCP__",mcp);fs.writeFileSync(dst,t)' "$CONFIG_ROOT/claude/agents/$f" "$dst" "bash" "$ARGS_JSON" "$TRIAJE_MCP"
   ok "Agente instalado: $dst"
 done
-for f in explorador.md redactor.md analista.md arquitecto.md adaptador-mcps.md planificador.md resolutor.md ayudante.md; do
+for f in explorador.md redactor.md analista.md arquitecto.md adaptador-mcps.md planificador.md resolutor.md ayudante.md retocador.md consultor.md; do
   backup_item "$AGENT_DIR/$f"
   cp -f "$CONFIG_ROOT/claude/agents/$f" "$AGENT_DIR/$f"
   ok "Subagente instalado: $AGENT_DIR/$f"

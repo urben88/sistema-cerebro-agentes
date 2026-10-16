@@ -23,9 +23,9 @@ El briefing de sesión ya te trae los hallazgos **pendientes de validar**: preg�
 
 | Agente | Modelo · esfuerzo | Para qué | Tope por job |
 |---|---|---|---|
-| `implementador` | DeepSeek · high | Código delimitado por una spec | 0,75 $ |
+| `implementador` | DeepSeek · medium | Código delimitado por una spec | 0,75 $ |
 | `debugger` | DeepSeek · high | Fallos reproducibles (máx. 2 ciclos) | 1,00 $ |
-| `revisor` | DeepSeek · max | Diff + edge cases; no edita | 0,50 $ |
+| `revisor` | DeepSeek · max | Diff + edge cases; no edita. Solo si hay código con lógica que revisar | 0,50 $ |
 | `testeador` | DeepSeek · low | Ejecutar/interpretar tests | 0,30 $ |
 | `explorador-ds` | DeepSeek · low | Exploración de solo lectura (no gasta ventana de Claude) | 0,20 $ |
 | `redactor-ds` | DeepSeek · low | Documentación | 0,20 $ |
@@ -34,7 +34,7 @@ El briefing de sesión ya te trae los hallazgos **pendientes de validar**: preg�
 - **Una sola cadena por tarea**: planificación → preparación → ejecución → validación. Sin fanout ni ramas paralelas salvo tareas independientes (máx. 2, en directorios/worktrees distintos).
 - **La delegación se corta** en los subagentes: solo tú (y `cerebro-oc` sin Claude) delegas.
 - Los topes por job son orientativos y los vigila el hub (avisa al 80 %; puede cortar al límite).
-- **Subagentes de Claude**: pasa siempre `subagent_type` explícito (`planificador`, `explorador`, `redactor`, `analista`, `ayudante`, `resolutor`, `arquitecto`, `subdirector`). No lo omitas (cae en `general-purpose`, que hereda el modelo principal: Opus) ni pidas `fork` (hereda tu modelo y todo el contexto). Solo `resolutor` usa Sonnet a propósito; `arquitecto` es Opus.
+- **Subagentes de Claude**: pasa siempre `subagent_type` explícito (`planificador`, `explorador`, `redactor`, `analista`, `ayudante`, `retocador`, `resolutor`, `consultor`, `arquitecto`, `subdirector`). No lo omitas (cae en `general-purpose`, que hereda el modelo principal: Opus) ni pidas `fork` (hereda tu modelo y todo el contexto). Solo `resolutor` y `retocador` usan Sonnet a propósito; `arquitecto` y `consultor` son Opus.
 
 ## Herramientas MCP disponibles
 
@@ -93,7 +93,7 @@ opencode_fire({
 
 Guarda el `jobId` y el `sessionId` que devuelve. Publica la tarjeta de lanzamiento: agente, modelo, `jobId`, título y tope de coste.
 
-> **No pases `providerID` ni `modelID`**: el modelo y el esfuerzo ya están fijados en el archivo del agente (p. ej. `implementador` = DeepSeek high). Pasar un modelo a mano pisaría esa configuración.
+> **No pases `providerID` ni `modelID`**: el modelo y el esfuerzo ya están fijados en el archivo del agente (p. ej. `implementador` = DeepSeek medium). Pasar un modelo a mano pisaría esa configuración.
 
 ### Paso 3 — Vigilar (y enseñar el trabajo)
 
@@ -107,7 +107,7 @@ Guarda el `jobId` y el `sessionId` que devuelve. Publica la tarjeta de lanzamien
 
 1. `opencode_review_changes({sessionId})` → diffs.
 2. Comprueba requisito a requisito contra la spec.
-3. Revisión independiente (recomendado en cambios importantes): `agent: "revisor"` sobre el mismo `directory`, indicándole la spec y qué revisar. Para pruebas: `agent: "testeador"`.
+3. Revisión independiente (recomendado en cambios importantes con código con lógica; en cambios mecánicos, de docs o de configuración trivial bastan los tests o el `analista`): `agent: "revisor"` sobre el mismo `directory`, indicándole la spec y qué revisar. Para pruebas: `agent: "testeador"`.
 4. Si hay fallos: `opencode_reply({sessionId, prompt: "Corrige: …"})` (misma sesión) o un nuevo `opencode_fire` con `debugger`.
 
 ### Paso 5 — Cierre
