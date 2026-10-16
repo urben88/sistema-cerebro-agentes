@@ -1,0 +1,23 @@
+{
+  "name": "sistema-cerebro-video",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vídeo Remotion «un día de trabajo» (spec 18). Salidas en docs/media/.",
+  "scripts": {
+    "render": "remotion render src/index.ts DemoEN ../../demo.mp4 && remotion render src/index.ts DemoES ../../demo.es.mp4",
+    "poster": "remotion still src/index.ts DemoEN ../../demo-poster.png --frame=1850",
+    "preview": "remotion studio src/index.ts"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.536",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.536"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "5.9.3"
+  }
+}

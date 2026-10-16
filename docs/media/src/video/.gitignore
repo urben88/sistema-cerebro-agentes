@@ -1,0 +1,4 @@
+# Dependencias y caché local del proyecto Remotion (no se versionan)
+node_modules/
+.remotion/
+out/

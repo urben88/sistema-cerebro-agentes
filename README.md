@@ -12,6 +12,12 @@ Arquitectura de IA para desarrollo **instalable en Windows, macOS y Linux**, pen
 
 El puente entre capas es **[opencode-mcp](https://github.com/AlaeddineMessari/opencode-mcp)** (stdio local) y el hub. Este repositorio es la **fuente de verdad**: configuración, agentes, app, instaladores y documentación.
 
+## Vídeo: un día de trabajo (75 s)
+
+[![Un día de trabajo con el sistema](docs/media/demo-poster.png)](docs/media/demo.es.mp4)
+
+▶️ [Ver en español](docs/media/demo.es.mp4) · [Watch in English](docs/media/demo.mp4) — fuente en [`docs/media/src/video/`](docs/media/src/video/) (Remotion; `npm run render`).
+
 ## Cómo funciona
 
 ```
