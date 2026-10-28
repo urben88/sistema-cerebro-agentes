@@ -1,9 +1,10 @@
 {
-  "nota": "Precios orientativos en USD por millón de tokens. Edita aquí (o copia a hub-data/precios.json, que manda) cuando cambien las tarifas. Se busca la clave dentro del id del modelo (p. ej. «opus» en claude-opus-5-5).",
+  "nota": "USD por millón de tokens, tarifas oficiales de la API de Anthropic (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1; tabla de modelos a 2026-10-06). Haiku: precio hasta 100K tokens de prompt. La escritura en caché se estima en 1,25 × la entrada (caché de 5 min). Edita aquí (o copia a hub-data/precios.json, que manda) cuando cambien las tarifas. La clave se busca dentro del id del modelo (p. ej. «opus» en claude-opus-5-5).",
   "moneda": "USD",
   "modelos": {
-    "opus": { "entrada": 5, "salida": 25, "cacheLectura": 0.5, "cacheEscritura": 6.25 },
-    "sonnet": { "entrada": 3, "salida": 15, "cacheLectura": 0.3, "cacheEscritura": 3.75 },
-    "haiku": { "entrada": 1, "salida": 5, "cacheLectura": 0.1, "cacheEscritura": 1.25 }
+    "fable": { "entrada": 10, "salida": 50, "cacheLectura": 0.25, "cacheEscritura": 12.5 },
+    "opus": { "entrada": 4, "salida": 20, "cacheLectura": 0.2, "cacheEscritura": 5 },
+    "sonnet": { "entrada": 2, "salida": 10, "cacheLectura": 0.2, "cacheEscritura": 2.5 },
+    "haiku": { "entrada": 0.1, "salida": 0.5, "cacheLectura": 0.01, "cacheEscritura": 0.125 }
   }
 }

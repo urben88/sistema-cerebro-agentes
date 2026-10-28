@@ -380,8 +380,13 @@ if ($env:SIN_GENTLE_AI) {
       Write-Warn 'OpenCode no encontrado: Gentle AI se configura solo para Claude Code'
     }
 
+    # gentle-ai sube defaultMode a bypassPermissions; permisos.mjs (paso 5b) lo devuelve.
+    $settingsAntes = Join-Path $UserHome '.claude\settings.json'
+    $modoPrevio = '(ninguno)'
+    try { $m = (Get-Content -Raw -LiteralPath $settingsAntes | ConvertFrom-Json).permissions.defaultMode; if ($m) { $modoPrevio = [string]$m } } catch { }
+    $env:MODO_PREVIO = $modoPrevio
     Write-Note "gentle-ai install --agents $agentesG --preset full-gentleman --persona gentleman --claude-orchestrator-modules"
-    $gr = Invoke-Cli $gentleExe @('install', '--agents', $agentesG, '--preset', 'full-gentleman', '--persona', 'gentleman', '--claude-orchestrator-modules')
+    $gr =Invoke-Cli $gentleExe @('install', '--agents', $agentesG, '--preset', 'full-gentleman', '--persona', 'gentleman', '--claude-orchestrator-modules')
     if ($gr.Code -eq 0) { Write-Ok 'Gentle AI configurado (ODD, RDD, Engram, CodeGraph, Context7, skills)' }
     else {
       Write-Warn 'gentle-ai install no termino bien; se sigue con lo demas'

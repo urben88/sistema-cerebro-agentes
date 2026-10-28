@@ -67,6 +67,16 @@ for (const [lista, reglas] of Object.entries(PERMISOS)) {
   anadidos[lista] = nuevas.length
 }
 
+// `gentle-ai install` sube defaultMode a bypassPermissions. El instalador guarda el modo
+// previo en MODO_PREVIO (`(ninguno)` si no había) y aquí se devuelve, sin tocar otro caso.
+const previo = process.env.MODO_PREVIO
+let restaurado = ''
+if (previo && previo !== 'bypassPermissions' && s.permissions.defaultMode === 'bypassPermissions') {
+  if (previo === '(ninguno)') delete s.permissions.defaultMode
+  else s.permissions.defaultMode = previo
+  restaurado = `; defaultMode devuelto a ${previo}`
+}
+
 fs.mkdirSync(path.dirname(ruta), { recursive: true })
 fs.writeFileSync(ruta, JSON.stringify(s, null, 2) + '\n')
-console.log(`Permisos: +${anadidos.allow} allow, +${anadidos.ask} ask, +${anadidos.deny} deny (defaultMode y lo existente, sin tocar).`)
+console.log(`Permisos: +${anadidos.allow} allow, +${anadidos.ask} ask, +${anadidos.deny} deny (lo existente, sin tocar${restaurado}).`)
