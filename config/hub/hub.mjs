@@ -35,6 +35,8 @@ import { crearLanzador } from './lib/lanzador.mjs'
 import { crearCron, parsearSchedule } from './lib/cron.mjs'
 import { crearCompresion } from './lib/compresion.mjs'
 import { crearMetricas } from './lib/metricas.mjs'
+import { crearUso, cargarPrecios } from './lib/uso.mjs'
+import { crearCambios } from './lib/cambios.mjs'
 import { crearSaludAgentes } from './lib/salud-agentes.mjs'
 import { crearA2A } from './lib/a2a.mjs'
 
@@ -153,6 +155,16 @@ const metricas = crearMetricas({
   logErrores: (d) => { try { logErrores.registrar(d) } catch { /* nada */ } },
 })
 try { metricas.podar() } catch { /* la poda nunca impide arrancar */ }
+
+// Spec 22 · coste por agente y stats: salen de los transcripts de Claude Code. El precio
+// por modelo vive en `precios.json` (hub-data/precios.json lo pisa); se relee en cada consulta.
+const uso = crearUso({
+  dirProyectos: path.join(CLAUDE_DIR, 'projects'),
+  precios: () => cargarPrecios([path.join(__dirname, 'precios.json'), path.join(DATA_DIR, 'precios.json')]),
+  jobs: () => metricas.leer({ tipo: 'job', limite: 1000 }),
+})
+// Spec 22 · cambios pendientes (sin commit) del repo de la sesión y de sus worktrees.
+const cambios = crearCambios()
 
 /** Escribe una clave en `hub-data/config.json` (read-merge-write, atómico). */
 function guardarConfigClave(clave, valor) {
@@ -346,6 +358,14 @@ function registrarLatido(b) {
     ts: ahora,
     desde: previo && ahora - previo.ts < LATIDO_TTL ? previo.desde : ahora,
   })
+}
+
+/** Carpetas cuyo repo se inspecciona: `?cwd=` (repetible) o, si no, las de los latidos vivos. */
+function cwdsCambios(u) {
+  const dados = u.searchParams.getAll('cwd').filter(Boolean)
+  if (dados.length) return dados
+  const vivos = [...new Set(latidosActivos().map((l) => l.cwd).filter(Boolean))]
+  return vivos.length ? vivos : [process.cwd()]
 }
 
 function latidosActivos() {
@@ -1078,6 +1098,24 @@ const servidor = http.createServer(async (req, res) => {
       const b = await cuerpoJson(req)
       anunciarTarea(b)
       return enviarJson(res, { ok: true })
+    }
+    // ------------------------------------------------ uso y cambios (spec 22)
+    if (ruta === '/api/agentes/coste' && req.method === 'GET') {
+      return enviarJson(res, { ok: true, ...uso.agentes({
+        dias: parseInt(u.searchParams.get('dias'), 10) || 7,
+        limite: parseInt(u.searchParams.get('limite'), 10) || 50,
+        sesion: u.searchParams.get('sesion') || null,
+      }) })
+    }
+    if (ruta === '/api/stats' && req.method === 'GET') {
+      return enviarJson(res, { ok: true, ...uso.stats({ dias: parseInt(u.searchParams.get('dias'), 10) || 30 }) })
+    }
+    if (ruta === '/api/cambios' && req.method === 'GET') {
+      return enviarJson(res, { ok: true, ...(await cambios.estado(cwdsCambios(u))) })
+    }
+    if (ruta === '/api/cambios/diff' && req.method === 'GET') {
+      const r = await cambios.diff(cwdsCambios(u), u.searchParams.get('arbol'), u.searchParams.get('archivo'))
+      return enviarJson(res, r, r.ok ? 200 : 400)
     }
     if (ruta === '/api/latidos') {
       // Latidos vivos (Claude y subagentes): los usa la barra de estado y el panel.

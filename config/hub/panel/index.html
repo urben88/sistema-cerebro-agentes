@@ -41,6 +41,18 @@
       </div>
       <div id="oficina" class="oficina"></div>
       <div id="oficinaVacia" class="vacio oculto"></div>
+      <section class="tarjeta" id="costeAgentes">
+        <div class="cab-oficina">
+          <h2>Coste por subagente <span class="tenue">(tokens, coste estimado, modelo y duración; precios en <code>precios.json</code>)</span></h2>
+          <span class="chip" id="costeResumen"></span>
+        </div>
+        <div class="tabla-scroll">
+          <table id="tablaCoste">
+            <thead><tr><th>Agente</th><th>Modelo</th><th>Entrada</th><th>Salida</th><th>Caché (lect./escr.)</th><th>Coste</th><th>Duración</th><th>Cuándo</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
     </section>
 
     <!-- ============ ORGANIZACIÓN (R12 + R15) ============ -->
@@ -180,6 +192,40 @@
           </div>
           <p class="tenue">Cada error completo (mensaje, stack y contexto) queda en <code>hub-data/logs/errores.jsonl</code>. También desde la terminal: <code>node ~/.sistema-cerebro-agentes/hub/errores.mjs --exportar</code>.</p>
           <div id="errores" class="lista"></div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ============ USO (spec 22 · S2) ============ -->
+    <section class="vista oculto" id="vista-uso" role="tabpanel" aria-label="Uso">
+      <div class="rejilla">
+        <section class="tarjeta ancho2">
+          <div class="cab-oficina">
+            <h2>Uso local <span class="tenue">(lo mismo que <code>/odd:stats</code>; sale de los transcripts de Claude Code)</span></h2>
+            <div><span class="chip" id="usoTotal"></span> <span class="chip" id="usoRacha"></span></div>
+          </div>
+          <h3>Por modelo</h3>
+          <div class="tabla-scroll"><table id="tablaUsoModelo"><thead><tr><th>Modelo</th><th>Entrada</th><th>Salida</th><th>Caché (lect./escr.)</th><th>Coste</th></tr></thead><tbody></tbody></table></div>
+          <h3 style="margin-top:10px">Por día</h3>
+          <div class="tabla-scroll"><table id="tablaUsoDia"><thead><tr><th>Día</th><th>Entrada</th><th>Salida</th><th>Caché (lect./escr.)</th><th>Coste</th></tr></thead><tbody></tbody></table></div>
+          <h3 style="margin-top:10px">Por proyecto</h3>
+          <div class="tabla-scroll"><table id="tablaUsoProyecto"><thead><tr><th>Proyecto</th><th>Entrada</th><th>Salida</th><th>Caché (lect./escr.)</th><th>Coste</th></tr></thead><tbody></tbody></table></div>
+          <h3 style="margin-top:10px">OpenCode <span class="tenue">(trabajos registrados en las métricas del hub)</span></h3>
+          <div id="usoOpencode" class="lista"></div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ============ CAMBIOS (spec 22 · S3) ============ -->
+    <section class="vista oculto" id="vista-cambios" role="tabpanel" aria-label="Cambios">
+      <div class="rejilla">
+        <section class="tarjeta ancho2">
+          <div class="cab-oficina">
+            <h2>Cambios pendientes <span class="tenue">(sin commit, en el repo de la sesión y en los worktrees de los subagentes)</span></h2>
+            <button class="boton mini" id="cambiosRefrescar" type="button">Actualizar</button>
+          </div>
+          <p class="tenue">El diff solo se carga al abrir un archivo.</p>
+          <div id="cambios" class="lista"></div>
         </section>
       </div>
     </section>

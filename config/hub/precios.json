@@ -1,0 +1,9 @@
+{
+  "nota": "Precios orientativos en USD por millón de tokens. Edita aquí (o copia a hub-data/precios.json, que manda) cuando cambien las tarifas. Se busca la clave dentro del id del modelo (p. ej. «opus» en claude-opus-5-5).",
+  "moneda": "USD",
+  "modelos": {
+    "opus": { "entrada": 5, "salida": 25, "cacheLectura": 0.5, "cacheEscritura": 6.25 },
+    "sonnet": { "entrada": 3, "salida": 15, "cacheLectura": 0.3, "cacheEscritura": 3.75 },
+    "haiku": { "entrada": 1, "salida": 5, "cacheLectura": 0.1, "cacheEscritura": 1.25 }
+  }
+}

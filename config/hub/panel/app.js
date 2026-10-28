@@ -1550,6 +1550,8 @@ const PESTANAS = [
   ['datos', 'Datos'],
   ['mcps', 'MCPs'],
   ['hallazgos', 'Hallazgos'],
+  ['uso', 'Uso'],
+  ['cambios', 'Cambios'],
   ['aprobaciones', 'Aprobaciones'],
   ['programadas', 'Programadas'],
   ['errores', 'Errores'],
@@ -1578,6 +1580,8 @@ function cambiarPestana(id) {
     b.setAttribute('aria-selected', activa ? 'true' : 'false')
   }
   if (id === 'oficina') requestAnimationFrame(dibujarDelegaciones)
+  if (id === 'uso') cargarUso()
+  if (id === 'cambios') cargarCambios()
 }
 
 // ---------------------------------------------------------------- tema (R16)
@@ -1814,6 +1818,95 @@ window.addEventListener('resize', () => {
   debounceResize = setTimeout(dibujarDelegaciones, 150)
 })
 
+// ---------------------------------------------------------------- coste, uso y cambios (spec 22)
+
+const usd = (n) => (typeof n === 'number' ? `$${n < 1 ? n.toFixed(4) : n.toFixed(2)}` : '—')
+const duracion = (ms) => {
+  if (typeof ms !== 'number') return '—'
+  const s = Math.round(ms / 1000)
+  return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s`
+}
+const nombreCorto = (m) => String(m || '—').replace(/^claude-/, '')
+const cacheTxt = (t) => `${k(t.cacheLectura)} / ${k(t.cacheEscritura)}`
+
+function pintarTabla(id, filas) {
+  const tb = vaciar($(id).querySelector('tbody'))
+  for (const f of filas) tb.append(h('tr', null, f.map((c) => h('td', null, c))))
+  if (!filas.length) tb.append(h('tr', null, h('td', { colspan: 8, clase: 'tenue', texto: 'Sin datos todavía.' })))
+}
+
+async function cargarCosteAgentes() {
+  if (estado.demo) { $('costeResumen').textContent = 'demo: sin datos reales'; return }
+  try {
+    const r = await fetch('/api/agentes/coste?dias=7&limite=30').then((x) => x.json())
+    $('costeResumen').textContent = `${r.total.agentes} subagentes · ${k(r.total.tokens.entrada + r.total.tokens.salida)} tokens (sin caché) · ${usd(r.total.coste)} · 7 días`
+    pintarTabla('tablaCoste', r.agentes.map((a) => [
+      a.agente, nombreCorto(a.modelo), k(a.tokens.entrada), k(a.tokens.salida), cacheTxt(a.tokens), usd(a.coste), duracion(a.duracionMs), hace(a.fin),
+    ]))
+  } catch { $('costeResumen').textContent = 'sin datos' }
+}
+
+async function cargarUso() {
+  cargarCosteAgentes()
+  if (estado.demo) return
+  try {
+    const s = await fetch('/api/stats?dias=30').then((x) => x.json())
+    $('usoTotal').textContent = `30 días · ${k(s.total.tokens.entrada + s.total.tokens.salida)} tokens (sin caché) · ${usd(s.total.coste)}`
+    $('usoRacha').textContent = `racha: ${s.racha.actual} días (mejor ${s.racha.mejor})`
+    const fila = (nombre, x) => [nombre, k(x.tokens.entrada), k(x.tokens.salida), cacheTxt(x.tokens), usd(x.coste)]
+    pintarTabla('tablaUsoModelo', s.porModelo.map((x) => fila(nombreCorto(x.modelo), x)))
+    pintarTabla('tablaUsoDia', s.porDia.slice().reverse().map((x) => fila(x.dia, x)))
+    pintarTabla('tablaUsoProyecto', s.porProyecto.slice(0, 20).map((x) => fila(x.proyecto, x)))
+    const oc = vaciar($('usoOpencode'))
+    const o = s.opencode || { jobs: 0, coste: 0, porModelo: [] }
+    oc.append(h('p', { clase: 'tenue', texto: o.jobs ? `${o.jobs} trabajos · ${usd(o.coste)} · ${o.porModelo.map((m) => `${m.modelo}: ${m.jobs}`).join(', ')}` : 'Sin trabajos de OpenCode en el periodo.' }))
+  } catch { $('usoTotal').textContent = 'sin datos' }
+}
+
+const ESTADO_CAMBIO = { M: 'modificado', A: 'añadido', D: 'borrado', R: 'renombrado', '?': 'nuevo' }
+
+function pintarArbol(arbol, raiz) {
+  const caja = h('div', { clase: 'agente' })
+  const cab = h('div', { clase: 'cab-oficina' })
+  cab.append(h('span', { clase: `badge ${arbol.principal ? 'verde' : 'ambar'}`, texto: arbol.principal ? 'repo' : 'worktree' }))
+  cab.append(h('span', { clase: 'nombre', texto: `${arbol.rama || '(sin rama)'} · ${arbol.ruta}` }))
+  cab.append(h('span', { clase: 'chip', texto: `${arbol.archivos.length} archivos · +${arbol.insertions} −${arbol.deletions}` }))
+  caja.append(cab)
+  if (!arbol.archivos.length) { caja.append(h('p', { clase: 'tenue', texto: 'Sin cambios pendientes.' })); return caja }
+  if (arbol.stat) {
+    const det = h('details', { clase: 'error-crudo' })
+    det.append(h('summary', { texto: 'git diff --stat' }), h('pre', { texto: arbol.stat }))
+    caja.append(det)
+  }
+  for (const a of arbol.archivos) {
+    const det = h('details', { clase: 'error-crudo' })
+    const pre = h('pre', { texto: 'Abre para cargar el diff…' })
+    let cargado = false
+    det.append(h('summary', { texto: `${ESTADO_CAMBIO[a.estado] || a.estado} · ${a.ruta}${a.insertions != null ? ` (+${a.insertions} −${a.deletions})` : ''}` }), pre)
+    det.addEventListener('toggle', async () => {
+      if (!det.open || cargado) return
+      cargado = true
+      try {
+        const r = await fetch(`/api/cambios/diff?cwd=${encodeURIComponent(raiz)}&arbol=${encodeURIComponent(arbol.ruta)}&archivo=${encodeURIComponent(a.ruta)}`).then((x) => x.json())
+        pre.textContent = r.ok ? (r.diff || '(sin diferencias)') + (r.truncado ? '\n… (recortado)' : '') : (r.error || 'no se pudo cargar')
+      } catch { pre.textContent = 'no se pudo cargar'; cargado = false }
+    })
+    caja.append(det)
+  }
+  return caja
+}
+
+async function cargarCambios() {
+  const cont = vaciar($('cambios'))
+  if (estado.demo) { cont.append(h('p', { clase: 'tenue', texto: 'Modo demo: sin repos reales.' })); return }
+  try {
+    const r = await fetch('/api/cambios').then((x) => x.json())
+    if (!r.repos.length) { cont.append(h('p', { clase: 'tenue', texto: 'No hay un repo git activo (se usan las carpetas de las sesiones en marcha).' })); return }
+    for (const repo of r.repos) for (const arbol of repo.arboles) cont.append(pintarArbol(arbol, repo.raiz))
+  } catch { cont.append(h('p', { clase: 'tenue', texto: 'No se pudieron leer los cambios.' })) }
+}
+$('cambiosRefrescar').addEventListener('click', () => cargarCambios())
+
 function arrancar() {
   iniciarTema()
   pintarPestanas()
@@ -1841,6 +1934,8 @@ function arrancar() {
   if (!estado.demo) conectarSse()
   setInterval(refrescarLigero, 15000)
   setInterval(refrescarPesado, 60000)
+  cargarCosteAgentes()
+  setInterval(cargarCosteAgentes, 60000)
   setInterval(refrescarTiempos, 30000)
 }
 

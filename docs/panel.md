@@ -80,3 +80,18 @@ Edita `BasePort` en `panel.ps1` (o `BASE_PORT` en `panel.sh`). El puerto real se
 ## Actualización con el repositorio
 
 El panel vive en el repositorio (`config/web`) y se despliega con el instalador. Al ejecutar `scripts/actualizar` (o `install`), además de hacer `git pull` se redespliega el panel y, **si estaba abierto, se reinicia solo** para aplicar la versión nueva. Nada manual.
+
+## Panel del hub: coste, uso y cambios (spec 22)
+
+El panel del Cerebro Hub (`http://127.0.0.1:4597`) añade:
+
+| Dónde | Qué muestra | Ruta del hub |
+|---|---|---|
+| Oficina · «Coste por subagente» | Por subagente: tokens (entrada, salida, caché), coste estimado, modelo y duración | `GET /api/agentes/coste?dias=7&limite=50&sesion=` |
+| Pestaña Uso | Tokens y coste por modelo, día y proyecto, racha de días y trabajos de OpenCode (igual que `/odd:stats`) | `GET /api/stats?dias=30` |
+| Pestaña Cambios | Lo que está sin commit en el repo de la sesión y en sus worktrees (archivos y `--stat`); el diff se carga al abrir un archivo | `GET /api/cambios`, `GET /api/cambios/diff?arbol=&archivo=` |
+
+- Los datos de coste salen de los transcripts de Claude Code (`~/.claude/projects`), no del hook.
+- Los precios están en `config/hub/precios.json` (USD por millón de tokens, por familia de modelo). Para cambiarlos sin tocar el repo, copia el archivo a `hub-data/precios.json`: manda sobre el del repo y se relee en cada consulta. Es una estimación.
+- `/agentes` (mod mesa-de-trabajo) añade el coste de los subagentes recientes; `/agentes <n>` incluye el del agente elegido.
+- Cambios: `?cwd=` (repetible) elige el repo; sin él se usan las carpetas de las sesiones en marcha. Solo lectura (`git status` y `git diff`).

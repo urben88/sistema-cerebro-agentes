@@ -144,10 +144,28 @@ function trabajosVivos(v) {
   return ((v && v.trabajos) || []).filter((j) => EN_CURSO.includes(j.status))
 }
 
-function formatearAgentes(l, v) {
+// Spec 22 · S1 · coste por subagente (el hub lo calcula de los transcripts y de precios.json).
+const kTok = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : String(n || 0))
+const usd = (n) => (typeof n === 'number' ? `${n < 1 ? n.toFixed(4) : n.toFixed(2)} $` : 'sin precio')
+const duracion = (ms) => (typeof ms === 'number' ? (ms < 60000 ? `${Math.round(ms / 1000)}s` : Math.round(ms / 60000) + 'm') : '?')
+
+function lineaCoste(c) {
+  const t = c.tokens || {}
+  const modelo = String(c.modelo || '?').replace(/^claude-/, '')
+  return `${c.agente} (${modelo}) · entrada ${kTok(t.entrada)} · salida ${kTok(t.salida)} · caché ${kTok(t.cacheLectura)}/${kTok(t.cacheEscritura)} · ${usd(c.coste)} · ${duracion(c.duracionMs)}`
+}
+
+function formatearCostes(costes) {
+  const lista = (costes && costes.agentes) || []
+  if (!lista.length) return []
+  return ['', `Coste de subagentes recientes (${lista.length}):`, ...lista.map((c, i) => `${i + 1}. ${lineaCoste(c)}`)]
+}
+
+function formatearAgentes(l, v, costes) {
   const subs = subagentesVivos(l)
   const jobs = trabajosVivos(v)
-  if (!subs.length && !jobs.length) return 'No hay agentes en marcha ahora mismo (ni subagentes de Claude ni trabajos de OpenCode).'
+  const extra = formatearCostes(costes)
+  if (!subs.length && !jobs.length) return ['No hay agentes en marcha ahora mismo (ni subagentes de Claude ni trabajos de OpenCode).', ...extra].join('\n')
   const salida = []
   if (subs.length) {
     salida.push(`Subagentes de Claude (${subs.length}):`)
@@ -166,7 +184,7 @@ function formatearAgentes(l, v) {
       salida.push(`${subs.length + i + 1}. ${j.agent || '?'}${esfuerzo} · ${estado} · ${minutos(j.createdAt, j.updatedAt)}${coste} · ${recortar(j.title || '(sin título)', 80)}`)
     })
   }
-  return [...salida, '', 'Detalle: /agentes <número>'].join('\n')
+  return [...salida, ...extra, '', 'Detalle: /agentes <número>'].join('\n')
 }
 
 function formatearDetalleJob(j) {
@@ -180,10 +198,12 @@ function formatearDetalleJob(j) {
   ].filter(Boolean).join('\n')
 }
 
-function formatearDetalleAgente(x, vivo) {
+function formatearDetalleAgente(x, vivo, costes) {
   const etiqueta = [x.modelo, x.esfuerzo ? nombreEsfuerzo(x.esfuerzo) : null].filter(Boolean).join('·')
   const cab = [`${x.agente}${etiqueta ? ` (${etiqueta})` : ''} · ${minutos(x.desde || x.ts, Date.now())}`]
   if (x.tarea) cab.push(`Tarea: ${recortar(x.tarea, 200)}`)
+  const mio = ((costes && costes.agentes) || []).find((c) => c.agente === x.agente && c.sesion === x.sesion)
+  if (mio) cab.push(`Coste: ${lineaCoste(mio)}`)
   const eventos = (vivo?.eventos || []).filter((ev) => ev.tipo === 'herramienta' || ev.tipo === 'subtarea' || ev.tipo === 'texto').slice(-8)
   if (!eventos.length) return [...cab, '', 'Sin actividad recogida todavía.'].join('\n')
   const lineas = eventos.map((ev) => ev.tipo === 'herramienta' ? `- ${ev.tool}: ${recortar(ev.entrada, 100)}` : ev.tipo === 'subtarea' ? `- subtarea: ${recortar(ev.texto || ev.entrada || '', 100)}` : `- dice: ${recortar(ev.texto, 100)}`)
@@ -214,18 +234,20 @@ export function register(on) {
       const l = await pedirJson($, "/api/latidos")
       let v = null
       try { v = await pedirJson($, "/api/vigilante") } catch { /* sin trabajos */ }
+      let costes = null
+      try { costes = await pedirJson($, "/api/agentes/coste?dias=1&limite=5") } catch { /* sin coste */ }
       const n = parseInt(String(e.args || "").trim(), 10)
-      if (!Number.isFinite(n)) return { text: formatearAgentes(l, v) }
+      if (!Number.isFinite(n)) return { text: formatearAgentes(l, v, costes) }
       const subs = subagentesVivos(l)
       const jobs = trabajosVivos(v)
       if (n >= 1 && n <= subs.length) {
         const x = subs[n - 1]
         let vivo = null
         if (x.sesion) { try { vivo = (await pedirJson($, `/api/vivo/agente?sesion=${encodeURIComponent(x.sesion)}`)).vivo } catch { /* sin vista viva */ } }
-        return { text: formatearDetalleAgente(x, vivo) }
+        return { text: formatearDetalleAgente(x, vivo, costes) }
       }
       const j = jobs[n - subs.length - 1]
-      if (!j) return { text: `No hay un agente número ${n}. ${formatearAgentes(l, v)}` }
+      if (!j) return { text: `No hay un agente número ${n}. ${formatearAgentes(l, v, costes)}` }
       return { text: formatearDetalleJob(j) }
     } catch {
       return { text: "El Cerebro Hub no responde (127.0.0.1:4597). Arráncalo o revisa `hub.ps1 status`." }
