@@ -1,6 +1,6 @@
 ---
 name: analista
-description: ★ MÍO · Verificación ligera — compara requisitos/spec contra cambios, detecta inconsistencias y produce checklists. Solo lectura; no edita ni delega.
+description: ★ MÍO · Verificación ligera — compara requisitos/spec contra cambios, detecta inconsistencias y produce checklists. Solo lectura; no edita ni delega. Rol ODD: verifier.
 effort: medium
 model: haiku
 tools: Read, Grep, Glob, Bash

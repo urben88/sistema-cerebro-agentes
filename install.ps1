@@ -8,11 +8,14 @@
    1. Comprueba prerrequisitos (Node >= 22, OpenCode, Claude Code, proveedor DeepSeek, Docker opcional).
    2. Instala el servidor OpenCode V1 (opencode-ai) que usa el MCP, con datos aislados.
    3. Copia el lanzador del MCP a ~/.sistema-cerebro-agentes.
-   4. Instala el panel web y el Cerebro Hub (memoria compartida, vigilante, triaje).
-   5. Instala los hooks de contexto y los subagentes de Claude (cerebro, subdirector...).
-   6. Instala los agentes de OpenCode (por esfuerzo) y retira los antiguos.
-   7. Levanta el stack Docker (hub + Laya) y registra el autoarranque.
-   8. Arranca el servidor local.
+   4. Instala el panel web y el Cerebro Hub (memoria compartida, vigilante, trabajos).
+   5. Instala y configura Gentle AI (ODD, RDD, Engram, CodeGraph, Context7, skills) en
+      Claude Code y OpenCode, antes de aplicar lo nuestro encima.
+   6. Instala los hooks de contexto, los subagentes, los comandos /odd:* y los permisos
+      prudentes de Claude.
+   7. Instala los agentes de OpenCode (por esfuerzo) y retira los antiguos.
+   8. Levanta el stack Docker (hub), retira el contenedor antiguo de Laya y registra el autoarranque.
+   9. Arranca el servidor local.
 
   Es idempotente y hace copia de seguridad de todo lo que reemplaza en
   ~/.sistema-cerebro-agentes/backups/<fecha>/.
@@ -42,6 +45,8 @@ $ServerDir      = Join-Path $SystemDir 'server'
 $ServerExe      = Join-Path $ServerDir 'node_modules\opencode-ai\bin\opencode.exe'
 $LauncherPath   = Join-Path $SystemDir 'launcher.ps1'
 $VersionServidor = '1.18.35'
+$VersionGentle   = '4.3.1'
+$VersionPluginOc = '2.0.4'
 $MarkerBegin    = '<!-- BEGIN sistema-cerebro-agentes -->'
 $MarkerEnd      = '<!-- END sistema-cerebro-agentes -->'
 $BackupRoot     = Join-Path $SystemDir 'backups'
@@ -100,6 +105,25 @@ function Set-ManagedBlock([string]$TargetPath, [string]$BlockPath) {
   }
 }
 
+function Get-GentleAiExe {
+  # go install deja el binario en GOPATH\bin, que puede no estar en el PATH de esta sesion.
+  $cmd = Get-Command gentle-ai -ErrorAction SilentlyContinue
+  if ($cmd) { return $cmd.Source }
+  $cands = @((Join-Path $UserHome 'go\bin\gentle-ai.exe'))
+  if (Get-Command go -ErrorAction SilentlyContinue) {
+    $gp = (Invoke-Cli 'go' @('env', 'GOPATH')).Output.Trim()
+    if ($gp) { $cands = @((Join-Path $gp 'bin\gentle-ai.exe')) + $cands }
+  }
+  foreach ($c in $cands) { if (Test-Path -LiteralPath $c) { return $c } }
+  return $null
+}
+
+function Get-GentleAiVersion([string]$Exe) {
+  $v = Invoke-Cli $Exe @('version')
+  if ($v.Output -match '(\d+\.\d+\.\d+)') { return $Matches[1] }
+  return ''
+}
+
 $fatal    = New-Object System.Collections.Generic.List[string]
 $warnings = New-Object System.Collections.Generic.List[string]
 
@@ -154,10 +178,28 @@ if ($authProviders -contains 'openrouter') {
   Write-Warn 'OpenRouter sigue conectado en OpenCode; este sistema ya no lo usa (puedes retirarlo con: opencode auth logout OpenRouter)'
 }
 if (Get-Command docker -ErrorAction SilentlyContinue) {
-  Write-Ok 'Docker disponible (hub + Laya en contenedores)'
+  Write-Ok 'Docker disponible (hub en contenedor)'
 } else {
-  Write-Warn 'Docker no encontrado: el hub podra ejecutarse en nativo (hub.ps1), pero Laya no estara disponible'
+  Write-Warn 'Docker no encontrado: el hub podra ejecutarse en nativo (hub.ps1)'
 }
+
+# Gentle AI (spec 20): aqui solo se lee; la instalacion va en su paso.
+$gentleExe = Get-GentleAiExe
+if ($gentleExe) {
+  $gv = Get-GentleAiVersion $gentleExe
+  if ($gv -eq $VersionGentle) { Write-Ok "Gentle AI $gv" }
+  else { Write-Warn "Gentle AI $gv (version fijada: $VersionGentle); se usa la instalada"; $warnings.Add("Gentle AI instalado es $gv y el sistema esta probado con $VersionGentle") }
+} elseif (Get-Command go -ErrorAction SilentlyContinue) {
+  Write-Warn "Gentle AI no encontrado: install lo instalara con go install (@v$VersionGentle)"
+} else {
+  Write-Warn 'Gentle AI no encontrado y falta Go: install seguira sin Gentle AI'
+  $warnings.Add("Instala Go (https://go.dev/dl) y ejecuta: go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v$VersionGentle")
+}
+$claudeMdPrev = Join-Path $UserHome '.claude\CLAUDE.md'
+if ((Test-Path -LiteralPath $claudeMdPrev) -and ([System.IO.File]::ReadAllText($claudeMdPrev) -match 'gentle-ai:')) { Write-Ok 'Bloques gentle-ai:* presentes en ~/.claude/CLAUDE.md' }
+else { Write-Note 'Aun no hay bloques gentle-ai:* en ~/.claude/CLAUDE.md (los escribira install)' }
+if (Test-Path -LiteralPath (Join-Path $UserHome '.claude\gentle-ai\orchestrator')) { Write-Ok 'Orquestador modular de Gentle AI presente' }
+else { Write-Note 'Aun no hay orquestador modular en ~/.claude/gentle-ai/orchestrator (lo escribira install)' }
 
 if ($fatal.Count -gt 0) {
   Write-Host "`nFaltan prerrequisitos obligatorios:" -ForegroundColor Red
@@ -249,7 +291,7 @@ if ($panelActivo) {
 }
 
 # ---------------------------------------------------------------- 3c. Cerebro Hub
-Write-Step 'Cerebro Hub (memoria compartida, hooks y triaje)'
+Write-Step 'Cerebro Hub (memoria compartida, hooks y trabajos)'
 
 $hubSrc = Join-Path $ConfigRoot 'hub'
 $hubDst = Join-Path $SystemDir 'hub'
@@ -273,7 +315,7 @@ $mcpDst = Join-Path $SystemDir 'mcp'
 New-Item -ItemType Directory -Force -Path $mcpDst | Out-Null
 Backup-Item (Join-Path $mcpDst 'triaje-mcp.mjs')
 Copy-Item -LiteralPath (Join-Path $ConfigRoot 'mcp\triaje-mcp.mjs') -Destination (Join-Path $mcpDst 'triaje-mcp.mjs') -Force
-Write-Ok 'MCP de triaje instalado (mcp/triaje-mcp.mjs)'
+Write-Ok 'MCP de trabajos instalado (mcp/triaje-mcp.mjs)'
 
 # Mods de Claude Code (mesa de trabajo): se cargan vía CLAUDE_CODE_PLUGIN_DIRS (settings-merge).
 $modsSrc = Join-Path $ConfigRoot 'mods'
@@ -285,6 +327,64 @@ if (Test-Path -LiteralPath $modsSrc) {
   Write-Ok "Mods instalados: $modsDst"
 }
 
+# ---------------------------------------------------------------- 3d. Gentle AI (ODD, RDD, Engram, CodeGraph, Context7, skills)
+# Va ANTES de lo nuestro: asi nuestros agentes, el bloque de CLAUDE.md, los permisos y el
+# default_agent se aplican encima y no los pisa el componente permissions de gentle-ai.
+Write-Step "Gentle AI $VersionGentle (Claude Code + OpenCode)"
+if ($env:SIN_GENTLE_AI) {
+  Write-Note 'SIN_GENTLE_AI: se omite Gentle AI'
+} else {
+  $gentleExe = Get-GentleAiExe
+  if (-not $gentleExe) {
+    if (Get-Command go -ErrorAction SilentlyContinue) {
+      Write-Note "Instalando gentle-ai@v$VersionGentle con go install (puede tardar)..."
+      $gi = Invoke-Cli 'go' @('install', "github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v$VersionGentle")
+      $gentleExe = Get-GentleAiExe
+      if ($gentleExe) { Write-Ok "gentle-ai instalado: $gentleExe" }
+      else { Write-Warn 'No se pudo instalar gentle-ai'; Write-Host $gi.Output -ForegroundColor DarkGray }
+    } else {
+      Write-Warn 'Falta Go: no se puede instalar gentle-ai'
+    }
+    if (-not $gentleExe) { $warnings.Add("Instala Gentle AI a mano: go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v$VersionGentle (necesita Go) y repite install") }
+  }
+  if ($gentleExe) {
+    $gv = Get-GentleAiVersion $gentleExe
+    if ($gv -ne $VersionGentle) { Write-Warn "Gentle AI $gv (fijada: $VersionGentle); se usa la instalada" }
+    $conOpenCode = [bool](Get-Command opencode -ErrorAction SilentlyContinue)
+    $agentesG = if ($conOpenCode) { 'claude-code,opencode' } else { 'claude-code' }
+
+    # Backup de lo que gentle-ai toca (no carpetas enteras: projects/ y node_modules son enormes)
+    foreach ($rel in @('.claude\CLAUDE.md', '.claude\settings.json', '.claude\agents', '.claude\skills', '.config\opencode\opencode.jsonc', '.config\opencode\package.json', '.config\opencode\.gentle-ai-default-agent.json', '.config\opencode\agents', '.config\opencode\AGENTS.md')) {
+      Backup-Item (Join-Path $UserHome $rel)
+    }
+
+    if ($conOpenCode) {
+      # gentle-ai exige @opencode/plugin en la carpeta de configuracion de OpenCode
+      $ocCfg = Join-Path $UserHome '.config\opencode'
+      $plugPkg = Join-Path $ocCfg 'node_modules\@opencode\plugin\package.json'
+      $plugOk = $false
+      if (Test-Path -LiteralPath $plugPkg) { try { $plugOk = ((Get-Content -LiteralPath $plugPkg -Raw | ConvertFrom-Json).version -eq $VersionPluginOc) } catch { } }
+      if (-not $plugOk) {
+        New-Item -ItemType Directory -Force -Path $ocCfg | Out-Null
+        $np = Invoke-Cli 'npm' @('install', '--prefix', $ocCfg, '--save-exact', "@opencode/plugin@$VersionPluginOc", '--no-audit', '--no-fund')
+        if ($np.Code -eq 0) { Write-Ok "@opencode/plugin@$VersionPluginOc instalado en ~/.config/opencode" }
+        else { Write-Warn "No se pudo instalar @opencode/plugin@$VersionPluginOc"; $warnings.Add("Ejecuta: npm install --prefix `"$ocCfg`" --save-exact @opencode/plugin@$VersionPluginOc y repite install") }
+      }
+    } else {
+      Write-Warn 'OpenCode no encontrado: Gentle AI se configura solo para Claude Code'
+    }
+
+    Write-Note "gentle-ai install --agents $agentesG --preset full-gentleman --persona gentleman --claude-orchestrator-modules"
+    $gr = Invoke-Cli $gentleExe @('install', '--agents', $agentesG, '--preset', 'full-gentleman', '--persona', 'gentleman', '--claude-orchestrator-modules')
+    if ($gr.Code -eq 0) { Write-Ok 'Gentle AI configurado (ODD, RDD, Engram, CodeGraph, Context7, skills)' }
+    else {
+      Write-Warn 'gentle-ai install no termino bien; se sigue con lo demas'
+      Write-Host $gr.Output -ForegroundColor DarkGray
+      $warnings.Add('Revisa la salida de gentle-ai install y repite install')
+    }
+  }
+}
+
 # ---------------------------------------------------------------- 4. Agente cerebro (con el MCP dentro)
 Write-Step 'Agente cerebro en Claude Code (con el MCP dentro)'
 
@@ -292,12 +392,12 @@ Write-Step 'Agente cerebro en Claude Code (con el MCP dentro)'
 $rm = Invoke-Cli 'claude' @('mcp', 'remove', 'opencode', '--scope', 'user')
 if ($rm.Code -eq 0) { Write-Note 'Retirado el registro global antiguo del MCP (ahora vive en el agente cerebro)' }
 
-# Modo normal: el triaje (Laya) SI es global, para que `claude` a secas reparta subagentes.
-# OpenCode NO: sigue solo dentro del agente cerebro.
+# MCP de trabajos (trabajo_estado, parar_trabajos): global, para que `claude` a secas vea los trabajos.
+# El MCP de OpenCode NO: sigue solo dentro del agente cerebro.
 $triajeGlobal = Join-Path $SystemDir 'mcp\triaje-mcp.mjs'
 Invoke-Cli 'claude' @('mcp', 'remove', 'triaje', '--scope', 'user') | Out-Null
 $addT = Invoke-Cli 'claude' @('mcp', 'add', '--scope', 'user', 'triaje', '--', 'node', $triajeGlobal)
-if ($addT.Code -eq 0) { Write-Ok 'MCP triaje registrado a nivel de usuario (modo normal)' } else { Write-Note 'No se pudo registrar el MCP triaje global; hazlo a mano: claude mcp add --scope user triaje -- node <ruta>' }
+if ($addT.Code -eq 0) { Write-Ok 'MCP de trabajos (triaje) registrado a nivel de usuario (modo normal)' } else { Write-Note 'No se pudo registrar el MCP triaje global; hazlo a mano: claude mcp add --scope user triaje -- node <ruta>' }
 
 $agentSrcDir = Join-Path $ConfigRoot 'claude\agents'
 $agentDir = Join-Path $UserHome '.claude\agents'
@@ -343,6 +443,15 @@ if (Test-Path -LiteralPath $skillDst) { Remove-Item -LiteralPath $skillDst -Recu
 Copy-Item -LiteralPath $skillSrc -Destination $skillDst -Recurse -Force
 Write-Ok "Skill instalada: $skillDst"
 
+# Comandos /odd:* (spec 21 · S4): solo se reemplaza la carpeta odd; los comandos del usuario no se tocan.
+$cmdSrc = Join-Path $ConfigRoot 'claude\commands\odd'
+$cmdDst = Join-Path $UserHome '.claude\commands\odd'
+Backup-Item $cmdDst
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $cmdDst) | Out-Null
+if (Test-Path -LiteralPath $cmdDst) { Remove-Item -LiteralPath $cmdDst -Recurse -Force }
+Copy-Item -LiteralPath $cmdSrc -Destination $cmdDst -Recurse -Force
+Write-Ok "Comandos /odd:* instalados: $cmdDst"
+
 # ---------------------------------------------------------------- 5b. Ajustes de Claude (esfuerzos + hooks)
 Write-Step 'Esfuerzos y hooks de contexto en Claude (settings.json)'
 $settingsPath = Join-Path $UserHome '.claude\settings.json'
@@ -357,6 +466,10 @@ else {
 $mergeRes = Invoke-Cli 'node' @((Join-Path $SystemDir 'hub\settings-merge.mjs'), $hooksDst)
 if ($mergeRes.Code -eq 0) { Write-Ok ($mergeRes.Output.Trim()) }
 else { Write-Warn 'No se pudo actualizar settings.json'; Write-Host $mergeRes.Output -ForegroundColor DarkGray }
+# Permisos prudentes (spec 21 · S5): se unen a los que ya hay, sin quitar nada.
+$permRes = Invoke-Cli 'node' @((Join-Path $ConfigRoot 'claude\permisos.mjs'), $settingsPath)
+if ($permRes.Code -eq 0) { Write-Ok ($permRes.Output.Trim()) }
+else { Write-Warn 'No se pudieron fusionar los permisos'; Write-Host $permRes.Output -ForegroundColor DarkGray }
 
 # ---------------------------------------------------------------- 6. Agentes de OpenCode
 Write-Step 'Agentes de OpenCode'
@@ -385,6 +498,10 @@ foreach ($viejo in @('chat-deepseek.md', 'chat-local.md')) {
   }
 }
 
+# gentle-ai deja gentle-orchestrator como default_agent; aqui se devuelve cerebro-oc (spec 20 · L8).
+$defRes = Invoke-Cli 'node' @((Join-Path $ConfigRoot 'claude\agente-defecto.mjs'), (Join-Path $UserHome '.config\opencode\opencode.jsonc'))
+if ($defRes.Code -eq 0) { Write-Ok ($defRes.Output.Trim()) } else { Write-Warn ($defRes.Output.Trim()) }
+
 # ---------------------------------------------------------------- 7. Arrancar servidor
 Write-Step 'Arrancando servidor local'
 if (Test-Path -LiteralPath (Join-Path $SystemDir 'servidor.ps1')) {
@@ -393,9 +510,18 @@ if (Test-Path -LiteralPath (Join-Path $SystemDir 'servidor.ps1')) {
   else { Write-Warn 'El servidor no respondio; se arrancara en la primera llamada del MCP'; Write-Host $srvRes.Output -ForegroundColor DarkGray }
 }
 
-# ---------------------------------------------------------------- 7b. Docker (hub + Laya) y autoarranque
-Write-Step 'Docker (hub + Laya) y autoarranque'
+# ---------------------------------------------------------------- 7b. Docker (hub) y autoarranque
+Write-Step 'Docker (hub) y autoarranque'
 if (Get-Command docker -ErrorAction SilentlyContinue) {
+  # Laya ya no existe: se retira el contenedor, la imagen y el volumen de las maquinas que lo tenian.
+  # Primero el contenedor y luego el volumen; sin fallar si no existen o el daemon esta parado.
+  # Cada uno por separado: tras un compose down o un uninstall puede quedar solo la imagen o el volumen (~850 MB).
+  $quitados = @()
+  foreach ($obj in @(@('contenedor', @('rm', '-f', 'cerebro-laya')), @('imagen', @('image', 'rm', 'cerebro-hub-laya:latest')), @('volumen', @('volume', 'rm', 'cerebro-hub_laya-modelos')))) {
+    $r = Invoke-Cli 'docker' $obj[1]
+    if ($r.Code -eq 0) { $quitados += $obj[0] }
+  }
+  if ($quitados.Count -gt 0) { Write-Ok ('Retirado lo que quedaba de Laya: ' + ($quitados -join ', ')) }
   $dockerDst = Join-Path $SystemDir 'docker'
   Backup-Item $dockerDst
   if (Test-Path -LiteralPath $dockerDst) { Remove-Item -LiteralPath $dockerDst -Recurse -Force }
@@ -413,12 +539,12 @@ if (Get-Command docker -ErrorAction SilentlyContinue) {
 
   # Reconstruye siempre (las capas sin cambios salen de cache): asi una actualizacion
   # del hub llega de verdad al contenedor; antes solo se construia si faltaba la imagen.
-  Write-Note 'Construyendo imagenes de Docker si hay cambios (la primera vez, Laya descarga torch; puede tardar)...'
+  Write-Note 'Construyendo imagenes de Docker si hay cambios (la primera vez puede tardar)...'
   $b = Invoke-Cli 'docker' @('compose', '-f', $composePath, 'build')
   if ($b.Code -eq 0) { Write-Ok 'Imagenes listas' }
   else { Write-Warn 'No se pudieron construir las imagenes'; Write-Host $b.Output -ForegroundColor DarkGray }
   $up = Invoke-Cli 'docker' @('compose', '-f', $composePath, 'up', '-d')
-  if ($up.Code -eq 0) { Write-Ok 'Hub + Laya en marcha (cerebro-hub, cerebro-laya)' }
+  if ($up.Code -eq 0) { Write-Ok 'Hub en marcha (cerebro-hub)' }
   else { Write-Warn 'No se pudo levantar el stack Docker'; Write-Host $up.Output -ForegroundColor DarkGray }
 
   $taskName = 'Cerebro Hub'
@@ -437,7 +563,7 @@ if (Get-Command docker -ErrorAction SilentlyContinue) {
     Write-Ok 'Autoarranque registrado (Inicio de Windows: cerebro-hub.cmd)'
   }
 } else {
-  Write-Warn 'Docker no encontrado: el hub puede ejecutarse en nativo (hub.ps1); Laya no estara disponible'
+  Write-Warn 'Docker no encontrado: el hub puede ejecutarse en nativo (hub.ps1)'
 }
 
 # ---------------------------------------------------------------- Resumen
@@ -446,8 +572,8 @@ Write-Host 'Instalacion completada. Proximos pasos:' -ForegroundColor Cyan
 Write-Host '  1. Reinicia Claude Code si lo tienes abierto (para que cargue el MCP).'
 Write-Host '  2. Verifica el sistema:'
 Write-Host '       powershell -ExecutionPolicy Bypass -File .\scripts\verificar.ps1 -Smoke'
-Write-Host '  3. Uso: abre Claude Code en la carpeta de un proyecto y pide lo que quieras.'
-Write-Host '  4. Panel del Cerebro Hub (organización, memoria, gasto y triaje):'
+Write-Host '  3. Uso: abre Claude Code en la carpeta de un proyecto y pide lo que quieras (comandos /odd:start, /odd:plan...).'
+Write-Host '  4. Panel del Cerebro Hub (organización, memoria y gasto):'
 Write-Host '       powershell -NoProfile -ExecutionPolicy Bypass -File ~\.sistema-cerebro-agentes\hub.ps1'
 Write-Host '     (El panel antiguo de actividad sigue disponible con panel.ps1.)'
 if ($warnings.Count -gt 0) {

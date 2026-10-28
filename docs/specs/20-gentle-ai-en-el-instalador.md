@@ -51,10 +51,10 @@ Rama: `feat/spec20-gentle-ai` · Riesgo: item 5 (instalador).
 | ID | Specs | Ruta | Estado | Commit |
 |---|---|---|---|---|
 | T1 | S2, S3 | inline | pendiente | — |
-| T2 | S1, S2, S3, S7, S8, S10 | inline | pendiente (incluye quitar Laya de install.*, verificar.*, actualizar.*: espera laya==true en /api/salud) | — |
+| T2 | S1, S2, S3, S7, S8, S10 | delegado (resolutor · high) | hecho (install.*, verificar.*, actualizar.*, uninstall.*; sin pruebas reales de install) | ver git log |
 | T3 | S4 | inline | pendiente | — |
 | T4 | S5, S6 | inline | pendiente | — |
-| T5 | S9, S10 | inline | pendiente (README, CHANGELOG, docs/ventanas-y-ahorro.md, docs/contexto-sesiones.md) | — |
+| T5 | S9, S10 | delegado (resolutor · high) | hecho (README, CHANGELOG 0.11.0, docs/ventanas-y-ahorro.md, docs/contexto-sesiones.md) | ver git log |
 | T6 | S5, S10 | delegado (resolutor · high, contexto) | hecho (tests 13/13, MCP sin triaje_decidir) | ver git log |
 
 T1 comprueba con `--dry-run` y `--help` los flags exactos: varios agentes, sin preguntas, persona. Luego aplica Gentle AI a OpenCode en esta máquina y compara el resultado con el backup.
@@ -76,3 +76,10 @@ T1 comprueba con `--dry-run` y `--help` los flags exactos: varios agentes, sin p
     3. Falta comprobar que el servidor V1 1.18.35 arranca con plugins V2.
     4. Hay un token de GitHub en texto plano en `opencode.jsonc`.
 - **L3:** la spec va en `docs/specs/` por convención del repositorio, en lugar de `odd/tasks/`.
+- **L9 (T2 y T5, resolutor):**
+  - `install.ps1`/`install.sh`: nuevo paso «Gentle AI» antes de los pasos de Claude. Instala el binario (`go install ...@v4.3.1` en Windows, buscando también en `GOPATHin`; script oficial en Linux/macOS, que no admite fijar versión: si instala otra, avisa), asegura `@opencode/plugin@2.0.4` en `~/.config/opencode` (npm `--save-exact`, aviso si falla) y ejecuta `gentle-ai install --agents claude-code[,opencode] --preset full-gentleman --persona gentleman --claude-orchestrator-modules`. `SIN_GENTLE_AI=1` lo omite; sin Go avisa y sigue.
+  - Backup selectivo (decisión): se copian solo `CLAUDE.md`, `settings.json`, `agents`, `skills`, `opencode.jsonc`, `package.json`, `AGENTS.md`, `agents` y `.gentle-ai-default-agent.json`, no las carpetas enteras (`~/.claude/projects` y `node_modules` son enormes).
+  - `default_agent`: `config/claude/agente-defecto.mjs` cambia `gentle-orchestrator` por `cerebro-oc` con un reemplazo de texto acotado (solo si aparece una vez y existe el agente). No toca `.gentle-ai-default-agent.json`. Un `gentle-ai sync` manual puede volver a cambiarlo.
+  - Laya: los instaladores quitan `cerebro-laya` (contenedor), `cerebro-hub-laya:latest` y el volumen `cerebro-hub_laya-modelos` si existe el contenedor, sin fallar si no hay Docker o daemon. `actualizar.*` espera ahora a `app == cerebro-hub`. El MCP `triaje` se conserva.
+  - `-Check`/`--check` informan (solo lectura) de versión de gentle-ai, bloques `gentle-ai:*` y orquestador modular. `verificar.*` añade la sección «Gentle AI y ODD».
+  - Docs sin Laya: README (nueva sección Gentle AI), CHANGELOG 0.11.0, `VERSION` 0.11.0, ventanas-y-ahorro y contexto-sesiones.

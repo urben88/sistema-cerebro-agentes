@@ -13,7 +13,7 @@ El hub gestiona la memoria y el contexto de **todos** los proyectos desde fuera 
 ├── memoria/ultima-sesion/         nota de la última sesión por proyecto (la escribe Haiku)
 ├── logs/                          decisiones.jsonl · vigilante.jsonl
 ├── config.json                    puerto y umbrales (atasco, permisos, caducidad…)
-└── reglas.json                    (si existe) reglas de reparto del usuario
+└── reglas.json                    (si existe) topes de coste y respaldo de agentes del usuario
 ```
 
 El **slug** del proyecto se deriva de su ruta absoluta (nombre + hash corto); las rutas se normalizan, así que la memoria funciona igual en Windows y dentro de los contenedores Linux.

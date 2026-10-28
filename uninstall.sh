@@ -73,6 +73,10 @@ else
   warn 'La skill delegar-a-opencode no estaba instalada'
 fi
 
+# 3a. Comandos /odd:* (solo la carpeta odd; los comandos del usuario se conservan)
+ODD_CMD="$HOME/.claude/commands/odd"
+if [ -e "$ODD_CMD" ]; then backup_item "$ODD_CMD"; rm -rf "$ODD_CMD"; ok "Eliminado: $ODD_CMD"; fi
+
 # 3b. Agente cerebro
 AGENT_DST="$HOME/.claude/agents/cerebro.md"
 if [ -e "$AGENT_DST" ]; then
@@ -84,7 +88,7 @@ else
 fi
 
 # 3c. Subagentes de Claude
-for name in subdirector.md explorador.md redactor.md analista.md arquitecto.md adaptador-mcps.md planificador.md resolutor.md ayudante.md; do
+for name in subdirector.md explorador.md redactor.md analista.md arquitecto.md adaptador-mcps.md planificador.md resolutor.md ayudante.md retocador.md consultor.md; do
   p="$HOME/.claude/agents/$name"
   if [ -e "$p" ]; then backup_item "$p"; rm -f "$p"; ok "Eliminado: $p"; fi
 done
@@ -162,3 +166,5 @@ for name in implementador.md revisor.md testeador.md constructor.md cerebro-oc.m
 done
 
 printf '\nDesinstalación completada. Copias en: %s\n' "$BACKUP_DIR"
+note 'Gentle AI es una herramienta externa y no se desinstala aquí: usa "gentle-ai uninstall" si quieres quitarlo.'
+note 'Los permisos prudentes de ~/.claude/settings.json se conservan (quítalos a mano si no los quieres).'

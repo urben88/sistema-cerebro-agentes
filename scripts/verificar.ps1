@@ -45,8 +45,8 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
 
 Test-Item ([bool](Get-Command opencode -ErrorAction SilentlyContinue)) 'OpenCode instalado' 'https://opencode.ai  (npm: npm install -g @opencode/cli)'
 Test-Item ([bool](Get-Command claude -ErrorAction SilentlyContinue)) 'Claude Code instalado' 'https://claude.com/claude-code'
-if (Get-Command docker -ErrorAction SilentlyContinue) { Write-Host '  [OK]   Docker disponible (hub + Laya)' -ForegroundColor Green; $script:pass++ }
-else { Write-Host '  [!]    Docker no encontrado (el hub nativo sigue funcionando; Laya no estara disponible)' -ForegroundColor Yellow }
+if (Get-Command docker -ErrorAction SilentlyContinue) { Write-Host '  [OK]   Docker disponible (hub en contenedor)' -ForegroundColor Green; $script:pass++ }
+else { Write-Host '  [!]    Docker no encontrado (el hub nativo sigue funcionando)' -ForegroundColor Yellow }
 
 Write-Step 'Proveedores (OpenCode)'
 $authPath = Join-Path $UserHome '.local\share\opencode\auth.json'
@@ -81,13 +81,50 @@ Test-Item $hasBlock 'Bloque gestionado en ~/.claude/CLAUDE.md' 'Ejecuta install.
 $skillOk = Test-Path -LiteralPath (Join-Path $UserHome '.claude\skills\delegar-a-opencode\SKILL.md')
 Test-Item $skillOk 'Skill delegar-a-opencode instalada' 'Ejecuta install.ps1'
 
+Write-Step 'Gentle AI y ODD (spec 20 y 21)'
+$versionGentle = '4.3.1'
+$gentleExe = $null
+$gc = Get-Command gentle-ai -ErrorAction SilentlyContinue
+if ($gc) { $gentleExe = $gc.Source }
+elseif (Test-Path -LiteralPath (Join-Path $UserHome 'go\bin\gentle-ai.exe')) { $gentleExe = Join-Path $UserHome 'go\bin\gentle-ai.exe' }
+Test-Item ([bool]$gentleExe) 'gentle-ai instalado' "Ejecuta install.ps1 (necesita Go: go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v$versionGentle)"
+if ($gentleExe) {
+  $gvOut = (& $gentleExe version 2>&1 | Out-String)
+  $gv = if ($gvOut -match '(\d+\.\d+\.\d+)') { $Matches[1] } else { '' }
+  Test-Item ($gv -eq $versionGentle) "gentle-ai en la version fijada ($versionGentle; instalada: $gv)" "Instala la fijada: go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v$versionGentle"
+}
+$cmTxt = if (Test-Path -LiteralPath $claudeMd) { [System.IO.File]::ReadAllText($claudeMd) } else { '' }
+Test-Item ($cmTxt -match '<!-- gentle-ai:') 'Bloques gentle-ai:* en ~/.claude/CLAUDE.md' 'Ejecuta install.ps1'
+$bloqueNuestro = [regex]::Match($cmTxt, '(?s)<!-- BEGIN sistema-cerebro-agentes -->.*?<!-- END sistema-cerebro-agentes -->').Value
+Test-Item (($bloqueNuestro.Length -gt 0) -and ($bloqueNuestro -notmatch '(?i)laya')) 'Nuestro bloque de CLAUDE.md no menciona Laya' 'Ejecuta install.ps1 para actualizar el bloque'
+Test-Item (Test-Path -LiteralPath (Join-Path $UserHome '.claude\gentle-ai\orchestrator')) 'Orquestador modular de Gentle AI (~/.claude/gentle-ai/orchestrator)' 'Ejecuta install.ps1 (usa --claude-orchestrator-modules)'
+$oddOk = $true
+foreach ($c in @('start', 'plan', 'implement', 'verify', 'review', 'status', 'handoff')) {
+  if (-not (Test-Path -LiteralPath (Join-Path $UserHome ".claude\commands\odd\$c.md"))) { $oddOk = $false }
+}
+Test-Item $oddOk 'Comandos /odd:* instalados (~/.claude/commands/odd)' 'Ejecuta install.ps1'
+$setPerm = Join-Path $UserHome '.claude\settings.json'
+$setPermTxt = if (Test-Path -LiteralPath $setPerm) { [System.IO.File]::ReadAllText($setPerm) } else { '' }
+Test-Item (($setPermTxt -match 'Read\(~/\.claude/\.credentials\.json\)') -and ($setPermTxt -match 'Bash\(git push:\*\)')) 'Permisos prudentes en settings.json (deny credenciales, ask git push)' 'Ejecuta install.ps1'
+$ocCfgTxt = ''
+foreach ($n in @('opencode.jsonc', 'opencode.json')) {
+  $pc = Join-Path $UserHome ".config\opencode\$n"
+  if (Test-Path -LiteralPath $pc) { $ocCfgTxt += [System.IO.File]::ReadAllText($pc) }
+}
+# Se mira donde lo lee OpenCode (opencode mcp list, solo lectura), no solo el texto del archivo.
+$ocMcp = if (Get-Command opencode -ErrorAction SilentlyContinue) { (& opencode mcp list 2>&1 | Out-String) } else { '' }
+Test-Item ($ocMcp -match 'engram\s+connected') 'engram conectado en OpenCode (opencode mcp list)' 'Ejecuta install.ps1 (gentle-ai install --agents claude-code,opencode) y revisa: opencode mcp list'
+if ($ocCfgTxt -match '"default_agent"\s*:\s*"([^"]*)"') {
+  Test-Item ($Matches[1] -eq 'cerebro-oc') "default_agent de OpenCode es cerebro-oc (ahora: $($Matches[1]))" 'Ejecuta install.ps1 (o node config/claude/agente-defecto.mjs)'
+}
+
 Write-Step 'Agentes de OpenCode'
 $agentsDst = Join-Path $UserHome '.config\opencode\agents'
 foreach ($name in @('cerebro-oc.md', 'implementador.md', 'debugger.md', 'revisor.md', 'testeador.md', 'explorador-ds.md', 'redactor-ds.md', 'planificador.md', 'local.md')) {
   Test-Item (Test-Path -LiteralPath (Join-Path $agentsDst $name)) "Agente $name" 'Ejecuta install.ps1'
 }
 
-Write-Step 'Cerebro Hub, hooks y triaje'
+Write-Step 'Cerebro Hub, hooks y trabajos'
 $hubPort = 0
 $hubPortFile = Join-Path $sysDir 'hub-port.txt'
 if (Test-Path -LiteralPath $hubPortFile) { [void][int]::TryParse((Get-Content -LiteralPath $hubPortFile -Raw).Trim(), [ref]$hubPort) }
@@ -99,17 +136,14 @@ if ($hubPort -le 0) {
   } catch { }
 }
 $hubOk = $false
-$layaOk = $false
 if ($hubPort -gt 0) {
   try {
     $salud = Invoke-RestMethod -Uri "http://127.0.0.1:$hubPort/api/salud" -TimeoutSec 4
     $hubOk = ($salud.app -eq 'cerebro-hub')
-    $layaOk = ($salud.laya -eq $true)
   } catch { }
 }
 Test-Item $hubOk "Cerebro Hub responde en 127.0.0.1:$hubPort" 'Arranca: powershell -File ~/.sistema-cerebro-agentes/hub.ps1 (o docker compose up -d)'
 if ($hubOk) {
-  Test-Item $layaOk 'Laya disponible para el triaje' 'Levanta el stack Docker: ~/.sistema-cerebro-agentes/docker/gestion.ps1 up'
   $actOk = $false
   try {
     $act = Invoke-RestMethod -Uri "http://127.0.0.1:$hubPort/api/actividad" -TimeoutSec 4
@@ -166,12 +200,12 @@ if (Test-Path -LiteralPath $hookLatido) {
   $seg = [math]::Round($sw.Elapsed.TotalSeconds, 2)
   Test-Item (($hookCode -eq 0) -and ($sw.Elapsed.TotalSeconds -lt 2)) "Hook latido no bloquea con el hub caído ($seg s)" 'Revisa config/hooks/latido.mjs'
 }
-Test-Item (Test-Path -LiteralPath (Join-Path $sysDir 'mcp\triaje-mcp.mjs')) 'MCP de triaje instalado' 'Ejecuta install.ps1'
+Test-Item (Test-Path -LiteralPath (Join-Path $sysDir 'mcp\triaje-mcp.mjs')) 'MCP de trabajos instalado' 'Ejecuta install.ps1'
 Test-Item (Test-Path -LiteralPath (Join-Path $sysDir 'mods\mesa-de-trabajo\hooks\register.js')) 'Mod «mesa de trabajo» instalado' 'Ejecuta install.ps1'
 $triajeTxt = ''
 $triajePath = Join-Path $sysDir 'mcp\triaje-mcp.mjs'
 if (Test-Path -LiteralPath $triajePath) { $triajeTxt = [System.IO.File]::ReadAllText($triajePath) }
-Test-Item ($triajeTxt.Contains('trabajo_estado')) 'MCP de triaje con trabajo_estado (visibilidad)' 'Ejecuta install.ps1'
+Test-Item ($triajeTxt.Contains('trabajo_estado')) 'MCP de trabajos con trabajo_estado (visibilidad)' 'Ejecuta install.ps1'
 $estadoLinea = Join-Path $sysDir 'hub\estado-linea.mjs'
 Test-Item (Test-Path -LiteralPath $estadoLinea) 'Barra de estado instalada (hub/estado-linea.mjs)' 'Ejecuta install.ps1'
 if (Test-Path -LiteralPath $estadoLinea) {

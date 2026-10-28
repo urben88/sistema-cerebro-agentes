@@ -37,9 +37,22 @@ Adaptar la configuración global de Claude Code (desplegada desde `config/claude
 | ID | Specs | Ruta | Estado |
 |---|---|---|---|
 | T1 | S1 | inline | hecho (pendiente de commit) |
-| T2 | S2–S8 + spec 20 T2 | delegado (resolutor · high) | pendiente |
+| T2 | S2–S8 + spec 20 T2 | delegado (resolutor · high) | hecho (falta aplicar `install` en esta máquina) |
 
 ## Log
 - **L1 (2026-10-28):** el usuario pegó un encargo en 7 fases para adaptar su configuración global a ODD (subagentes odd-explorer/planner/implementer/reviewer/verifier, comandos /odd:*, CLAUDE.md breve, permisos prudentes, backup en `~/.claude/backup-odd-YYYY-MM-DD-HHMM/`). Pidió «EMPIEZA SOLO CON LA FASE 1».
 - **L2 (usuario):** «si haz las mejoras, manten el reparto de subagentes con modelos mas baratos y esfuerzos diferentes».
 - **L3:** los cambios se hacen en el repo porque el instalador pisa `~/.claude` (regla 7). Los nombres `odd-*` se dejan como roles en la descripción y no como agentes nuevos, para no duplicarlos ni romper el hub, el panel y el cerebro. Backup hecho en `~/.claude/backup-odd-2026-10-28-*`.
+- **L4 (T2, resolutor):**
+  - S2: `--claude-orchestrator-modules` va en el paso Gentle AI de los instaladores; el directorio `~/.claude/gentle-ai/orchestrator` aún no existe en esta máquina hasta ejecutar `install` (`verificar` lo marcará hasta entonces).
+  - S3: los 6 agentes con rol (`explorador`, `planificador`, `ayudante`, `retocador`, `resolutor`, `analista`) añaden «Rol ODD: <rol>.» al final de la `description`, sin comillas (las descripciones ya llevaban `: ` y funcionan sin ellas). Modelo, esfuerzo y herramientas intactos.
+  - S4: 7 comandos en `config/claude/commands/odd/`, copiados a `~/.claude/commands/odd` (solo esa carpeta; `uninstall` la quita).
+  - S5: `config/hub/settings-merge.mjs` (línea del `writeFileSync` final, ~170) está fuera de la superficie permitida, así que la fusión de permisos vive en `config/claude/permisos.mjs`, llamado desde el paso 5b justo después de `settings-merge`. Idempotente (probado dos veces sobre una copia: segunda pasada +0) y conserva `defaultMode` y lo existente. Rutas `Read`/`Edit` en forma `~/` y absoluta (`//c/Users/...`). Limitación: `Bash(prefijo:*)` solo casa al inicio del comando.
+  - S6: coste de los hooks documentado en `docs/ventanas-y-ahorro.md`; no se tocó ningún hook.
+  - S7: `verificar.*` comprueba comandos `odd/`, que el bloque no mencione Laya, el orquestador modular, los permisos, `engram` y `default_agent` de OpenCode.
+  - S8: README y CHANGELOG 0.11.0.
+- **L5 (hallazgos del cierre de T2):**
+  - **Bloqueo abierto (S3/S6):** `config/hub/settings-merge.mjs:58` (`registrarContexto`) y `:72` (`s.hooks.SessionEnd = grupos`) sustituyen enteros los arrays de `SessionStart`, `PreCompact` y `SessionEnd`. Como ahora el paso de Gentle AI va antes, `settings-merge` borra el hook `gentle-ai review stop-hook` de `SessionStart`. Comprobado: tras un `install` real en esta máquina ese hook desapareció (Stop y UserPromptSubmit quedaron intactos). Arreglo propuesto: que `registrarContexto` y el bloque de `SessionEnd` reemplacen solo las entradas cuyo `command` contenga nuestro fichero, como ya hace `latido.mjs`. El archivo está fuera de la superficie de T2.
+  - Los comandos `/odd:*` sí llevan el prefijo: la documentación de Claude Code confirma que `.claude/commands/<carpeta>/<archivo>.md` se invoca como `/<carpeta>:<archivo>`.
+  - `verificar` mira `opencode mcp list` (engram `connected`), no el texto del archivo.
+  - Sin probar con una salida interactiva: la salida de `gentle-ai install` va capturada, así que si pidiera algo el instalador se quedaría esperando sin mostrarlo.

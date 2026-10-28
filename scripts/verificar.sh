@@ -76,6 +76,36 @@ else
 fi
 [ -f "$HOME/.claude/skills/delegar-a-opencode/SKILL.md" ] && test_item 0 'Skill delegar-a-opencode instalada' || test_item 1 'Skill delegar-a-opencode no instalada' 'Ejecuta install.sh'
 
+step 'Gentle AI y ODD (spec 20 y 21)'
+VERSION_GENTLE="4.3.1"
+GENTLE_EXE=""
+if command -v gentle-ai >/dev/null 2>&1; then GENTLE_EXE="$(command -v gentle-ai)"
+else for c in "$HOME/go/bin/gentle-ai" "$HOME/.local/bin/gentle-ai" "/usr/local/bin/gentle-ai"; do [ -x "$c" ] && { GENTLE_EXE="$c"; break; }; done; fi
+if [ -n "$GENTLE_EXE" ]; then
+  test_item 0 'gentle-ai instalado'
+  GV="$("$GENTLE_EXE" version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)"
+  if [ "$GV" = "$VERSION_GENTLE" ]; then test_item 0 "gentle-ai en la versión fijada ($VERSION_GENTLE)"; else test_item 1 "gentle-ai en la versión fijada ($VERSION_GENTLE; instalada: ${GV:-?})" "Instala la fijada: go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v$VERSION_GENTLE"; fi
+else
+  test_item 1 'gentle-ai no instalado' 'Ejecuta install.sh (script oficial de Gentle AI)'
+fi
+if [ -f "$CLAUDE_MD" ] && grep -q '<!-- gentle-ai:' "$CLAUDE_MD"; then test_item 0 'Bloques gentle-ai:* en ~/.claude/CLAUDE.md'; else test_item 1 'Faltan los bloques gentle-ai:* en ~/.claude/CLAUDE.md' 'Ejecuta install.sh'; fi
+BLOQUE_NUESTRO=""
+[ -f "$CLAUDE_MD" ] && BLOQUE_NUESTRO="$(sed -n '/<!-- BEGIN sistema-cerebro-agentes -->/,/<!-- END sistema-cerebro-agentes -->/p' "$CLAUDE_MD")"
+if [ -n "$BLOQUE_NUESTRO" ] && ! printf '%s' "$BLOQUE_NUESTRO" | grep -qi 'laya'; then test_item 0 'Nuestro bloque de CLAUDE.md no menciona Laya'; else test_item 1 'Nuestro bloque de CLAUDE.md falta o menciona Laya' 'Ejecuta install.sh para actualizar el bloque'; fi
+[ -d "$HOME/.claude/gentle-ai/orchestrator" ] && test_item 0 'Orquestador modular de Gentle AI (~/.claude/gentle-ai/orchestrator)' || test_item 1 'Falta el orquestador modular de Gentle AI' 'Ejecuta install.sh (usa --claude-orchestrator-modules)'
+ODD_OK=0
+for c in start plan implement verify review status handoff; do [ -f "$HOME/.claude/commands/odd/$c.md" ] || ODD_OK=1; done
+test_item "$ODD_OK" 'Comandos /odd:* instalados (~/.claude/commands/odd)' 'Ejecuta install.sh'
+if grep -q 'Read(~/.claude/.credentials.json)' "$HOME/.claude/settings.json" 2>/dev/null && grep -q 'Bash(git push:\*)' "$HOME/.claude/settings.json" 2>/dev/null; then test_item 0 'Permisos prudentes en settings.json (deny credenciales, ask git push)'; else test_item 1 'Faltan los permisos prudentes en settings.json' 'Ejecuta install.sh'; fi
+OC_CFG_TXT="$(cat "$HOME/.config/opencode/opencode.jsonc" "$HOME/.config/opencode/opencode.json" 2>/dev/null || true)"
+# Se mira donde lo lee OpenCode (opencode mcp list, solo lectura), no solo el texto del archivo.
+OC_MCP="$(opencode mcp list 2>&1 || true)"
+if printf '%s' "$OC_MCP" | grep -qE 'engram[[:space:]]+connected'; then test_item 0 'engram conectado en OpenCode (opencode mcp list)'; else test_item 1 'engram no conectado en OpenCode' 'Ejecuta install.sh (gentle-ai install --agents claude-code,opencode) y revisa: opencode mcp list'; fi
+DEF_AGENT="$(printf '%s' "$OC_CFG_TXT" | grep -oE '"default_agent"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed -E 's/.*"([^"]*)"$/\1/' || true)"
+if [ -n "$DEF_AGENT" ]; then
+  if [ "$DEF_AGENT" = "cerebro-oc" ]; then test_item 0 'default_agent de OpenCode es cerebro-oc'; else test_item 1 "default_agent de OpenCode es cerebro-oc (ahora: $DEF_AGENT)" 'Ejecuta install.sh (o node config/claude/agente-defecto.mjs)'; fi
+fi
+
 step 'Agentes de OpenCode'
 for name in cerebro-oc.md implementador.md debugger.md revisor.md testeador.md explorador-ds.md redactor-ds.md planificador.md local.md; do
   [ -f "$HOME/.config/opencode/agents/$name" ] && test_item 0 "Agente $name" || test_item 1 "Agente $name no encontrado" 'Ejecuta install.sh'
@@ -171,14 +201,14 @@ for f in session-start.mjs pre-compact.mjs session-end.mjs cerrar-trabajos.mjs e
 done
 TRIAJE="$HOME/.sistema-cerebro-agentes/mcp/triaje-mcp.mjs"
 if [ -f "$TRIAJE" ]; then
-  test_item 0 'MCP de triaje instalado'
+  test_item 0 'MCP de trabajos instalado'
   if grep -q 'trabajo_estado' "$TRIAJE"; then
-    test_item 0 'MCP de triaje con trabajo_estado (visibilidad)'
+    test_item 0 'MCP de trabajos con trabajo_estado (visibilidad)'
   else
-    test_item 1 'MCP de triaje sin trabajo_estado' 'Ejecuta install.sh'
+    test_item 1 'MCP de trabajos sin trabajo_estado' 'Ejecuta install.sh'
   fi
 else
-  test_item 1 'MCP de triaje no instalado' 'Ejecuta install.sh'
+  test_item 1 'MCP de trabajos no instalado' 'Ejecuta install.sh'
 fi
 [ -f "$HOME/.sistema-cerebro-agentes/mods/mesa-de-trabajo/hooks/register.js" ] && test_item 0 'Mod «mesa de trabajo» instalado' || test_item 1 'Mod «mesa de trabajo» no instalado' 'Ejecuta install.sh'
 ESTADO_LINEA="$HOME/.sistema-cerebro-agentes/hub/estado-linea.mjs"

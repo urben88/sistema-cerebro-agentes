@@ -34,9 +34,13 @@ Cómo hacer que la suscripción de Claude (20 $) rinda al máximo, con las condi
 ## Delegación y coste en OpenCode
 
 - **Topes por job** (los vigila el hub; avisa al 80 %): `explorador-ds` 0,20 $ · `redactor-ds` 0,20 $ · `testeador` 0,30 $ · `revisor` 0,50 $ · `implementador` 0,75 $ · `debugger` 1,00 $.
-- **Reglas** en `hub-data/reglas.json` (o las de serie en `config/hub/reglas.json`): reparto por palabras clave, `confianzaMinima` y `paraleloMax` (2 por defecto).
-- **Triaje con Laya**: el modelo local decide agente y esfuerzo en milisegundos; si su confianza < 0,60, mandan las reglas. **Cada decisión se registra** (`logs/decisiones.jsonl`) con sus probabilidades: con el uso real se podrá afinar Laya (fine-tuning) para que su confianza suba y decida más.
+- **Reglas** en `hub-data/reglas.json` (o las de serie en `config/hub/reglas.json`): `presupuestos` (topes de coste por agente), `respaldo` (degradación de agentes que fallan), `nudge_intervalo` y `bitacora_max_chars`.
+- **ODD decide el reparto**: delegar solo con un motivo concreto (el coste lo es); lo pequeño lo hace Claude. El *a quién* sale de la tabla fija de `CLAUDE.md`, sin consultar a ningún modelo.
 - **Gasto**: el panel muestra el saldo de DeepSeek, el coste de las sesiones de hoy y la ventana de Claude estimada.
+
+## Coste de los hooks por prompt
+
+Cada prompt ejecuta hasta 4 hooks (latido de actividad, aviso de contexto y los de Gentle AI y CodeGraph). Son procesos de Node de pocos milisegundos que no llaman a ningún modelo: no gastan ventana, solo algo de latencia. Los de Gentle AI y CodeGraph **no se tocan**, porque sus instaladores los regeneran; si molestan, se quitan desde su herramienta, no desde aquí.
 
 ## Rutina semanal recomendada
 

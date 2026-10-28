@@ -92,6 +92,10 @@ if (Test-Path -LiteralPath $skillDst) {
   Write-Warn 'La skill delegar-a-opencode no estaba instalada'
 }
 
+# 3a. Comandos /odd:* (solo la carpeta odd; los comandos del usuario se conservan)
+$oddCmd = Join-Path $UserHome '.claude\commands\odd'
+if (Test-Path -LiteralPath $oddCmd) { Backup-Item $oddCmd; Remove-Item -LiteralPath $oddCmd -Recurse -Force; Write-Ok "Eliminado: $oddCmd" }
+
 # 3b. Agente cerebro
 $agentDst = Join-Path $UserHome '.claude\agents\cerebro.md'
 if (Test-Path -LiteralPath $agentDst) {
@@ -103,7 +107,7 @@ if (Test-Path -LiteralPath $agentDst) {
 }
 
 # 3c. Subagentes de Claude
-foreach ($f in @('subdirector.md', 'explorador.md', 'redactor.md', 'analista.md', 'arquitecto.md', 'adaptador-mcps.md', 'planificador.md', 'resolutor.md', 'ayudante.md')) {
+foreach ($f in @('subdirector.md', 'explorador.md', 'redactor.md', 'analista.md', 'arquitecto.md', 'adaptador-mcps.md', 'planificador.md', 'resolutor.md', 'ayudante.md', 'retocador.md', 'consultor.md')) {
   $p = Join-Path $UserHome ".claude\agents\$f"
   if (Test-Path -LiteralPath $p) { Backup-Item $p; Remove-Item -LiteralPath $p -Force; Write-Ok "Eliminado: $p" }
 }
@@ -158,3 +162,5 @@ foreach ($name in @('implementador.md', 'revisor.md', 'testeador.md', 'construct
 }
 
 Write-Host "`nDesinstalacion completada. Copias en: $BackupDir" -ForegroundColor Cyan
+Write-Note 'Gentle AI es una herramienta externa y no se desinstala aqui: usa "gentle-ai uninstall" si quieres quitarlo.'
+Write-Note 'Los permisos prudentes de ~/.claude/settings.json se conservan (quitalos a mano si no los quieres).'

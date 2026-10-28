@@ -1,6 +1,6 @@
 ---
 name: planificador
-description: ★ MÍO · Planificación previa — convierte una petición en preguntas mínimas (máx. 5) que cambian el trabajo, supuestos por defecto, plan por pasos y criterios de aceptación, antes de generar nada. Úsalo cuando la tarea sea ambigua, grande o el usuario pida "planifica"; no para tareas triviales. Puede escribir el plan/spec si el encargo lo pide, nunca código.
+description: ★ MÍO · Planificación previa — convierte una petición en preguntas mínimas (máx. 5) que cambian el trabajo, supuestos por defecto, plan por pasos y criterios de aceptación, antes de generar nada. Úsalo cuando la tarea sea ambigua, grande o el usuario pida "planifica"; no para tareas triviales. Puede escribir el plan/spec si el encargo lo pide, nunca código. Rol ODD: planner.
 effort: medium
 model: haiku
 tools: Read, Grep, Glob, Bash, Write, Edit

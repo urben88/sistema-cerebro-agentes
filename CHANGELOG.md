@@ -3,6 +3,27 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado semántico (MAJOR.MINOR.PATCH).
 
+## [0.11.0] - 2026-10-28
+
+### Añadido (specs 20 y 21 · Gentle AI en el instalador y configuración global adaptada a ODD)
+
+- **Gentle AI en `install`** (ps1 y sh): instala el binario (4.3.1 con `go install` en Windows; script oficial en Linux y macOS; sin Go avisa y sigue) y ejecuta `gentle-ai install --agents claude-code,opencode --preset full-gentleman --persona gentleman --claude-orchestrator-modules`. Va antes de lo nuestro y hace backup de lo que toca. Asegura `@opencode/plugin@2.0.4` en `~/.config/opencode`. `SIN_GENTLE_AI=1` lo omite.
+- **`default_agent` de OpenCode**: tras Gentle AI se devuelve a `cerebro-oc` (`config/claude/agente-defecto.mjs`, reemplazo de texto acotado que conserva los comentarios del JSONC; no toca `.gentle-ai-default-agent.json`).
+- **Comandos `/odd:*`** (`config/claude/commands/odd/`): `start`, `plan`, `implement`, `verify`, `review`, `status`, `handoff`. Se copian a `~/.claude/commands/odd`.
+- **Permisos prudentes** (`config/claude/permisos.mjs`, fusión idempotente en `settings.json`): `ask` para `git push`, instalaciones y borrados recursivos; `deny` para credenciales de Claude y `~/.ssh` (forma `~/` y absoluta); `allow` para lectura, git de solo lectura, tests y lint. No quita nada ni toca `defaultMode`.
+- Los agentes `explorador`, `planificador`, `ayudante`, `retocador`, `resolutor` y `analista` añaden su «Rol ODD» a la descripción (sin cambiar modelo ni esfuerzo).
+- `install -Check` y `verificar` informan de Gentle AI (versión, bloques `gentle-ai:*`, orquestador modular, `engram` en OpenCode), de los comandos `odd/`, de los permisos y de que el bloque de `CLAUDE.md` no mencione Laya.
+
+### Cambiado
+
+- `CLAUDE.md` compacto sobre ODD (de 67 a unas 50 líneas): reparto barato con tabla de roles; el coste es motivo válido para delegar.
+- `actualizar` espera solo al hub (`/api/salud`), no a Laya.
+- `uninstall` quita `~/.claude/commands/odd` y avisa de que Gentle AI se desinstala con `gentle-ai uninstall`.
+
+### Retirado
+
+- **Laya** por completo (modelo, triaje, pestaña del panel, `triaje_decidir`). Los instaladores eliminan el contenedor `cerebro-laya` con su imagen y volumen si existen. El MCP `triaje` se queda con `trabajo_estado` y `parar_trabajos`.
+
 ## [0.10.0] - 2026-10-16
 
 ### Cambiado (esfuerzos más bajos)

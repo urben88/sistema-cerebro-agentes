@@ -49,9 +49,9 @@ Write-Host "`nActualizado a la version $((Get-Content -LiteralPath (Join-Path $R
 
 if (-not $SinVerificar) {
   Write-Host "`n== Verificando (smoke) ==" -ForegroundColor Cyan
-  # Hub y Laya se reinician al desplegar: esperar hasta 90 s a que estén listos para no dar un falso fallo.
+  # El hub se reinicia al desplegar: esperar hasta 90 s a que estén listos para no dar un falso fallo.
   for ($i = 0; $i -lt 45; $i++) {
-    try { $s = Invoke-RestMethod -TimeoutSec 2 'http://127.0.0.1:4597/api/salud'; if ($s.laya -eq $true) { break } } catch { }
+    try { $s = Invoke-RestMethod -TimeoutSec 2 'http://127.0.0.1:4597/api/salud'; if ($s.app -eq 'cerebro-hub') { break } } catch { }
     Start-Sleep -Seconds 2
   }
   $ver = Invoke-Cli 'powershell' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $RepoRoot 'scripts\verificar.ps1'), '-Smoke')

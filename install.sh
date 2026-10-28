@@ -10,6 +10,8 @@ SERVER_DIR="$SYSTEM_DIR/server"
 SERVER_BIN="$SERVER_DIR/node_modules/.bin/opencode"
 LAUNCHER="$SYSTEM_DIR/launcher.sh"
 VERSION_SERVIDOR="1.18.35"
+VERSION_GENTLE="4.3.1"
+VERSION_PLUGIN_OC="2.0.4"
 MARKER_BEGIN='<!-- BEGIN sistema-cerebro-agentes -->'
 MARKER_END='<!-- END sistema-cerebro-agentes -->'
 BACKUP_ROOT="$SYSTEM_DIR/backups"
@@ -46,6 +48,17 @@ backup_item(){
   cp -R "$path" "$BACKUP_DIR/$name"
   note "backup: $path"
 }
+
+gentle_exe(){
+  # El script oficial y go install dejan el binario en sitios que pueden no estar en el PATH de esta sesión.
+  local c
+  if command -v gentle-ai >/dev/null 2>&1; then command -v gentle-ai; return 0; fi
+  for c in "$HOME/go/bin/gentle-ai" "$HOME/.local/bin/gentle-ai" "/usr/local/bin/gentle-ai" "$(go env GOPATH 2>/dev/null)/bin/gentle-ai"; do
+    [ -x "$c" ] && { printf '%s' "$c"; return 0; }
+  done
+  return 1
+}
+gentle_version(){ "$1" version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true; }
 
 # ---------------------------------------------------------------- 1. Prerrequisitos
 step 'Prerrequisitos'
@@ -88,6 +101,18 @@ fi
 if [ -f "$AUTH_JSON" ] && grep -q '"openrouter"' "$AUTH_JSON"; then
   ok 'OpenRouter también conectado (opcional: GPT-6 Luna cuando la cuenta tenga crédito)'
 fi
+
+if command -v docker >/dev/null 2>&1; then ok 'Docker disponible (hub en contenedor)'; else warn 'Docker no encontrado: el hub podrá ejecutarse en nativo (hub.sh)'; fi
+
+# Gentle AI (spec 20): aquí solo se lee; la instalación va en su paso.
+if GENTLE_EXE="$(gentle_exe)"; then
+  GV="$(gentle_version "$GENTLE_EXE")"
+  if [ "$GV" = "$VERSION_GENTLE" ]; then ok "Gentle AI $GV"; else warn "Gentle AI ${GV:-?} (versión fijada: $VERSION_GENTLE); se usa la instalada"; WARNINGS+=("Gentle AI instalado es ${GV:-?} y el sistema está probado con $VERSION_GENTLE"); fi
+else
+  warn 'Gentle AI no encontrado: install lo instalará con el script oficial (última versión estable)'
+fi
+if [ -f "$HOME/.claude/CLAUDE.md" ] && grep -q 'gentle-ai:' "$HOME/.claude/CLAUDE.md"; then ok 'Bloques gentle-ai:* presentes en ~/.claude/CLAUDE.md'; else note 'Aún no hay bloques gentle-ai:* en ~/.claude/CLAUDE.md (los escribirá install)'; fi
+if [ -d "$HOME/.claude/gentle-ai/orchestrator" ]; then ok 'Orquestador modular de Gentle AI presente'; else note 'Aún no hay orquestador modular en ~/.claude/gentle-ai/orchestrator (lo escribirá install)'; fi
 
 if [ "${#FATAL[@]}" -gt 0 ]; then
   printf '\nFaltan prerrequisitos obligatorios:\n' >&2
@@ -158,7 +183,7 @@ if [ -f "$SYSTEM_DIR/web-port.txt" ] && curl -fsS --max-time 3 "http://127.0.0.1
 fi
 
 # ---------------------------------------------------------------- 3c. Cerebro Hub
-step 'Cerebro Hub (memoria compartida, hooks y triaje)'
+step 'Cerebro Hub (memoria compartida, hooks y trabajos)'
 
 backup_item "$SYSTEM_DIR/hub"
 rm -rf "$SYSTEM_DIR/hub"
@@ -178,12 +203,64 @@ ok "Hooks instalados: $SYSTEM_DIR/hooks"
 mkdir -p "$SYSTEM_DIR/mcp"
 backup_item "$SYSTEM_DIR/mcp/triaje-mcp.mjs"
 cp -f "$CONFIG_ROOT/mcp/triaje-mcp.mjs" "$SYSTEM_DIR/mcp/triaje-mcp.mjs"
-ok 'MCP de triaje instalado (mcp/triaje-mcp.mjs)'
+ok 'MCP de trabajos instalado (mcp/triaje-mcp.mjs)'
 
 backup_item "$SYSTEM_DIR/mods"
 rm -rf "$SYSTEM_DIR/mods"
 cp -R "$CONFIG_ROOT/mods" "$SYSTEM_DIR/mods"
 ok "Mods instalados: $SYSTEM_DIR/mods"
+
+# ---------------------------------------------------------------- 3d. Gentle AI (ODD, RDD, Engram, CodeGraph, Context7, skills)
+# Va ANTES de lo nuestro: así nuestros agentes, el bloque de CLAUDE.md, los permisos y el
+# default_agent se aplican encima y no los pisa el componente permissions de gentle-ai.
+step "Gentle AI $VERSION_GENTLE (Claude Code + OpenCode)"
+if [ -n "${SIN_GENTLE_AI:-}" ]; then
+  note 'SIN_GENTLE_AI: se omite Gentle AI'
+else
+  if ! GENTLE_EXE="$(gentle_exe)"; then
+    note 'Instalando Gentle AI con el script oficial (instala la última versión estable)...'
+    if curl -fsSL https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/scripts/install.sh | bash >/dev/null 2>&1; then :; else warn 'El script oficial de Gentle AI falló'; fi
+    GENTLE_EXE="$(gentle_exe)" || GENTLE_EXE=''
+    if [ -n "$GENTLE_EXE" ]; then ok "gentle-ai instalado: $GENTLE_EXE"; else WARNINGS+=("Instala Gentle AI a mano: curl -fsSL https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/scripts/install.sh | bash  y repite install"); fi
+  fi
+  if [ -n "${GENTLE_EXE:-}" ]; then
+    GV="$(gentle_version "$GENTLE_EXE")"
+    [ "$GV" = "$VERSION_GENTLE" ] || warn "Gentle AI ${GV:-?} (fijada: $VERSION_GENTLE); se usa la instalada"
+    CON_OPENCODE=0; command -v opencode >/dev/null 2>&1 && CON_OPENCODE=1
+    if [ "$CON_OPENCODE" -eq 1 ]; then AGENTES_G='claude-code,opencode'; else AGENTES_G='claude-code'; fi
+
+    # Backup de lo que gentle-ai toca (no carpetas enteras: projects/ y node_modules son enormes)
+    for rel in .claude/CLAUDE.md .claude/settings.json .claude/agents .claude/skills .config/opencode/opencode.jsonc .config/opencode/package.json .config/opencode/.gentle-ai-default-agent.json .config/opencode/agents .config/opencode/AGENTS.md; do
+      backup_item "$HOME/$rel"
+    done
+
+    if [ "$CON_OPENCODE" -eq 1 ]; then
+      # gentle-ai exige @opencode/plugin en la carpeta de configuración de OpenCode
+      OC_CFG="$HOME/.config/opencode"
+      PLUG_VER="$(node -e 'try{console.log(require(process.argv[1]).version)}catch{}' "$OC_CFG/node_modules/@opencode/plugin/package.json" 2>/dev/null || true)"
+      if [ "$PLUG_VER" != "$VERSION_PLUGIN_OC" ]; then
+        mkdir -p "$OC_CFG"
+        if npm install --prefix "$OC_CFG" --save-exact "@opencode/plugin@$VERSION_PLUGIN_OC" --no-audit --no-fund >/dev/null 2>&1; then
+          ok "@opencode/plugin@$VERSION_PLUGIN_OC instalado en ~/.config/opencode"
+        else
+          warn "No se pudo instalar @opencode/plugin@$VERSION_PLUGIN_OC"
+          WARNINGS+=("Ejecuta: npm install --prefix \"$OC_CFG\" --save-exact @opencode/plugin@$VERSION_PLUGIN_OC  y repite install")
+        fi
+      fi
+    else
+      warn 'OpenCode no encontrado: Gentle AI se configura solo para Claude Code'
+    fi
+
+    note "gentle-ai install --agents $AGENTES_G --preset full-gentleman --persona gentleman --claude-orchestrator-modules"
+    if GR="$("$GENTLE_EXE" install --agents "$AGENTES_G" --preset full-gentleman --persona gentleman --claude-orchestrator-modules 2>&1)"; then
+      ok 'Gentle AI configurado (ODD, RDD, Engram, CodeGraph, Context7, skills)'
+    else
+      warn 'gentle-ai install no terminó bien; se sigue con lo demás'
+      printf '%s\n' "$GR" | tail -n 15
+      WARNINGS+=('Revisa la salida de gentle-ai install y repite install')
+    fi
+  fi
+fi
 
 # ---------------------------------------------------------------- 4. Agente cerebro (con el MCP dentro)
 step 'Agente cerebro en Claude Code (con el MCP dentro)'
@@ -193,9 +270,9 @@ AGENT_DIR="$HOME/.claude/agents"
 mkdir -p "$AGENT_DIR"
 ARGS_JSON='["'"$SYSTEM_DIR"'/launcher.sh"]'
 TRIAJE_MCP="$SYSTEM_DIR/mcp/triaje-mcp.mjs"
-# Modo normal: el triaje (Laya) si es global; OpenCode solo dentro del agente cerebro.
+# MCP de trabajos (trabajo_estado, parar_trabajos): global, para que `claude` a secas vea los trabajos; OpenCode solo dentro del agente cerebro.
 claude mcp remove triaje --scope user >/dev/null 2>&1 || true
-if claude mcp add --scope user triaje -- node "$TRIAJE_MCP" >/dev/null 2>&1; then ok "MCP triaje registrado a nivel de usuario (modo normal)"; else note "No se pudo registrar el MCP triaje global; claude mcp add --scope user triaje -- node <ruta>"; fi
+if claude mcp add --scope user triaje -- node "$TRIAJE_MCP" >/dev/null 2>&1; then ok "MCP de trabajos (triaje) registrado a nivel de usuario (modo normal)"; else note "No se pudo registrar el MCP triaje global; claude mcp add --scope user triaje -- node <ruta>"; fi
 for f in cerebro.md subdirector.md; do
   dst="$AGENT_DIR/$f"
   backup_item "$dst"
@@ -272,6 +349,14 @@ rm -rf "$SKILL_DST"
 cp -R "$SKILL_SRC" "$SKILL_DST"
 ok "Skill instalada: $SKILL_DST"
 
+# Comandos /odd:* (spec 21 · S4): solo se reemplaza la carpeta odd; los comandos del usuario no se tocan.
+CMD_DST="$HOME/.claude/commands/odd"
+backup_item "$CMD_DST"
+mkdir -p "$(dirname "$CMD_DST")"
+rm -rf "$CMD_DST"
+cp -R "$CONFIG_ROOT/claude/commands/odd" "$CMD_DST"
+ok "Comandos /odd:* instalados: $CMD_DST"
+
 # ---------------------------------------------------------------- 5b. Ajustes de Claude (esfuerzos + hooks)
 step 'Esfuerzos y hooks de contexto en Claude (settings.json)'
 backup_item "$HOME/.claude/settings.json"
@@ -287,6 +372,8 @@ if node "$SYSTEM_DIR/hub/settings-merge.mjs" "$SYSTEM_DIR/hooks"; then
 else
   warn 'No se pudo actualizar settings.json'
 fi
+# Permisos prudentes (spec 21 · S5): se unen a los que ya hay, sin quitar nada.
+if PERM_OUT="$(node "$CONFIG_ROOT/claude/permisos.mjs" "$HOME/.claude/settings.json" 2>&1)"; then ok "$PERM_OUT"; else warn 'No se pudieron fusionar los permisos'; printf '%s\n' "$PERM_OUT"; fi
 
 # ---------------------------------------------------------------- 6. Agentes de OpenCode
 step 'Agentes de OpenCode'
@@ -313,6 +400,9 @@ for viejo in chat-deepseek.md chat-local.md; do
   fi
 done
 
+# gentle-ai deja gentle-orchestrator como default_agent; aquí se devuelve cerebro-oc (spec 20 · L8).
+if DEF_OUT="$(node "$CONFIG_ROOT/claude/agente-defecto.mjs" "$HOME/.config/opencode/opencode.jsonc" 2>&1)"; then ok "$DEF_OUT"; else warn "$DEF_OUT"; fi
+
 # ---------------------------------------------------------------- 7. Arrancar servidor
 step 'Arrancando servidor local'
 if [ -f "$SYSTEM_DIR/servidor.sh" ] && bash "$SYSTEM_DIR/servidor.sh" >/dev/null 2>&1; then
@@ -321,9 +411,17 @@ else
   warn 'El servidor no respondió; se arrancará en la primera llamada del MCP'
 fi
 
-# ---------------------------------------------------------------- 7b. Docker (hub + Laya)
-step 'Docker (hub + Laya)'
+# ---------------------------------------------------------------- 7b. Docker (hub)
+step 'Docker (hub)'
 if command -v docker >/dev/null 2>&1; then
+  # Laya ya no existe: se retira el contenedor, la imagen y el volumen de las máquinas que lo tenían.
+  # Primero el contenedor y luego el volumen; sin fallar si no existen o el daemon está parado.
+  # Cada uno por separado: tras un compose down o un uninstall puede quedar solo la imagen o el volumen (~850 MB).
+  QUITADOS=""
+  docker rm -f cerebro-laya >/dev/null 2>&1 && QUITADOS="$QUITADOS contenedor" || true
+  docker image rm cerebro-hub-laya:latest >/dev/null 2>&1 && QUITADOS="$QUITADOS imagen" || true
+  docker volume rm cerebro-hub_laya-modelos >/dev/null 2>&1 && QUITADOS="$QUITADOS volumen" || true
+  [ -z "$QUITADOS" ] || ok "Retirado lo que quedaba de Laya:$QUITADOS"
   backup_item "$SYSTEM_DIR/docker"
   rm -rf "$SYSTEM_DIR/docker"
   cp -R "$REPO_ROOT/docker" "$SYSTEM_DIR/docker"
@@ -333,13 +431,13 @@ if command -v docker >/dev/null 2>&1; then
   sed -i.bak -e 's|\.\./config/hub|../hub|' -e 's|# __TAREAS_MCP_ENV__|- OPENCODE_MCP_TASKS=/opencode-mcp/tasks|' -e "s|# __TAREAS_MCP_VOL__|- $TAREAS_MCP:/opencode-mcp/tasks:ro|" "$SYSTEM_DIR/docker/docker-compose.yml" && rm -f "$SYSTEM_DIR/docker/docker-compose.yml.bak"
   ok "Stack Docker instalado: $SYSTEM_DIR/docker"
   if docker compose -f "$SYSTEM_DIR/docker/docker-compose.yml" up -d --build >/dev/null 2>&1; then
-    ok 'Hub + Laya en marcha (contenedores cerebro-hub y cerebro-laya)'
+    ok 'Hub en marcha (contenedor cerebro-hub)'
   else
     warn 'No se pudo levantar el stack Docker; prueba: docker compose -f ~/.sistema-cerebro-agentes/docker/docker-compose.yml up -d --build'
   fi
   note 'Autoarranque en macOS/Linux: añade un servicio de usuario que ejecute docker compose up -d'
 else
-  warn 'Docker no encontrado: el hub puede ejecutarse en nativo (hub.sh); Laya no estará disponible'
+  warn 'Docker no encontrado: el hub puede ejecutarse en nativo (hub.sh)'
 fi
 
 # ---------------------------------------------------------------- Resumen
@@ -348,8 +446,8 @@ printf 'Instalación completada. Próximos pasos:\n'
 printf '  1. Reinicia Claude Code si lo tienes abierto (para que cargue el MCP).\n'
 printf '  2. Verifica el sistema:\n'
 printf '       bash scripts/verificar.sh --smoke\n'
-printf '  3. Uso: abre Claude Code en la carpeta de un proyecto y pide lo que quieras.\n'
-printf '  4. Panel del Cerebro Hub (organización, memoria, gasto y triaje):\n'
+printf '  3. Uso: abre Claude Code en la carpeta de un proyecto y pide lo que quieras (comandos /odd:start, /odd:plan...).\n'
+printf '  4. Panel del Cerebro Hub (organización, memoria y gasto):\n'
 printf '       bash ~/.sistema-cerebro-agentes/hub.sh\n'
 if [ "${#WARNINGS[@]}" -gt 0 ]; then
   printf '\nAvisos:\n'

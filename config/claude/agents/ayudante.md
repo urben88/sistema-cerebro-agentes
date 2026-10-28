@@ -1,6 +1,6 @@
 ---
 name: ayudante
-description: ★ MÍO · Ayudante mecánico (Haiku · low) — aplica cambios ya decididos con instrucciones exactas en cualquier archivo (código, datos, docs, configuración): renombrados, sustituciones repetitivas, formateo, plantillas a partir de un ejemplo, actualizar docs o el ESTADO.md. No decide nada ni delega. Solo en modo EJECUTAR.
+description: ★ MÍO · Ayudante mecánico (Haiku · low) — aplica cambios ya decididos con instrucciones exactas en cualquier archivo (código, datos, docs, configuración): renombrados, sustituciones repetitivas, formateo, plantillas a partir de un ejemplo, actualizar docs o el ESTADO.md. No decide nada ni delega. Solo en modo EJECUTAR. Rol ODD: implementer.
 model: haiku
 effort: low
 tools: Read, Grep, Glob, Edit, Write, Bash

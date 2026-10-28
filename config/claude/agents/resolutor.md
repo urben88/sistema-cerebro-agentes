@@ -1,6 +1,6 @@
 ---
 name: resolutor
-description: ★ MÍO · Resolutor (Sonnet · medium, high al depurar) — decide el cómo dentro de un área acotada y la resuelve (código, datos, documentos, configuración). Trabaja en modo PLAN (solo propone) o EJECUTAR (aplica y verifica), según el encargo. En modo cerebro solo se usa si OpenCode falla dos veces. No delega.
+description: ★ MÍO · Resolutor (Sonnet · medium, high al depurar) — decide el cómo dentro de un área acotada y la resuelve (código, datos, documentos, configuración). Trabaja en modo PLAN (solo propone) o EJECUTAR (aplica y verifica), según el encargo. En modo cerebro solo se usa si OpenCode falla dos veces. No delega. Rol ODD: implementer.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash, Edit, Write

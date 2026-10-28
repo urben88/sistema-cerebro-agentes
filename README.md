@@ -5,8 +5,8 @@ Arquitectura de IA para desarrollo **instalable en Windows, macOS y Linux**, pen
 | Capa | Quién | Qué hace | Coste |
 |---|---|---|---|
 | 🧠 **Cerebro** | Claude Code (tu suscripción) | Opus 5.5 piensa, decide, escribe specs y revisa. Sonnet resuelve áreas acotadas y Haiku hace lo barato (leer, resumir, documentar). | Suscripción de Claude (20 $) |
-| 🖥️ **Cerebro Hub** | App local (Docker) | Memoria compartida de todos los proyectos, contexto de sesiones (briefing/checkpoints), vigilante de trabajos, triaje de tareas y panel. | Gratis (Docker local) |
-| 🧭 **Laya** | Modelo local de decisiones (Docker) | Decide en milisegundos **qué agente y qué esfuerzo** toca cada tarea, con probabilidades calibradas. | Gratis (CPU) |
+| 🖥️ **Cerebro Hub** | App local (Docker) | Memoria compartida de todos los proyectos, contexto de sesiones (briefing/checkpoints), vigilante de trabajos y panel. | Gratis (Docker local) |
+| 🧭 **Gentle AI** | Herramienta externa que instala `install` | Flujo **ODD** (autorizar, explorar, implementar, verificar), revisión **RDD**, Engram, CodeGraph, Context7 y skills, en Claude Code y OpenCode. El reparto barato de este repo se suma encima. | Gratis |
 | 🤖 **Manos** | OpenCode + **DeepSeek V4.1 Flash** (oficial) | Escribe, depura, prueba y revisa el código siguiendo las specs, por céntimos. | Tokens de DeepSeek |
 | 🐌 **Local** | Ollama/Qwen (tu GPU) | Tareas mecánicas explícitas, solo si tú lo pides. | Gratis |
 
@@ -27,15 +27,14 @@ El puente entre capas es **[opencode-mcp](https://github.com/AlaeddineMessari/op
 ┌──────────────────────────── Claude Code (cerebro) ────────────────────────────┐
 │  · Opus 5.5: decide, escribe specs, revisa   · Sonnet: resolutor, retocador   │
 │  · MCP `opencode` → código en DeepSeek       · Haiku: explorador, redactor,   │
-│  · MCP `triaje`   → ¿a quién le toca?        · analista, ayudante, subdirector│
+│  · MCP `triaje`   → estado de los trabajos   · analista, ayudante, subdirector│
 │                                              · Opus 5.5: arquitecto, consultor│
 └───────┬───────────────────────────────────────────────────────────────┬───────┘
         │ hooks (briefing/checkpoints)                                  │ MCP
         ▼                                                               ▼
 ┌────────────────────────── Cerebro Hub (Docker) ──────────────┐  servidor OpenCode V1
-│  memoria externa a los repos · vigilante · panel · triaje ──►│  (nativo: trabaja
-│      ▲                                                       │   sobre tus carpetas)
-│      └── Laya (Docker, decisiones locales)                   │      │
+│  memoria externa a los repos · vigilante · panel         ──►│  (nativo: trabaja
+│                                                              │   sobre tus carpetas)
 └──────────────────────────────────────────────────────────────┘      ▼
                                                         agentes DeepSeek por esfuerzo:
                                                         implementador · debugger · revisor
@@ -54,7 +53,9 @@ El puente entre capas es **[opencode-mcp](https://github.com/AlaeddineMessari/op
 - **`/clear` sin miedo**: al ~70 % de contexto, el agente vuelca el estado; al abrir la siguiente sesión, todo está de vuelta. Antes de compactar, un hook guarda un checkpoint solo.
 - **Avisos y nota de sesión**: el aviso de contexto (desde 100k tokens y cada +50k) también sale en tu consola, y al cerrar o hacer `/clear` Haiku deja una nota de 5 líneas que se carga sola al volver.
 - **Reparto por esfuerzos**: DeepSeek low/high/max según el trabajo (`implementador`/`testeador` low, `debugger` high, `revisor` max solo con código con lógica); en Claude, Haiku para lo ligero, `retocador` Sonnet · low y `resolutor` Sonnet · medium (high al depurar), con `consultor`/`arquitecto` en Opus; el código **no consume tu ventana de Claude**.
-- **Triaje local (Laya)**: decide a quién mandar cada tarea; si duda (confianza < 0,60), mandan las reglas; **cada decisión queda registrada** para afinar Laya con tu uso real.
+- **ODD decide el reparto**: Gentle AI manda el flujo (delegar solo con un motivo concreto; lo pequeño lo hace Claude) y una tabla fija en `CLAUDE.md` dice a quién (buscar → `explorador`, cambio mecánico → `ayudante`, área → `resolutor`…). No hay modelo intermedio.
+- **Comandos `/odd:*`**: `start`, `plan`, `implement`, `verify`, `review`, `status` y `handoff` (`/odd:handoff` guarda el estado antes de `/clear`).
+- **Permisos prudentes**: `git push`, instalaciones de paquetes y borrados recursivos piden confirmación; las credenciales de Claude y `~/.ssh` quedan vedadas a lectura y edición; lectura, git de solo lectura, tests y lint van sin preguntar. Se unen a los tuyos sin quitar ninguno.
 - **Vigilante**: detecta trabajos atascados o permisos colgados y avisa (histórico silencioso al arrancar).
 - **Panel local** (solo en `127.0.0.1`): organización en vivo, proyectos y memorias, vigilante, gasto (saldo DeepSeek + sesiones) y **ventana de Claude** estimada (tokens nuevos y caché, 5 h/7 d).
 
@@ -63,7 +64,8 @@ El puente entre capas es **[opencode-mcp](https://github.com/AlaeddineMessari/op
 - **Node.js ≥ 22** — [nodejs.org](https://nodejs.org)
 - **OpenCode V2** — [opencode.ai](https://opencode.ai) con el proveedor **DeepSeek** conectado (`opencode auth login` o `/connect`). *(El instalador añade su propio servidor OpenCode V1 aislado en `~/.sistema-cerebro-agentes/server` para el MCP; tu TUI no se toca.)*
 - **Claude Code** — [claude.com/claude-code](https://claude.com/claude-code) con tu suscripción.
-- **Docker Desktop** — para el hub y Laya (la primera vez, Laya descarga ~850 MB de pesos; quedan en un volumen).
+- **Docker Desktop** — para el hub.
+- **Go ≥ 1.25.10** (solo Windows) — para instalar [Gentle AI](https://github.com/Gentleman-Programming/gentle-ai) con `go install`. Si falta, `install` avisa con el comando exacto y sigue sin Gentle AI. En macOS y Linux se usa el script oficial.
 - **Git** — para clonar y actualizar.
 
 ## Instalación
@@ -84,7 +86,11 @@ cd ~/sistema-cerebro-agentes
 bash install.sh
 ```
 
-El instalador es **idempotente**, hace **copia de seguridad** de todo lo que reemplaza en `~/.sistema-cerebro-agentes/backups/` y no toca nada más de tu configuración. Después: **reinicia Claude Code** y verifica:
+El instalador es **idempotente**, hace **copia de seguridad** de todo lo que reemplaza en `~/.sistema-cerebro-agentes/backups/` y no toca nada más de tu configuración. `install -Check` (`--check` en bash) solo informa, sin escribir.
+
+**Gentle AI.** Antes de aplicar lo nuestro, `install` instala el binario (versión fijada 4.3.1 en Windows) y ejecuta `gentle-ai install --agents claude-code,opencode --preset full-gentleman --persona gentleman --claude-orchestrator-modules`. Luego aplica encima agentes, bloque de `CLAUDE.md`, comandos `/odd:*`, permisos y el `default_agent` de OpenCode (`cerebro-oc`, que Gentle AI cambia a `gentle-orchestrator`). Con `SIN_GENTLE_AI=1` se omite este paso. Si más tarde lanzas `gentle-ai sync` por tu cuenta, puede volver a cambiar el `default_agent`: repite `install`. Las instalaciones antiguas pierden el contenedor `cerebro-laya` (con su imagen y volumen).
+
+Después: **reinicia Claude Code** y verifica:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\verificar.ps1 -Smoke    # Windows
@@ -101,7 +107,7 @@ bash scripts/verificar.sh --smoke                                          # mac
 | Parar algo que se quedó corriendo | `cerebro-parar` (o pídele «para todo» al Cerebro) | Cancela los trabajos de OpenCode al momento; `cerebro-parar --seco` solo los lista |
 | Verlo dentro de Claude | `/trabajos`, `/errores` o `/parar-todo` en cualquier sesión | El mod «mesa de trabajo» lo muestra en la banda y responde en el transcript |
 | Sin Claude (cuota agotada) | Abre OpenCode en tu proyecto | Arranca `cerebro-oc` (DeepSeek · max): specs y delegación en el resto |
-| Verlo todo | Abre el panel: `~/.sistema-cerebro-agentes/hub.ps1` (o `hub.sh`) → `http://127.0.0.1:4597` | Organización, memoria, triaje, gasto y ventana |
+| Verlo todo | Abre el panel: `~/.sistema-cerebro-agentes/hub.ps1` (o `hub.sh`) → `http://127.0.0.1:4597` | Organización, memoria, gasto y ventana |
 | Cambiar algo | Editor de bots del panel antiguo (`panel.ps1`) o edita el repo y `scripts/actualizar` | Todo queda versionado en este repositorio |
 
 Reglas de oro para que la ventana de Claude dure: **`/clear` al cambiar de tarea**, nada de fanout de subagentes, el código siempre por DeepSeek, y las specs en archivo. Detalles en [docs/ventanas-y-ahorro.md](docs/ventanas-y-ahorro.md).
@@ -132,7 +138,7 @@ Los agentes son **perfiles**: se activan bajo demanda y terminan al devolver su 
 
 Además de estos roles por defecto (globales, disponibles en todos los proyectos), **cada proyecto puede añadir agentes propios** en `.claude/agents/` y `.opencode/agents/`: son aditivos y un mismo nombre solo pisa en ese proyecto. Guía: [docs/agentes-por-proyecto.md](docs/agentes-por-proyecto.md).
 
-## Docker (hub + Laya)
+## Docker (hub)
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File ~\.sistema-cerebro-agentes\docker\gestion.ps1 up   # arrancar
@@ -140,16 +146,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ~\.sistema-cerebro-agentes\d
 powershell -NoProfile -ExecutionPolicy Bypass -File ~\.sistema-cerebro-agentes\docker\gestion.ps1 down   # parar
 ```
 
-- `hub` → `127.0.0.1:4597` (backend + panel). Laya vive en la red interna; el puente MCP y el servidor OpenCode siguen en el host (trabajan sobre tus carpetas) y el hub los alcanza por `host.docker.internal`.
+- `hub` → `127.0.0.1:4597` (backend + panel). El puente MCP y el servidor OpenCode siguen en el host (trabajan sobre tus carpetas) y el hub los alcanza por `host.docker.internal`.
 - En Windows, el instalador registra el **autoarranque** al iniciar sesión (tarea programada «Cerebro Hub»; si Windows deniega la tarea, cae a la carpeta de Inicio con `cerebro-hub.cmd`).
 - La memoria vive en `~/.sistema-cerebro-agentes/hub-data/` (montada en el contenedor): `memoria/global`, `memoria/proyectos/<slug>` (ESTADO, BITACORA, CONTEXTO-REPO, checkpoints) y `memoria/temporal`.
 
 ## El Cerebro Hub por dentro
 
-- **API local** (solo `127.0.0.1`): `salud`, `briefing`, `proyectos`, `memoria/*` (estado, contexto, bitácora, checkpoints), `vigilante`, `organizacion`, `gasto`, `ventana`, `reglas`, `triaje`, `decisiones`.
+- **API local** (solo `127.0.0.1`): `salud`, `briefing`, `proyectos`, `memoria/*` (estado, contexto, bitácora, checkpoints), `vigilante`, `organizacion`, `gasto`, `ventana`, `reglas`.
 - **Hooks** (`~/.sistema-cerebro-agentes/hooks/`): `session-start`, `pre-compact`, `session-end` y el CLI `estado` (`--leer`, `--escribir --archivo`, `--bitacora`, `--checkpoint`).
-- **MCP de triaje** (`config/mcp/triaje-mcp.mjs`): herramienta `triaje_decidir` disponible dentro de `cerebro` y `subdirector`.
-- **Reglas** (`config/hub/reglas.json`): reparto, topes de coste por job y paralelismo máximo; editables en la copia de datos.
+- **MCP de trabajos** (`config/mcp/triaje-mcp.mjs`, registrado como `triaje` por compatibilidad): herramientas `trabajo_estado` y `parar_trabajos`.
+- **Reglas** (`config/hub/reglas.json`): topes de coste por job (`presupuestos`), respaldo de agentes degradados, intervalo de nudges y tamaño de la bitácora; editables en la copia de datos.
 
 Guía completa: [docs/contexto-sesiones.md](docs/contexto-sesiones.md) · [docs/ventanas-y-ahorro.md](docs/ventanas-y-ahorro.md).
 
@@ -160,14 +166,14 @@ sistema-cerebro-agentes/
 ├── install.ps1 / install.sh          ← instaladores (idempotentes, con backups)
 ├── uninstall.ps1 / uninstall.sh      ← desinstaladores (conservan memoria y backups)
 ├── config/
-│   ├── claude/                       ← agente cerebro + subagentes, CLAUDE.md, skill de delegación
+│   ├── claude/                       ← agente cerebro + subagentes, CLAUDE.md, comandos /odd:*, permisos, skill de delegación
 │   ├── opencode/agents/              ← agentes DeepSeek por esfuerzo (+ local)
 │   ├── hub/                          ← Cerebro Hub: backend, panel, plantillas, reglas, Dockerfile
 │   ├── hooks/                        ← hooks de contexto y CLI `estado`
-│   ├── mcp/                          ← lanzador del MCP y MCP de triaje
+│   ├── mcp/                          ← lanzador del MCP y MCP de trabajos
 │   ├── web/                          ← panel antiguo de actividad (sigue disponible)
 │   └── bin/                          ← comando `cerebro`
-├── docker/                           ← docker-compose (hub + Laya) y gestor
+├── docker/                           ← docker-compose (hub) y gestor
 ├── docs/                             ← arquitectura, uso, panel, contexto/sesiones, ahorro, decisiones
 └── scripts/                          ← verificar, actualizar, smoke del MCP, panel
 ```
@@ -183,11 +189,11 @@ powershell -ExecutionPolicy Bypass -File .\uninstall.ps1    # Windows
 bash uninstall.sh                                           # macOS/Linux
 ```
 
-Quita agentes, hooks (solo los del sistema), hub, contenedores y tarea de autoarranque; **conserva** la memoria (`hub-data`) y los backups en `~/.sistema-cerebro-agentes/backups/`.
+Quita agentes, comandos `/odd:*`, hooks (solo los del sistema), hub, contenedores y tarea de autoarranque; **no** desinstala Gentle AI (usa `gentle-ai uninstall`) y **conserva** los permisos añadidos, la memoria (`hub-data`) y los backups en `~/.sistema-cerebro-agentes/backups/`.
 
 ## Créditos
 
 - [opencode-mcp](https://github.com/AlaeddineMessari/opencode-mcp) — puente MCP entre Claude y OpenCode.
 - [OpenCode](https://opencode.ai) — capa de ejecución.
 - [Claude Code](https://claude.com/claude-code) — capa de pensamiento.
-- [Laya](https://huggingface.co/convaiinnovations/laya) — modelo local de decisiones (Apache 2.0).
+- [Gentle AI](https://github.com/Gentleman-Programming/gentle-ai) — ODD, RDD, Engram, CodeGraph, Context7 y skills.

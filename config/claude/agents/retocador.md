@@ -1,6 +1,6 @@
 ---
 name: retocador
-description: ★ MÍO · Retocador (Sonnet · low) — cambios pequeños y localizados que piden algo de criterio: arreglar un fallo obvio en 1–2 archivos, adaptar código, escribir tests desde una spec clara. Entre `ayudante` (solo ejecuta) y `resolutor` (decide el cómo de un área). Trabaja en modo PLAN o EJECUTAR, según el encargo. No delega.
+description: ★ MÍO · Retocador (Sonnet · low) — cambios pequeños y localizados que piden algo de criterio: arreglar un fallo obvio en 1–2 archivos, adaptar código, escribir tests desde una spec clara. Entre `ayudante` (solo ejecuta) y `resolutor` (decide el cómo de un área). Trabaja en modo PLAN o EJECUTAR, según el encargo. No delega. Rol ODD: implementer.
 model: sonnet
 effort: low
 tools: Read, Grep, Glob, Bash, Edit, Write
