@@ -311,6 +311,12 @@ if (Test-Path -LiteralPath $hooksDst) { Remove-Item -LiteralPath $hooksDst -Recu
 Copy-Item -LiteralPath (Join-Path $ConfigRoot 'hooks') -Destination $hooksDst -Recurse -Force
 Write-Ok "Hooks instalados: $hooksDst"
 
+# Sonido al terminar (spec 22 · S6): crea la carpeta y deja el README; NO toca los fin.* del usuario.
+$sonidosDst = Join-Path $SystemDir 'sonidos'
+New-Item -ItemType Directory -Force -Path $sonidosDst | Out-Null
+Copy-Item -LiteralPath (Join-Path $ConfigRoot 'sonidos\README.md') -Destination (Join-Path $sonidosDst 'README.md') -Force
+Write-Ok "Carpeta de sonidos: $sonidosDst (pon ahí fin.mp3, fin.wav o fin.ogg)"
+
 $mcpDst = Join-Path $SystemDir 'mcp'
 New-Item -ItemType Directory -Force -Path $mcpDst | Out-Null
 Backup-Item (Join-Path $mcpDst 'triaje-mcp.mjs')

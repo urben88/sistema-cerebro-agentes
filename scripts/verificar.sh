@@ -196,7 +196,7 @@ if [ -f "$HOOK_LATIDO" ]; then
 else
   test_item 1 'Hook latido no instalado' 'Ejecuta install.sh'
 fi
-for f in session-start.mjs pre-compact.mjs session-end.mjs cerrar-trabajos.mjs estado.mjs latido.mjs aviso-contexto.mjs errores-repetidos.mjs ultima-sesion.mjs resumir-sesion.mjs hallazgos.mjs buscar.mjs; do
+for f in session-start.mjs pre-compact.mjs session-end.mjs cerrar-trabajos.mjs estado.mjs latido.mjs sonido-fin.mjs doctor.mjs aviso-contexto.mjs errores-repetidos.mjs ultima-sesion.mjs resumir-sesion.mjs hallazgos.mjs buscar.mjs; do
   [ -f "$HOME/.sistema-cerebro-agentes/hooks/$f" ] && test_item 0 "Hook $f instalado" || test_item 1 "Hook $f no instalado" 'Ejecuta install.sh'
 done
 TRIAJE="$HOME/.sistema-cerebro-agentes/mcp/triaje-mcp.mjs"
@@ -260,6 +260,10 @@ else
 fi
 
 step 'Nudges de memoria (R2 · spec 10)'
+for n in sonido doctor; do
+  if node "$REPO_ROOT/scripts/test-$n.mjs" >/dev/null 2>&1; then test_item 0 "Pruebas de $n (spec 22)"; else test_item 1 "Pruebas de $n (spec 22)" "Ejecuta: node scripts/test-$n.mjs"; fi
+done
+
 if node "$REPO_ROOT/scripts/test-nudges.mjs" >/dev/null 2>&1; then
   test_item 0 'Pruebas de nudges y límites de memoria'
 else

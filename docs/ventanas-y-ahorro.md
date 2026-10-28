@@ -34,7 +34,7 @@ Cómo hacer que la suscripción de Claude (20 $) rinda al máximo, con las condi
 ## Delegación y coste en OpenCode
 
 - **Topes por job** (los vigila el hub; avisa al 80 %): `explorador-ds` 0,20 $ · `redactor-ds` 0,20 $ · `testeador` 0,30 $ · `revisor` 0,50 $ · `implementador` 0,75 $ · `debugger` 1,00 $.
-- **Reglas** en `hub-data/reglas.json` (o las de serie en `config/hub/reglas.json`): `presupuestos` (topes de coste por agente), `respaldo` (degradación de agentes que fallan), `nudge_intervalo` y `bitacora_max_chars`.
+- **Reglas** en `hub-data/reglas.json` (o las de serie en `config/hub/reglas.json`): `presupuestos` (topes de coste por agente), `respaldo` (degradación de agentes que fallan), `nudge_intervalo`, `bitacora_max_chars`, `tarea_caducada_min` (minutos sin actualizar la spec o ESTADO.md antes de avisar, 30 por defecto) y `sonido_fin` (sonido al terminar; pon tu `fin.mp3`/`fin.wav`/`fin.ogg` en `~/.sistema-cerebro-agentes/sonidos/`).
 - **ODD decide el reparto**: delegar solo con un motivo concreto (el coste lo es); lo pequeño lo hace Claude. El *a quién* sale de la tabla fija de `CLAUDE.md`, sin consultar a ningún modelo.
 - **Gasto**: el panel muestra el saldo de DeepSeek, el coste de las sesiones de hoy y la ventana de Claude estimada.
 

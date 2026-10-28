@@ -37,7 +37,7 @@ if (s.advisorModel === undefined) s.advisorModel = 'opus'
 s.hooks = s.hooks || {}
 
 /** Ficheros que gestiona el sistema: se registran solo si existen en disco. */
-const GESTIONADOS = ['session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'skills-uso.mjs', 'errores-repetidos.mjs']
+const GESTIONADOS = ['session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'skills-uso.mjs', 'errores-repetidos.mjs', 'sonido-fin.mjs']
 const existe = (f) => fs.existsSync(path.join(hooksDir, f))
 const comando = (f) => `node "${path.join(hooksDir, f)}"`
 const faltan = []
@@ -115,6 +115,15 @@ if (existe('aviso-contexto.mjs')) {
   if (!yaEsta) grupos.push({ hooks: [{ type: 'command', command: comando('aviso-contexto.mjs') }] })
   s.hooks.UserPromptSubmit = grupos
 } else faltan.push('aviso-contexto.mjs')
+
+// S6 · sonido al terminar: solo en Stop (sesión principal), en segundo plano (async) y
+// sin duplicar. Idempotente y sin pisar otros hooks (p. ej. `gentle-ai review stop-hook`).
+if (existe('sonido-fin.mjs')) {
+  const grupos = Array.isArray(s.hooks.Stop) ? s.hooks.Stop : []
+  const yaEsta = grupos.some((g) => Array.isArray(g?.hooks) && g.hooks.some((h) => typeof h?.command === 'string' && h.command.includes('sonido-fin.mjs')))
+  if (!yaEsta) grupos.push({ hooks: [{ type: 'command', command: comando('sonido-fin.mjs'), async: true, timeout: 5 }] })
+  s.hooks.Stop = grupos
+} else faltan.push('sonido-fin.mjs')
 
 // Freno a bucles de error: avisa cuando el mismo comando de Bash falla 2-3 veces seguidas.
 // Va en PostToolUseFailure (comandos con exit ≠ 0) y PostToolUse (éxitos, que reinician el

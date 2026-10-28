@@ -200,6 +200,11 @@ rm -rf "$SYSTEM_DIR/hooks"
 cp -R "$CONFIG_ROOT/hooks" "$SYSTEM_DIR/hooks"
 ok "Hooks instalados: $SYSTEM_DIR/hooks"
 
+# Sonido al terminar (spec 22 · S6): crea la carpeta y deja el README; NO toca los fin.* del usuario.
+mkdir -p "$SYSTEM_DIR/sonidos"
+cp -f "$CONFIG_ROOT/sonidos/README.md" "$SYSTEM_DIR/sonidos/README.md"
+ok "Carpeta de sonidos: $SYSTEM_DIR/sonidos (pon ahí fin.mp3, fin.wav o fin.ogg)"
+
 mkdir -p "$SYSTEM_DIR/mcp"
 backup_item "$SYSTEM_DIR/mcp/triaje-mcp.mjs"
 cp -f "$CONFIG_ROOT/mcp/triaje-mcp.mjs" "$SYSTEM_DIR/mcp/triaje-mcp.mjs"

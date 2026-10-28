@@ -1,8 +1,10 @@
 {
   "version": 2,
-  "descripcion": "Configuración del Cerebro Hub: tope de coste por agente, respaldo de salud, intervalo de nudges y tamaño máximo de la bitácora. Editable desde la carpeta de datos (se copia ahí).",
+  "descripcion": "Configuración del Cerebro Hub: tope de coste por agente, respaldo de salud, intervalo de nudges y tamaño máximo de la bitácora, minutos para avisar de tarea caducada (tarea_caducada_min) y sonido al terminar (sonido_fin). Editable desde la carpeta de datos (se copia ahí).",
   "nudge_intervalo": 10,
   "bitacora_max_chars": 60000,
+  "tarea_caducada_min": 30,
+  "sonido_fin": true,
   "presupuestos": {
     "explorador-ds": 0.2,
     "redactor-ds": 0.2,

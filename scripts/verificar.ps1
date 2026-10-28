@@ -183,7 +183,7 @@ if ($hubOk) {
   Test-Item $latidosOk 'GET /api/latidos responde (subagentes en vivo)' 'Revisa hub.mjs / latido.mjs'
   Test-Item (Test-Path -LiteralPath (Join-Path $sysDir 'hub\errores.mjs')) 'CLI de errores instalada (hub/errores.mjs)' 'Ejecuta install.ps1'
 }
-foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'estado.mjs', 'latido.mjs', 'aviso-contexto.mjs', 'errores-repetidos.mjs', 'ultima-sesion.mjs', 'resumir-sesion.mjs', 'hallazgos.mjs', 'buscar.mjs')) {
+foreach ($f in @('session-start.mjs', 'pre-compact.mjs', 'session-end.mjs', 'cerrar-trabajos.mjs', 'estado.mjs', 'latido.mjs', 'sonido-fin.mjs', 'doctor.mjs', 'aviso-contexto.mjs', 'errores-repetidos.mjs', 'ultima-sesion.mjs', 'resumir-sesion.mjs', 'hallazgos.mjs', 'buscar.mjs')) {
   Test-Item (Test-Path -LiteralPath (Join-Path $sysDir "hooks\$f")) "Hook $f instalado" 'Ejecuta install.ps1'
 }
 $hookLatido = Join-Path $sysDir 'hooks\latido.mjs'
@@ -258,6 +258,14 @@ Write-Step 'Nudges de memoria (R2 · spec 10)'
 $nudgesPruebas = Join-Path $RepoRoot 'scripts\test-nudges.mjs'
 & node $nudgesPruebas | Out-Null
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de nudges y límites de memoria' 'Ejecuta: node scripts\test-nudges.mjs'
+
+Write-Step 'Sonido y doctor (spec 22)'
+$s22 = Join-Path $RepoRoot 'scripts\test-sonido.mjs'
+& node $s22 | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas del sonido al terminar' 'Ejecuta: node scripts\test-sonido.mjs'
+$s22d = Join-Path $RepoRoot 'scripts\test-doctor.mjs'
+& node $s22d | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de /odd:doctor' 'Ejecuta: node scripts\test-doctor.mjs'
 
 Write-Step 'Ledger de trabajos (R3 · spec 10)'
 $ledgerPruebas = Join-Path $RepoRoot 'scripts\test-ledger.mjs'

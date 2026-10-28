@@ -233,6 +233,49 @@ prueba('al escribir su clave conserva las claves ajenas', () => {
   assert.ok(clave('sM') in c, 'falta la entrada propia')
 })
 
+// 5f · S4 (spec 22): tarea caducada. Solo avisa si se edita código y ESTADO.md/spec llevan
+// más de N min sin tocarse; como mucho una vez cada N min; nunca en sesiones de solo lectura.
+const transcripto = (nombre, herramientas) => {
+  const f = path.join(raiz, nombre)
+  fs.writeFileSync(f, herramientas.map((h) => JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', name: h, input: { file_path: 'x.js' } }] } })).join('\n') + '\n')
+  return f
+}
+const envejecer = (archivo, min) => { const d = new Date(Date.now() - min * 60000); fs.utimesSync(archivo, d, d) }
+const caducada = (salida) => /caduc/i.test(nudgeDe(salida) || '')
+const reglasCad = (n) => fs.writeFileSync(path.join(dataDir, 'reglas.json'), JSON.stringify({ nudge_intervalo: 1000, tarea_caducada_min: n }) + '\n')
+
+prueba('tarea caducada: edita código con ESTADO.md viejo → avisa una vez y no repite dentro de N min', () => {
+  reglasCad(5)
+  fs.rmSync(CONTADOR, { force: true })
+  fs.writeFileSync(ARCHIVO_ESTADO, '# ESTADO\n\n## Tarea\nvieja\n')
+  envejecer(ARCHIVO_ESTADO, 20)
+  const tr = transcripto('edita.jsonl', ['Read', 'Edit'])
+  const a = latir('UserPromptSubmit', { session_id: 'sC', transcript_path: tr })
+  assert.equal(a.code, 0)
+  assert.ok(caducada(a.salida), `faltó el aviso: ${a.salida}`)
+  assert.ok(nudgeDe(a.salida).length < 300, 'el aviso debe ser breve')
+  const b = latir('UserPromptSubmit', { session_id: 'sC', transcript_path: tr })
+  assert.ok(!caducada(b.salida), 'no debía repetir el aviso dentro de N min')
+})
+
+prueba('tarea caducada: sesión de solo lectura no avisa', () => {
+  const tr = transcripto('lee.jsonl', ['Read', 'Grep', 'Bash'])
+  const r = latir('UserPromptSubmit', { session_id: 'sR', transcript_path: tr })
+  assert.ok(!caducada(r.salida), `no debía avisar: ${r.salida}`)
+  assert.ok(!caducada(latir('UserPromptSubmit', { session_id: 'sR2' }).salida), 'sin transcript tampoco')
+})
+
+prueba('tarea caducada: ESTADO.md reciente no avisa; N se lee de la configuración', () => {
+  const tr = transcripto('edita2.jsonl', ['Write'])
+  envejecer(ARCHIVO_ESTADO, 1)
+  assert.ok(!caducada(latir('UserPromptSubmit', { session_id: 'sF', transcript_path: tr }).salida), 'ESTADO.md de hace 1 min con N=5')
+  reglasCad(1)
+  envejecer(ARCHIVO_ESTADO, 3)
+  assert.ok(caducada(latir('UserPromptSubmit', { session_id: 'sG', transcript_path: tr }).salida), 'con N=1 y 3 min debía avisar')
+  fs.writeFileSync(path.join(dataDir, 'reglas.json'), JSON.stringify({ nudge_intervalo: INTERVALO }) + '\n')
+  fs.rmSync(CONTADOR, { force: true })
+})
+
 // 6 · Límites de memoria (función directa, sin hub).
 const memoria = crearMemoria(limitesDir, {})
 const cuerpoOk = '# ESTADO\n\n## Tarea\n' + 'y'.repeat(100) + '\n'

@@ -21,6 +21,10 @@
  * que relee el fichero justo antes de escribir y conserva las claves ajenas). El
  * reset lo marca el mtime de `ESTADO.md`. Se podan las entradas con más de 14 días
  * sin actividad (`visto`) y se limita el fichero a 200 entradas.
+ *
+ * S4 (spec 22) · tarea caducada: en `UserPromptSubmit`, si la sesión edita código y la
+ * spec o el ESTADO.md llevan más de `tarea_caducada_min` (30) minutos sin actualizarse,
+ * añade un aviso breve (como mucho uno cada N min por sesión). Solo lectura → nada.
  */
 import fs from 'node:fs'
 import os from 'node:os'
@@ -146,6 +150,72 @@ function nudgeSiToca(cwd, sesion) {
   return texto
 }
 
+// S4 (spec 22) · tarea caducada: valores y herramientas que cuentan como «editar código».
+const CADUCADA_DEFECTO_MIN = 30
+const HERRAMIENTAS_EDICION = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
+
+/** Minutos de `tarea_caducada_min` (hub-data/reglas.json → reglas del hub → 30). */
+function minutosCaducada() {
+  const local = leerJson(path.join(DATA_DIR, 'reglas.json'))
+  const bruto = local.tarea_caducada_min ?? leerJson(path.join(__dirname, '..', 'hub', 'reglas.json'))?.tarea_caducada_min
+  const n = Math.floor(Number(bruto))
+  return Number.isFinite(n) && n >= 1 ? n : CADUCADA_DEFECTO_MIN
+}
+
+/** ¿La cola del transcript tiene alguna herramienta de edición? (sesión de solo lectura → no). */
+function editandoCodigo(ruta) {
+  if (!ruta) return false
+  try {
+    const fd = fs.openSync(ruta, 'r')
+    try {
+      const tam = fs.fstatSync(fd).size
+      const bytes = Math.min(tam, TAM_COLA_TRANSCRIPT)
+      if (bytes <= 0) return false
+      const buf = Buffer.alloc(bytes)
+      fs.readSync(fd, buf, 0, bytes, tam - bytes)
+      for (const l of buf.toString('utf8').split('\n')) {
+        if (!l.includes('tool_use')) continue
+        let e
+        try { e = JSON.parse(l) } catch { continue }
+        const partes = Array.isArray(e?.message?.content) ? e.message.content : []
+        if (partes.some((c) => c?.type === 'tool_use' && HERRAMIENTAS_EDICION.has(c?.name))) return true
+      }
+    } finally { fs.closeSync(fd) }
+  } catch { /* sin transcript legible */ }
+  return false
+}
+
+/** mtime más reciente entre ESTADO.md y las specs/tareas del repo (0 si no hay ninguno). */
+function ultimaActualizacion(cwd, slug) {
+  const archivos = []
+  if (slug) archivos.push(path.join(MEMORIA_DIR, 'proyectos', slug, 'ESTADO.md'))
+  for (const sub of [['docs', 'specs'], ['specs'], ['odd', 'tasks']]) {
+    const dir = path.join(cwd || '', ...sub)
+    try { for (const f of fs.readdirSync(dir)) if (f.endsWith('.md')) archivos.push(path.join(dir, f)) } catch { /* no existe */ }
+  }
+  let max = 0
+  for (const a of archivos) { try { max = Math.max(max, fs.statSync(a).mtimeMs) } catch { /* ausente */ } }
+  return max
+}
+
+/** Aviso breve si se edita código y la spec/ESTADO.md llevan > N min sin tocarse; como
+ *  mucho uno cada N min por sesión (clave propia en estado-nudges.json). */
+function caducadaSiToca(cwd, sesion, transcript) {
+  if (!editandoCodigo(transcript)) return null
+  const slug = slugDelProyecto(cwd)
+  const ultima = ultimaActualizacion(cwd, slug)
+  if (!ultima) return null
+  const ahora = Date.now()
+  const limite = minutosCaducada() * 60000
+  if (ahora - ultima <= limite) return null
+  const clave = `caducada:${slug || normalizar(cwd)}:${sesion || 'sin-sesion'}`
+  const previo = leerJson(ESTADO_NUDGES)[clave]
+  if (previo && ahora - (Number(previo.ultimoAviso) || 0) < limite) return null
+  try { guardarNudges(clave, { ultimoAviso: ahora, visto: ahora }) } catch { return null }
+  const min = Math.round((ahora - ultima) / 60000)
+  return `Aviso: estás editando código y la spec/ESTADO.md del proyecto lleva ~${min} min sin actualizarse (tarea caducada). Si el plan cambió, actualízalo; si no, ignora este aviso.`
+}
+
 /** Modelo declarado directamente en el payload del hook (string u objeto). */
 function modeloDelPayload(d) {
   const limpio = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null)
@@ -260,8 +330,10 @@ try {
     // (spec 11 · M3: disparado/descartado). Viaja SOLO como additionalContext de
     // UserPromptSubmit; en el resto de eventos el hook no devuelve nada.
     let nudge = null
+    let caducada = null
     if (evento === 'UserPromptSubmit') {
       try { nudge = nudgeSiToca(cuerpo.cwd, cuerpo.sesion) } catch { nudge = null }
+      try { caducada = caducadaSiToca(cuerpo.cwd, cuerpo.sesion, cuerpo.transcript) } catch { caducada = null }
       cuerpo.nudge = nudge ? 'disparado' : 'descartado'
     }
     try {
@@ -273,9 +345,10 @@ try {
       })
     } catch { /* hub apagado o lento: se ignora */ }
 
-    if (evento === 'UserPromptSubmit' && nudge) {
+    const contexto = [nudge, caducada].filter(Boolean).join(' ')
+    if (evento === 'UserPromptSubmit' && contexto) {
       console.log(JSON.stringify({
-        hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: nudge },
+        hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: contexto },
       }))
     }
   }
