@@ -66,4 +66,13 @@ T1 comprueba con `--dry-run` y `--help` los flags exactos: varios agentes, sin p
 - **L5 (2026-10-28, usuario):** «¿Puestas aplicar estos camios y mejoras además que quiero que mires el tema de poder optimizar el cloud.md general porque parece que es muy extenso si se puede optimizar mucho mejor» → se añade S11.
 - **L6:** `~/.claude/CLAUDE.md` tiene 679 líneas: 67 son nuestras y unas 610 de Gentle AI (el orquestador ocupa unas 400). `gentle-ai install --help` ofrece `--claude-orchestrator-modules`, que deja un núcleo corto más módulos bajo demanda en `~/.claude/gentle-ai/orchestrator/`.
 - **L7:** T1 está bloqueado. `gentle-ai install --agent opencode` exige `@opencode/plugin@2.0.4` en `~/.config/opencode` (lo pide con `npm install --save-exact`). Auto mode denegó el `npm install`, así que lo tiene que ejecutar el usuario. Riesgo: el servidor V1 (1.18.35) comparte esa carpeta, así que hay que comprobar que siga arrancando. Backup en `~/.sistema-cerebro-agentes/backups/spec20-20261028-201400`. T6 se delegó en `resolutor` (Sonnet · high) por el límite de contexto.
+- **L8 (T1 aplicado):** el usuario ejecutó el npm install (estaba up to date) y `gentle-ai install --agent opencode` terminó OK. Diff contra el backup:
+  - agentes propios intactos;
+  - nuevo `AGENTS.md` (220 líneas), `skills/`, `commands/`, `themes/`, `tui.json` y los plugins `engram`, `model-variants`, `opencode-review-transport`, `skill-registry` y `telemetry-runtime`;
+  - `opencode.jsonc` reordenado (no falta ningún MCP), con **`default_agent` cambiado de `cerebro-oc` a `gentle-orchestrator`** (guardado en `.gentle-ai-default-agent.json`).
+  - Problemas abiertos:
+    1. engram quedó dentro de `mcp.servers`, una clave que ya existía antes con `urbenserver` y `whatsapp`, en lugar de en `mcp.<nombre>`.
+    2. `opencode mcp list` (v2.2.0) dice «No MCP servers configured».
+    3. Falta comprobar que el servidor V1 1.18.35 arranca con plugins V2.
+    4. Hay un token de GitHub en texto plano en `opencode.jsonc`.
 - **L3:** la spec va en `docs/specs/` por convención del repositorio, en lugar de `odd/tasks/`.

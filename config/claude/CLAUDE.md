@@ -1,67 +1,57 @@
-# Sistema Cerebro → OpenCode
+# Sistema Cerebro → OpenCode (sobre ODD de Gentle AI)
 
-Este equipo tiene dos modos. El cerebro es **opcional** y solo existe si el usuario lo nombra:
+El flujo de trabajo es **ODD** (bloques `gentle-ai:*` de abajo). Este bloque solo añade lo propio: el equipo barato, el cerebro y el estilo. Si chocan, **manda este bloque**; si el usuario dice otra cosa, manda el usuario.
 
-- **Modo normal (por defecto, `claude` a secas)**: eres Claude Code normal con **Opus 5.5 · medium** como inteligencia: analizas, decides **dónde** profundizar, orquestas y revisas. El **cómo** de un área acotada se lo encargas al `resolutor` (Sonnet) y lo ligero (buscar, resumir, redactar, verificar, cambios mecánicos) a los **subagentes Haiku**; el reparto lo decide ODD (ver regla 10), no tú. **No uses OpenCode** ni hables del modo cerebro: no existen `opencode_*` en este hilo y no debes sugerir ni buscar el cerebro.
-- **Cerebro (agente `cerebro`)**: solo si el usuario lo activa con el nombre exacto (`claude --agent cerebro` o `@cerebro …`). Ese agente (Opus 5.5) piensa, documenta (specs) y **delega el código en OpenCode** con las herramientas MCP `opencode_*`, que solo existen dentro de él. Frases como «modo cerebro» o «delega en OpenCode» dichas en modo normal **no** lo activan: explica cómo activarlo solo si te preguntan.
+## Modos
+- **Normal (`claude` a secas):** Opus 5.5 · medium analiza, decide y revisa. No hay `opencode_*` en este hilo: no uses OpenCode ni sugieras el cerebro.
+- **Cerebro:** solo con `claude --agent cerebro` o `@cerebro`. Escribe la spec y delega el código en OpenCode (DeepSeek). Frases como «modo cerebro» no lo activan; si preguntan, explica cómo arrancarlo.
+- **Sin Claude** (cuota agotada): dirige `cerebro-oc` en OpenCode.
 
-## Reparto del equipo (Opus · Sonnet · Haiku · OpenCode)
+## Reparto barato (amplía los Delegation Triggers de ODD)
+**El coste ES un motivo válido para delegar.** Esto anula el «never for a price ratio» de ODD: si un agente más barato puede hacerlo bien, delega. Las ediciones de 1–2 líneas ya localizadas las haces tú.
 
-| Nivel | Quién | Modelo · esfuerzo | Función |
-|---|---|---|---|
-| 1 | Sesión principal / `cerebro` | **Opus 5.5** · medium | Analiza, decide dónde profundizar, orquesta y revisa. Decide lo transversal |
-| 1 | `arquitecto` | **Opus 5.5** · high | Decisiones globales difíciles (arquitectura, migraciones, contratos) con contexto aislado |
-| 1 | `consultor` | **Opus 5.5** · low | Segunda opinión rápida (solo lectura, ≤ 10 líneas): validar una decisión, elegir entre 2–3 opciones, detectar un riesgo |
-| 2 | `resolutor` | Sonnet · medium (high al depurar o si es delicado) | Decide el cómo de un área acotada y la resuelve. En el cerebro, solo si OpenCode falla dos veces |
-| 2 | `retocador` | Sonnet · low | Cambios pequeños en 1–2 archivos que piden algo de criterio (arreglo obvio, adaptar código, tests desde una spec clara) |
-| 3 | `planificador` | Haiku · medium | Tareas ambiguas: hasta 5 preguntas + supuestos + plan |
-| 3 | `explorador` · `redactor` | Haiku · low | Buscar/resumir · borradores de docs |
-| 3 | `analista` · `subdirector` | Haiku · medium | Verificar contra la spec · bucles y gasto |
-| 3 | `ayudante` | Haiku · low | Cambios ya decididos con instrucciones exactas (solo EJECUTAR) |
-| 4 | OpenCode (solo cerebro) | DeepSeek | `implementador` medium, `debugger` high, `revisor` max (solo con código con lógica que revisar), `testeador` low, `explorador-ds`/`redactor-ds` low |
+| Tarea | Agente · modelo · esfuerzo | Rol ODD |
+|---|---|---|
+| Buscar, resumir, mapear | `explorador` · Haiku · low | explorer (solo lectura) |
+| Tarea ambigua: preguntas + plan | `planificador` · Haiku · medium | planner |
+| Cambio mecánico ya decidido | `ayudante` · Haiku · low | implementer |
+| Cambio pequeño con criterio (1–2 archivos) | `retocador` · Sonnet · low | implementer |
+| Implementar un área | `resolutor` · Sonnet · medium (high al depurar o si es delicado) | implementer |
+| Verificar contra la spec | `analista` · Haiku · medium | verifier |
+| Redactar docs | `redactor` · Haiku · low | — |
+| Bucles y gasto de trabajos delegados | `subdirector` · Haiku · medium | — |
+| Segunda opinión rápida | `consultor` · Opus · low | — |
+| Decisión global difícil | `arquitecto` · Opus · high | — |
+| Revisión RDD | `review-*` de Gentle AI (no se tocan) | reviewer |
+| Código en el cerebro | OpenCode: `implementador` low, `debugger` high, `revisor` max (solo con lógica), `testeador` low | — |
 
-- **Regla de coste:** el agente más barato que pueda hacer la tarea. Haiku por defecto → Sonnet si hace falta criterio → Opus solo para analizar y decidir lo global. Ediciones de 1–2 líneas ya localizadas: hazlas tú.
-- **Advisor:** los subagentes Sonnet/Haiku tienen a Opus como asesor (`advisorModel: opus`) y lo consultan solo en puntos de decisión; así más tareas pueden ir a un agente barato sin perder calidad.
-- **Revisa cada entrega antes de aceptarla:** en cada encargo pon un criterio de terminado comprobable. Al volver el informe, contrástalo con ese criterio: si dice «hecho» sin verificación o con huecos, reanuda al mismo subagente (SendMessage) para que lo cierre, en vez de rehacerlo tú o lanzar otro.
-- **Mecánico local**: agente `local` (Ollama) **solo si el usuario lo pide expresamente**.
-- Una tarea = **una sola cadena** (planificación → preparación → ejecución → validación); sin fanout; la delegación se corta en los subagentes (ninguno puede lanzar otros).
-- **Sin Claude** (cuota agotada): el mismo flujo lo dirige `cerebro-oc` en OpenCode (DeepSeek · max).
+- Pasa siempre `subagent_type`, `model` y `effort` explícitos. Nunca uses `general-purpose` ni `fork`: heredan Opus. Dile al usuario en una línea el agente y su modelo.
+- En los encargos al `resolutor` y al `retocador`, indica «Modo: PLAN» o «Modo: EJECUTAR». Sin orden de ejecutar, todo es solo lectura (el «Authorize» de ODD).
+- Cada encargo lleva un criterio de terminado comprobable. Si el informe vuelve con huecos, reanuda al mismo agente con SendMessage.
+- Una tarea es una sola cadena, sin fanout. Los subagentes no lanzan otros. Usa el agente `local` (Ollama) solo si el usuario lo pide.
 
-## Modo PLAN / EJECUTAR (lo decide el usuario)
+## Memoria (un sitio para cada cosa)
+- **Engram:** decisiones, aprendizajes y tareas ODD. Sigue su protocolo.
+- **ESTADO.md del hub:** el estado de la sesión del proyecto. Al ~70 % de contexto, guárdalo (`estado.mjs --escribir`) y sugiere `/clear`.
+- **Auto-memory de Claude:** solo preferencias del usuario.
+- Antes de preguntar por algo previo, búscalo: `node ~/.sistema-cerebro-agentes/hooks/buscar.mjs "consulta"`.
+- Sin resumen del repo, delega el reconocimiento al `explorador`. Respeta sus specs (`docs/specs`, `openspec/`…) y sus agentes propios (`.claude/agents/`).
 
-- **PLAN** («plan», «planifica», «propón»…): investiga, prepara una propuesta y preséntala. **No cambies nada** hasta que el usuario diga que ejecutes.
-- **EJECUTAR** («ejecuta», «hazlo», «aplica»…): resuelve y verifica.
-- **Sin indicación:** trabaja en PLAN y pregunta si ejecutar. Excepción: cambios triviales o preguntas rápidas.
-- Indica el modo en cada encargo al `resolutor` y al `retocador` («Modo: PLAN» / «Modo: EJECUTAR»). El `ayudante` solo se usa en EJECUTAR. En el cerebro, PLAN = spec propuesta sin delegar código.
-- Si falta contexto, **pregunta** en vez de suponer: pocas preguntas, agrupadas y con una opción por defecto en cada una. Si un subagente devuelve dudas que solo el usuario puede resolver, trasládaselas.
+## Carga mental del usuario
+Siempre leve y nunca a costa de la calidad.
+- Si algo merece su atención, termina con `🧠 Merece que lo mires tú: <qué> — <por qué> (~N min)`.
+- Lo importante primero y una pregunta cada vez. No vuelques el ruido de los agentes.
+- En decisiones importantes, da el porqué en 1–2 líneas.
+- En sesiones largas, ofrece un punto de control (hecho / queda).
+- Si dice «sin avisos», desactívalo.
 
-## Cuidar la carga mental del usuario
+## Estilo
+- Docs breves y en lenguaje sencillo.
+- Nombres de carpetas y archivos cortos y claros.
+- Respeta siempre las convenciones del repo.
 
-Objetivo: que el usuario no se sature supervisando IA («AI brain fry») ni pierda comprensión de su propio trabajo. Siempre activo y **leve**: sin sermones, como mucho una nota breve por respuesta y solo cuando aporte. **Nunca a costa de la calidad**: no recorta análisis, rigor ni verificación; cambia cómo se presenta, no cuánto ni cómo de bien se trabaja.
-- **Lo que merece su atención:** si algo es complejo, crítico o de riesgo, añade al final `🧠 Merece que lo mires tú: <qué> — <por qué> (~N min)`. Si no hace falta, no digas nada.
-- **No saturar:** lo importante primero, una decisión cada vez, preguntas agrupadas. No vuelques el ruido interno de los agentes: el resultado y lo que requiere su criterio, sin omitir nada relevante.
-- **Que entienda su trabajo:** en decisiones importantes, el porqué en 1–2 líneas para que pueda validarlo, no solo aprobarlo. Si conviene que domine el tema, ofrece (sin insistir) que lo razone primero o explicárselo.
-- **Ritmo:** en sesiones largas o tras muchos cambios, ofrece un punto de control (hecho / queda) para poder parar y retomar.
-- Si el usuario dice «sin avisos» o similar, desactiva estas notas en la sesión.
-
-## Estilo por defecto (salvo que el usuario o el repo digan otra cosa)
-
-- Documentación breve, resumida y en lenguaje sencillo: frases cortas, listas, sin relleno.
-- Carpetas y archivos con nombres cortos, claros e intuitivos; sin abreviaturas raras ni anidar de más.
-- Respeta siempre las convenciones que ya tenga el repo.
-
-## Reglas
-
-1. No intentes usar herramientas `opencode_*` en el hilo normal: no están disponibles ahí. Si el usuario pide expresamente el flujo con OpenCode, dile que lo arranque con `claude --agent cerebro` (o `@cerebro`); no lo actives tú por interpretación.
-2. Cuando actúes como cerebro: ninguna delegación sin spec escrita; planifica antes si la tarea es ambigua (`planificador`); vigila el trabajo, resuelve permisos, revisa el resultado contra la spec y resume al usuario.
-3. **Subagentes**: pasa siempre `subagent_type` explícito (`explorador`, `redactor`, `analista`, `ayudante`, `retocador`, `resolutor`, `consultor`, `arquitecto`, `subdirector`, `planificador`); no lo omitas (cae en `general-purpose`, que hereda tu modelo: Opus) ni uses `fork` (hereda tu modelo y todo el contexto). Para iterar con un subagente, reanúdalo con SendMessage en vez de lanzar otro.
-4. **Ventana de contexto**: el aviso de contexto te llega a ti y al usuario (en la consola). Al ~70 % vuelca el estado a la memoria del hub (`ESTADO.md` del proyecto); después puede hacerse `/clear` sin perder nada: además, Haiku guarda sola una nota de última sesión que se carga al volver. No reanudes sesiones frías de más de una hora.
-5. **El contexto del repositorio lo manda el repositorio**: antes de trabajar en un proyecto del que no haya resumen, delega su reconocimiento (subagente `explorador`) y guarda el resultado en la memoria del hub; respeta las reglas y la estructura de specs propias del proyecto (docs/specs, specs/, openspec/…). Para buscar decisiones o contexto previo: `node ~/.sistema-cerebro-agentes/hooks/buscar.mjs "consulta"` antes de preguntar al usuario.
-6. **Agentes por proyecto**: los roles por defecto son globales y están siempre disponibles; cada proyecto puede añadir los suyos en `.claude/agents/` y `.opencode/agents/` (aditivos; un mismo nombre solo pisa en ese proyecto). Si existen, úsalos cuando encajen.
-7. La distribución del sistema vive en el repositorio `sistema-cerebro-agentes` (instaladores, agente cerebro, agentes de OpenCode, panel web, hub). Las mejoras se hacen ahí y se despliegan con `install` o `scripts/actualizar`; no improvises cambios sueltos en las máquinas.
-8. **MCPs**: hay un inventario automático en la memoria del hub (`memoria/global/MCPS.md`); úsalos siempre que aporten (web, docs, repos, servidores…) y no inventes herramientas que no estén. Cuál usar y con qué petición: guía en `~/.sistema-cerebro-agentes/hub-data/memoria/global/MCPS-GUIA.md`. Si falta una capacidad recurrente, propón el agente `adaptador-mcps`.
-9. **Buscar antes de crear**: antes de construir nada nuevo, mira el registro de hallazgos (`hallazgos.mjs --listar`) y busca si ya existe (MCPs). Los candidatos se apuntan con enlace y **los valida el usuario** (el Cerebro se los pregunta) antes de integrar; si nada encaja, se crea de cero.
-10. **Modo normal · reparto**: ODD decide si se delega (solo con motivo concreto: explorar mucho, trabajo en paralelo, verificar un cambio de riesgo; lo pequeño lo hace Claude). A quién, según esta tabla fija: buscar/resumir → `explorador` (Haiku · low); redactar docs → `redactor` (Haiku · low); verificar/comparar → `analista` (Haiku · medium); cambio mecánico ya decidido → `ayudante` (Haiku · low); cambio pequeño en 1–2 archivos con algo de criterio → `retocador` (Sonnet · low); implementar un área → `resolutor` (Sonnet · medium), depurar o tarea delicada → `resolutor` (Sonnet · high); segunda opinión rápida → `consultor` (Opus · low); decisión global difícil → `arquitecto` (Opus · high). Pasa siempre `subagent_type`, `model` y `effort` explícitos en la herramienta Agent (nunca omitas `subagent_type`). Dile al usuario en una línea el subagente y su modelo.
-11. **MCPs globales**: los MCP que el usuario tenga instalados en Claude están disponibles en los dos modos; úsalos cuando el usuario lo pida o cuando aporten claramente.
-
-Si hay conflicto entre este archivo y una instrucción explícita del usuario, gana el usuario.
+## Sistema
+- La configuración vive en el repo `sistema-cerebro-agentes` y se despliega con `install` o `scripts/actualizar`. No hagas cambios sueltos en la máquina.
+- MCPs: inventario en `memoria/global/MCPS.md` y guía en `MCPS-GUIA.md` (hub). No inventes herramientas; si falta una capacidad recurrente, propón `adaptador-mcps`.
+- Buscar antes de crear: revisa `hallazgos.mjs --listar`. Los candidatos los valida el usuario.
+- En el cerebro, ninguna delegación sin spec escrita. Vigila, revisa contra la spec y resume.
