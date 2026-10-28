@@ -30,9 +30,10 @@ Llevar a Claude Code las mecánicas útiles de gentle-shell (https://github.com/
 ## Tareas
 | ID | Specs | Ruta | Estado |
 |---|---|---|---|
-| T1 | S1, S2, S3 | delegado (resolutor A · medium, paralelo) | pendiente |
-| T2 | S4, S5, S6 | delegado (resolutor B · medium, paralelo) | pendiente |
+| T1 | S1, S2, S3 | delegado (resolutor A · medium, paralelo) | hecho (22cbdf0); S3 no funciona con el hub en Docker |
+| T2 | S4, S5, S6 | delegado (resolutor B · medium, paralelo) | hecho (50e9a5e) |
 
 ## Log
 - **L1 (2026-10-28, usuario):** «aplica el 3,4,5,6,7,8 para el sonido pon https://www.youtube.com/watch?v=irZrMgLox28 solo cuando termine». Los números son los de la propuesta: 3 coste por agente, 4 `/odd:stats`, 5 cambios pendientes, 6 tarea caducada, 7 `/odd:doctor` y 8 avisos sonoros.
 - **L2:** el audio de YouTube no se descarga, por sus condiciones y por los derechos. Se reproduce el archivo local que ponga el usuario.
+- **L3 (instalado y probado en vivo, 2026-10-28):** doctor sale 5/5 en verde y verificar 98/98. `/api/agentes/coste` y `/api/stats` responden. `/api/cambios` devuelve `repos: []` porque el hub corre en Docker y no ve las rutas de Windows ni el git del host. Falta decidir: montar los repos en el contenedor o calcular los cambios en el host (hook o mod). Los precios se corrigieron con las tarifas oficiales (dbdde95). La caché de Haiku y la escritura en caché son estimaciones.
