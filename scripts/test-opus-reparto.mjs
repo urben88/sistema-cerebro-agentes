@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 /**
  * Prueba de la spec 15 (Opus dirige y lo mejor de configurar-claude):
- *   · reparto del modo normal: implementar → resolutor (Sonnet), mecánico → ayudante (Haiku),
- *     delicado → arquitecto (Opus), global → hazlo tú (Opus);
  *   · aviso de contexto por tokens reales: systemMessage + additionalContext, una vez por nivel;
  *   · nota de última sesión: slug estable, lectura y espera de la marca «pendiente»;
  *   · frontmatter de los agentes: modelos y sin delegación.
@@ -19,43 +17,7 @@ const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'test-opus-'))
 process.env.HUB_DATA_DIR = tmp
 
-// 1 · Reparto del modo normal
-const { aClaude } = await import(new URL('../config/hub/lib/reparto-claude.mjs', import.meta.url).href)
-assert.deepEqual([aClaude({ agente: 'implementador' }).subagente, aClaude({ agente: 'implementador' }).modelo], ['resolutor', 'sonnet'])
-assert.equal(aClaude({ agente: 'implementador' }).esfuerzo, 'medium', 'resolutor: medium por defecto')
-assert.equal(aClaude({ agente: 'implementador', escalar: true }).esfuerzo, 'high', 'resolutor: high si es delicado')
-assert.deepEqual([aClaude({ agente: 'debugger' }).subagente, aClaude({ agente: 'debugger' }).esfuerzo], ['resolutor', 'high'])
-assert.deepEqual([aClaude({ agente: 'retocador' }).modelo, aClaude({ agente: 'retocador' }).esfuerzo], ['sonnet', 'low'])
-assert.deepEqual([aClaude({ agente: 'consultor' }).modelo, aClaude({ agente: 'consultor' }).esfuerzo], ['opus', 'low'])
-// Reglas por palabras clave de los roles nuevos
-const { crearTriaje, CATALOGO_AGENTES, AGENTES_CLAUDE } = await import(new URL('../config/hub/lib/triaje.mjs', import.meta.url).href)
-const reglas = JSON.parse(fs.readFileSync(path.join(raiz, 'config/hub/reglas.json'), 'utf8'))
-const tri = crearTriaje({ reglas })
-assert.equal(tri.clasificarPorReglas('un cambio pequeño en el botón').agente, 'retocador')
-assert.equal(tri.clasificarPorReglas('dale un retoque al logo').agente, 'retocador')
-assert.equal(tri.clasificarPorReglas('necesito una segunda opinión').agente, 'consultor')
-assert.equal(tri.clasificarPorReglas('qué opción elegimos').agente, 'consultor')
-assert.equal(tri.clasificarPorReglas('implementa un endpoint').agente, 'implementador')
-// «ajusta»/«retoca» sueltos no son del retocador (Sonnet · low): son palabras muy comunes
-assert.notEqual(tri.clasificarPorReglas('ajusta los esfuerzos de los agentes').agente, 'retocador')
-assert.notEqual(tri.clasificarPorReglas('retoca el README').agente, 'retocador')
-assert.equal(tri.clasificarPorReglas('retoca este fallo').agente, 'debugger')
-// lo de alto valor no va al consultor
-assert.equal(tri.clasificarPorReglas('valida la decisión técnica del contrato').agente, 'arquitecto')
-// el catálogo de Laya incluye los roles nuevos, en la capa Claude
-assert.ok(CATALOGO_AGENTES.includes('retocador') && CATALOGO_AGENTES.includes('consultor'))
-assert.ok(AGENTES_CLAUDE.has('retocador') && AGENTES_CLAUDE.has('consultor'))
-assert.equal(reglas.reglas.find((r) => r.agente === 'implementador').esfuerzo, 'low')
-assert.equal(reglas.reglas.find((r) => r.agente === 'debugger').esfuerzo, 'high')
-assert.equal(reglas.reglas.find((r) => r.agente === 'revisor').esfuerzo, 'max')
-assert.deepEqual([aClaude({ agente: 'local' }).subagente, aClaude({ agente: 'local' }).modelo], ['ayudante', 'haiku'])
-assert.equal(aClaude({ agente: 'explorador-ds' }).subagente, 'explorador')
-assert.equal(aClaude({ agente: 'revisor' }).subagente, 'analista')
-assert.deepEqual([aClaude({ agente: 'revisor', riesgo: true }).subagente, aClaude({ agente: 'revisor', riesgo: true }).modelo], ['arquitecto', 'opus'])
-assert.equal(aClaude({ agente: 'cerebro' }).modelo, 'opus')
-assert.match(aClaude({ agente: 'cerebro' }).subagente, /hazlo tú/)
-
-// 2 · Aviso de contexto en consola
+// 1 · Aviso de contexto en consola
 const transcript = path.join(tmp, 't.jsonl')
 const respuesta = (input) => JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: input, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } })
 const hook = (sesion) => spawnSync(process.execPath, [path.join(raiz, 'config/hooks/aviso-contexto.mjs')], {
@@ -75,7 +37,7 @@ fs.writeFileSync(transcript, `${respuesta(160000)}\n`)
 assert.match(JSON.parse(hook('s1')).systemMessage, /~160k/, 'nivel nuevo: avisa otra vez')
 assert.match(JSON.parse(hook('s2')).systemMessage, /~160k/, 'otra sesión: avisa')
 
-// 3 · Nota de última sesión
+// 2 · Nota de última sesión
 const { slugProyecto, leerNota, dirUltimaSesion } = await import(new URL('../config/hooks/ultima-sesion.mjs', import.meta.url).href)
 assert.equal(slugProyecto('C:\\Users\\Ana\\Proyecto Uno\\'), slugProyecto('c:/users/ana/proyecto uno'))
 assert.equal(await leerNota('C:/no/existe', 0), '')
@@ -87,7 +49,7 @@ const t0 = Date.now()
 assert.match(await leerNota('C:/repo', 1200), /Tarea: x/)
 assert.ok(Date.now() - t0 >= 1000, 'espera mientras hay un resumen en curso')
 
-// 4 · Agentes: modelos del reparto y la delegación cortada en los subagentes
+// 3 · Agentes: modelos del reparto y la delegación cortada en los subagentes
 const fm = (n) => fs.readFileSync(path.join(raiz, 'config/claude/agents', `${n}.md`), 'utf8').split(/\r?\n---/)[0]
 assert.match(fm('cerebro'), /^model: opus$/m)
 assert.match(fm('arquitecto'), /^model: opus$/m)
@@ -110,7 +72,7 @@ for (const n of ['cerebro-oc', 'implementador', 'debugger', 'revisor', 'testeado
 for (const n of ['explorador', 'redactor', 'analista', 'planificador', 'subdirector', 'ayudante']) assert.match(fm(n), /^model: haiku$/m, n)
 for (const n of ['explorador', 'redactor', 'analista', 'planificador', 'subdirector', 'ayudante', 'resolutor', 'arquitecto', 'retocador', 'consultor']) assert.match(fm(n), /^disallowedTools: Agent$/m, n)
 
-// 5 · Barra claude-hud: config sin pisar la del usuario, statusLine reconocida y widget con datos del entorno
+// 4 · Barra claude-hud: config sin pisar la del usuario, statusLine reconocida y widget con datos del entorno
 const barra = await import(new URL('../config/hub/barra-hud.mjs', import.meta.url).href)
 const cfgHud = path.join(tmp, 'hud', 'config.json')
 assert.equal(barra.escribirConfigHud(cfgHud), 'creada')
@@ -136,4 +98,4 @@ assert.equal(tramoDeepseek(new Date('2026-10-17T07:00:00Z')).punta, false, 'sáb
 assert.deepEqual(tramoDeepseek(new Date('2026-10-19T00:59:00Z')), { punta: false, cambiaEnMin: 1 })
 
 fs.rmSync(tmp, { recursive: true, force: true })
-console.log('OK  spec 15: reparto Opus/Sonnet/Haiku, aviso de contexto en consola, nota de última sesión, agentes y barra claude-hud')
+console.log('OK  spec 15: aviso de contexto en consola, nota de última sesión, agentes y barra claude-hud')

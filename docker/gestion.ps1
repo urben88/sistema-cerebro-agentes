@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Gestor del stack Docker del Cerebro Hub (hub + Laya).
+  Gestor del stack Docker del Cerebro Hub (hub).
 
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File gestion.ps1 up -Build

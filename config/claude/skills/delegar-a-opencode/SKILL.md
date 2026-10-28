@@ -57,7 +57,6 @@ El briefing de sesión ya te trae los hallazgos **pendientes de validar**: preg�
 
 | Herramienta | Uso |
 |---|---|
-| `triaje_decidir` | Decide capa/agente/esfuerzo con Laya + reglas |
 | `trabajo_estado` | Resumen barato de los trabajos de OpenCode: lista los activos o detalla un `jobId` (estado, tiempo, coste, tokens, último paso, herramientas, pregunta pendiente). Úsalo para enseñar el progreso sin volcar conversaciones |
 
 ## Protocolo

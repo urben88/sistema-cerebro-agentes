@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * MCP de triaje — expone dos cosas del ecosistema Cerebro como herramientas MCP
- * para Claude Code (y OpenCode): la decisión local del hub (Laya + reglas) y el
- * estado de los trabajos lanzados por el puente opencode-mcp. Sin dependencias.
+ * MCP de trabajos — expone el estado de los trabajos lanzados por el puente
+ * opencode-mcp como herramientas MCP para Claude Code (y OpenCode). Sin dependencias.
+ * (El nombre del archivo y del servidor, «triaje», se conserva por compatibilidad con
+ * las configuraciones ya instaladas.)
  *
  * Herramientas:
- *   · triaje_decidir { tarea, contexto? } → { capa, agente, esfuerzo, ... }
  *   · trabajo_estado { jobId? } → lista de trabajos activos/recientes o detalle
  *     de uno (estado, tiempo, coste, tokens, último paso, herramientas y
  *     pregunta pendiente). Para enseñar el progreso sin volcar conversaciones.
@@ -17,26 +17,12 @@
 import readline from 'node:readline'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { aClaude } from '../hub/lib/reparto-claude.mjs'
 
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
-const VERSION = '0.4.0'
+const VERSION = '0.5.0'
 const RAIZ = process.env.SISTEMA_CEREBRO_DIR || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const TOOLS = [
-  {
-    name: 'triaje_decidir',
-    description: 'Decide qué agente y esfuerzo debe hacer una tarea (modelo local Laya + reglas). Úsalo antes de delegar si dudas de a quién mandar el trabajo. Devuelve la capa (claude/opencode), agente, esfuerzo, si conviene escalar, si hay riesgo y el motivo.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        tarea: { type: 'string', description: 'Descripción breve de la tarea (una o dos frases).' },
-        contexto: { type: 'string', description: 'Contexto opcional: proyecto, ficheros, complejidad.' },
-        solo_claude: { type: 'boolean', description: 'true en modo normal (sin OpenCode): traduce la decisión a un subagente de Claude (Haiku, Sonnet `resolutor`/`retocador` u Opus `arquitecto`/`consultor`) con su modelo y esfuerzo.' },
-      },
-      required: ['tarea'],
-    },
-  },
   {
     name: 'trabajo_estado',
     description: 'Estado de los trabajos de OpenCode lanzados por el puente MCP: sin argumentos lista los activos y los recientes; con jobId devuelve el detalle (estado, duración, coste, tokens, último paso, últimas herramientas y preguntas pendientes). Úsalo para enseñar el progreso al usuario sin volcar la conversación completa ni gastar contexto.',
@@ -61,8 +47,6 @@ const TOOLS = [
     },
   },
 ]
-
-// Modo normal: la traducción a subagentes de Claude (Opus/Sonnet/Haiku) vive en hub/lib/reparto-claude.mjs (spec 15).
 
 function send(obj) { process.stdout.write(JSON.stringify(obj) + '\n') }
 
@@ -157,24 +141,6 @@ rl.on('line', async (line) => {
     const nombre = msg.params?.name
     const args = msg.params?.arguments || {}
     try {
-      if (nombre === 'triaje_decidir') {
-        const r = await fetch(`${HUB}/api/triaje`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tarea: String(args.tarea || ''), contexto: String(args.contexto || '') }),
-          signal: AbortSignal.timeout(20000),
-        })
-        const j = await r.json()
-        if (j.ok && args.solo_claude === true) {
-          const c = aClaude(j)
-          const texto = `modo: normal (solo Claude)\nsubagent_type: ${c.subagente}\nmodel: ${c.modelo}\neffort: ${c.esfuerzo}\nnota: ${c.nota}\n(origen: capa ${j.capa}, agente ${j.agente}, confianza ${typeof j.confianza === 'number' ? j.confianza.toFixed(2) : j.confianza}, fuente ${j.fuente})`
-          return send({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: texto }] } })
-        }
-        const texto = j.ok
-          ? `capa: ${j.capa}\nagente: ${j.agente}\nesfuerzo: ${j.esfuerzo ?? '(el del agente)'}\nescalar: ${j.escalar}\nriesgo: ${j.riesgo}\nconfianza: ${typeof j.confianza === 'number' ? j.confianza.toFixed(2) : j.confianza}\nfuente: ${j.fuente}\nmotivo: ${j.motivo}`
-          : `Error del hub: ${j.error || 'desconocido'}`
-        return send({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: texto }] } })
-      }
       if (nombre === 'trabajo_estado') {
         const oc = await cargarOpenCode()
         const jobId = args.jobId ? String(args.jobId) : ''

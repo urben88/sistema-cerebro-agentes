@@ -91,10 +91,10 @@ Verificado que el frontmatter de agentes acepta `variant:` tanto en V2 (TUI) com
 ### D21 — Cerebro Hub: la capa de organización, como aplicación · 2026-10-13
 Petición del usuario: la organización (memoria, contexto, vigilante, panel) no vive en sus repositorios y es una **aplicación con backend**, no solo configuración. Implementación: `config/hub/` (Node sin dependencias) con API local, memoria externa en `hub-data/`, vigilante, briefing para hooks y panel minimalista. Se abre en el puerto 4597 (sin tocar el 4598/4599 del panel antiguo y del V1).
 
-### D22 — Docker para la capa de aplicación (hub + Laya); puente MCP nativo · 2026-10-13
-`docker-compose` con dos servicios: `hub` (127.0.0.1:4597) y `laya` (red interna). El **puente MCP y el servidor OpenCode V1 siguen en el host** porque trabajan sobre las carpetas de Windows del usuario (montarlos en contenedor exigiría traducir rutas; frágil). El hub los alcanza por `host.docker.internal`. Autoarranque en Windows: tarea programada y, si el sistema la deniega, carpeta de Inicio. Esta decisión sustituye, **solo para la capa de aplicación**, el «sin Docker» de D2.
+### D22 — Docker para la capa de aplicación (hub); puente MCP nativo · 2026-10-13
+`docker-compose` con el servicio `hub` (127.0.0.1:4597); hasta la spec 20 llevaba también `laya` (retirado, ver D35). El **puente MCP y el servidor OpenCode V1 siguen en el host** porque trabajan sobre las carpetas de Windows del usuario (montarlos en contenedor exigiría traducir rutas; frágil). El hub los alcanza por `host.docker.internal`. Autoarranque en Windows: tarea programada y, si el sistema la deniega, carpeta de Inicio. Esta decisión sustituye, **solo para la capa de aplicación**, el «sin Docker» de D2.
 
-### D23 — Laya como motor de triaje local, con reglas de respaldo y registro · 2026-10-13
+### D23 — Laya como motor de triaje local, con reglas de respaldo y registro · 2026-10-13 (retirada en D35)
 `laya[serve]` en contenedor CPU (3 checkpoints, `multilingual` para español). API real: `POST /v1/systemone` con `questions` como diccionario (`criteria` + `instructions`). Decisiones tipadas: agente, esfuerzo, escalar, riesgo. Confianza mínima 0,60: por debajo, mandan las reglas fijas (`reglas.json`). Cada decisión se registra con probabilidades (`logs/decisiones.jsonl`) para poder afinar Laya más adelante con uso real.
 
 ### D24 — Hooks de contexto y CLI `estado` · 2026-10-13
@@ -131,7 +131,11 @@ Decisión del usuario: Opus 5.5 · medium pasa a ser la inteligencia de la sesi�
 
 Decisión del usuario: `resolutor` pasa a Sonnet · medium (high al depurar o en tareas delicadas); `implementador` baja a DeepSeek low —no hay `medium`: la escalera es `low`/`high`/`max`— (`debugger` sigue en high). `revisor` sigue en max pero solo con código con lógica que revisar (en cambios mecánicos, de docs o de configuración trivial bastan tests o `analista`). `cerebro` sigue en Opus · medium y el esfuerzo lo sube el usuario a mano (`/effort high`); el agente no lo sube solo. Roles nuevos: `retocador` (Sonnet · low, cambios pequeños en 1–2 archivos) y `consultor` (Opus · low, segunda opinión rápida de solo lectura; lo difícil sigue en `arquitecto`).
 
-El **catálogo de Laya** ya incluye `retocador` y `consultor` (`CATALOGO_AGENTES` + `AGENTES_CLAUDE` en `hub/lib/triaje.mjs`, capa `claude`; la spec 15 lo dejaba fuera de alcance), así que el triaje local puede elegirlos y no solo las palabras clave. Esas palabras se afinan: `retocador` exige que el encargo diga que el cambio es pequeño, «ajusta»/«retoca» sueltos no lo capturan, y `arquitecto` pasa delante de `consultor`. Detalle en `docs/specs/19-esfuerzos-y-roles-retocador-consultor.md`.
+Las palabras clave del triaje local se afinaron en su momento; el triaje se retiró en D35 y la spec 19 conserva ese detalle histórico (`docs/specs/19-esfuerzos-y-roles-retocador-consultor.md`).
+
+### D35 — Quitar Laya; ODD decide el reparto · 2026-10-28
+
+Decisión del usuario (spec 20): se retira Laya por completo. Ya no hay modelo local de triaje: **ODD decide si se delega** (solo con motivo concreto: explorar mucho, trabajo en paralelo, verificar un cambio de riesgo; lo pequeño lo hace Claude) y **a quién** lo dice una tabla fija en `CLAUDE.md` (regla 10) y en `cerebro.md`/`cerebro-oc.md`. Se quitan la herramienta `triaje_decidir`, `hub/lib/triaje.mjs`, `hub/lib/reparto-claude.mjs`, las rutas `/api/triaje`, `/api/laya` y `/api/decisiones`, el registro `decisiones.jsonl` (C4 de la spec 14), el servicio `cerebro-laya`, `docker/laya/` y la pestaña «Triaje·Laya» del panel. `reglas.json` se queda solo con configuración (`presupuestos`, `respaldo`, `nudge_intervalo`, `bitacora_max_chars`). Se mantienen `trabajo_estado` y `parar_trabajos` en el MCP `triaje` (el nombre del servidor no cambia para no romper configuraciones instaladas) y la salud de agentes, que ahora se ve en la pestaña «Datos».
 
 ## Notas técnicas útiles
 

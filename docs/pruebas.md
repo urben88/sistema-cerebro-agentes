@@ -231,11 +231,9 @@ Prueba sin dependencias (ledger falso en memoria y reloj inyectado; nunca toca `
 real): comprueba que sin historial `resolver('local-codigo')` devuelve el agente original; que
 3 fallos seguidos lo degradan a `implementador` (con el motivo «…: 3 de 3 fallaron»); que pasado
 el enfriamiento permite **una prueba** (`prueba:true`), que un acierto limpia el contador y que
-un fallo reabre el enfriamiento; que los `cancelado` no cuentan; que un encargo acotado («crea
-la función X en el archivo Y con test») enruta a `local-codigo` mientras depuración, revisión y
-arquitectura no cambian; y que `decidir` aplica el respaldo, lo explica en `motivo` y lo registra
-en `decisiones.jsonl` con `degradado`. La respuesta de `GET /api/agentes/salud` y la línea del
-panel se comprueban a mano. `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
+un fallo reabre el enfriamiento; que los `cancelado` no cuentan; y que la prueba se concede una
+sola vez y caduca por TTL. La respuesta de `GET /api/agentes/salud` y la tarjeta «Salud de
+agentes» del panel (pestaña «Datos») se comprueban a mano. `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
 
 ## Guía de uso de MCPs (spec 13 · N1–N4)
 
@@ -251,7 +249,7 @@ Prueba sin dependencias (directorio temporal; copia `mcps.mjs` a un `hub/` propi
 node scripts/test-a2a.mjs
 ```
 
-Prueba sin dependencias (todo en `os.tmpdir()`; el `lanzador` va **simulado** —no se lanza ningún job ni servidor real—): comprueba la Agent Card ligera (C1); la consulta mediada válida (≤ 1200 chars con «…», coste y ms, job con `agente` en el ledger y evento `a2a` en métricas **sin** la pregunta ni la respuesta) y sus rechazos (agente no de lectura, pregunta > 2000, `directory` relativo o inexistente); la **profundidad 1** y el **límite de 3 consultas** (409); el **tope de coste** (aborta la sesión); el buzón (estados, TTL 30 min, 20 pendientes → 429, «una respuesta no genera preguntas» y persistencia read-merge-write en `a2a.json`); el triaje registrado una sola vez por encargo/ventana (C4); y `reparto()` por agente, por capa, `%` con triaje previo y `consultasA2A` (C5). `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
+Prueba sin dependencias (todo en `os.tmpdir()`; el `lanzador` va **simulado** —no se lanza ningún job ni servidor real—): comprueba la Agent Card ligera (C1); la consulta mediada válida (≤ 1200 chars con «…», coste y ms, job con `agente` en el ledger y evento `a2a` en métricas **sin** la pregunta ni la respuesta) y sus rechazos (agente no de lectura, pregunta > 2000, `directory` relativo o inexistente); la **profundidad 1** y el **límite de 3 consultas** (409); el **tope de coste** (aborta la sesión); el buzón (estados, TTL 30 min, 20 pendientes → 429, «una respuesta no genera preguntas» y persistencia read-merge-write en `a2a.json`); y `reparto()` por agente, por capa y `consultasA2A` (C5). `verificar.sh` / `verificar.ps1` la ejecutan como un paso más.
 
 El fix del ledger (C6) se prueba además en `node scripts/test-ledger.mjs`: `reconciliar()` completa el `agente` de entradas que se crearon sin él (terminales incluidas) sin cambiar el estado ni pisar un agente ya conocido.
 
@@ -261,7 +259,7 @@ El fix del ledger (C6) se prueba además en `node scripts/test-ledger.mjs`: `rec
 node scripts/test-opus-reparto.mjs
 ```
 
-Prueba sin dependencias (datos en una carpeta temporal): comprueba el reparto del modo normal (implementar → `resolutor` Sonnet medium, depurar o delicado → `resolutor` high, retoque → `retocador` Sonnet low, segunda opinión → `consultor` Opus low, mecánico → `ayudante` Haiku, delicado → `arquitecto` Opus, global → «hazlo tú»); el aviso de contexto por tokens reales (`systemMessage` + `additionalContext`, una vez por nivel); la nota de última sesión (slug estable, lectura y espera de la marca «pendiente»); y el frontmatter de los agentes (modelos y sin delegación).
+Prueba sin dependencias (datos en una carpeta temporal): comprueba el aviso de contexto por tokens reales (`systemMessage` + `additionalContext`, una vez por nivel); la nota de última sesión (slug estable, lectura y espera de la marca «pendiente»); y el frontmatter de los agentes (modelos, sin delegación y `variant` de OpenCode dentro de low/high/max).
 
 ## Prueba de fuego sugerida
 

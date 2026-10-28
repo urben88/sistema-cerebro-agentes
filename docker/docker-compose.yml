@@ -1,7 +1,6 @@
 # Cerebro Hub — despliegue de la capa de aplicación en Docker.
 #
 #   · hub   → backend + panel  (127.0.0.1:4597)
-#   · laya  → modelo local de decisiones (red interna; 127.0.0.1:8000 solo para depurar)
 #
 # El puente MCP y el servidor OpenCode V1 siguen en el host (trabajan sobre tus
 # carpetas): el hub los alcanza por host.docker.internal.
@@ -10,22 +9,6 @@
 name: cerebro-hub
 
 services:
-  laya:
-    build:
-      context: ./laya
-    image: cerebro-hub-laya:latest
-    container_name: cerebro-laya
-    restart: unless-stopped
-    environment:
-      - LAYA_DEVICE=cpu
-      - LAYA_PRELOAD=1
-      - HF_HOME=/modelos
-    volumes:
-      - laya-modelos:/modelos
-    # Sin puerto al host: el hub lo alcanza por la red interna (laya:8000).
-    # Para depurar: docker exec cerebro-laya curl -s localhost:8000/health
-    networks: [cerebro]
-
   hub:
     build:
       # En el repositorio: ../config/hub · En la instalación: ../hub (lo ajusta el instalador)
@@ -33,7 +16,6 @@ services:
     image: cerebro-hub:latest
     container_name: cerebro-hub
     restart: unless-stopped
-    depends_on: [laya]
     ports:
       - "127.0.0.1:4597:4597"
     environment:
@@ -44,7 +26,6 @@ services:
       - CLAUDE_DIR=/claude
       - OPENCODE_AUTH=/opencode-auth/auth.json
       - OPENCODE_HOST=host.docker.internal
-      - LAYA_URL=http://laya:8000
       # El instalador sustituye esta línea por la carpeta de trabajos del MCP
       # (o la monta el usuario a mano si usa el compose del repo directamente).
       # __TAREAS_MCP_ENV__
@@ -60,6 +41,3 @@ services:
 
 networks:
   cerebro: {}
-
-volumes:
-  laya-modelos: {}

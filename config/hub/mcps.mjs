@@ -43,7 +43,7 @@ const CAPACIDADES = [
   { claves: ['ssh', 'remote'], capacidad: 'acceso a servidores' },
   { claves: ['pieces', 'basic-memory', 'mem-persistence', 'memory'], capacidad: 'memoria' },
   { claves: ['agentation', 'annotation'], capacidad: 'anotaciones de UI' },
-  { claves: ['triaje'], capacidad: 'triaje local' },
+  { claves: ['triaje'], capacidad: 'estado de trabajos' },
   { claves: ['filesystem', 'files'], capacidad: 'ficheros' },
   { claves: ['postgres', 'mysql', 'sqlite', 'database', 'mongo', 'redis'], capacidad: 'bases de datos' },
   { claves: ['slack', 'discord', 'telegram', 'mail', 'email'], capacidad: 'comunicación' },

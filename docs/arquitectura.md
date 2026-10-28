@@ -12,17 +12,17 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
   │       · Haiku: planificador · explorador · redactor · analista · ayudante       │
   │       · subdirector · Sonnet: resolutor (cómo) · retocador (retoques)           │
   │       · Opus: arquitecto (lo duro) · consultor (segunda opinión)                │
-  │       · MCP `opencode` → código en DeepSeek   · MCP `triaje` → ¿quién y cuánto? │
+  │       · MCP `opencode` → código en DeepSeek   · MCP `triaje` → estado de jobs   │
   │       · hooks → briefing, checkpoints, /clear sin pérdidas                      │
   │                                                                                 │
   └──── PUERTA 2 · sin Claude (cuota agotada) ──────────────────────────────────────┤
         OpenCode TUI → `cerebro-oc` (DeepSeek · max): specs y delegación en el resto │
                                                                                     ▼
 ┌─────────────────────────── CEREBRO HUB (app local, Docker) ────────────────────────┐
-│  hub (Node sin deps, 127.0.0.1:4597)          laya (modelo local de decisiones)     │
-│   · memoria compartida FUERA de los repos      · decide agente/esfuerzo/escalar     │
-│   · briefing de sesión · vigilante             · confianza calibrada; si duda,      │
-│   · organización · gasto · ventana Claude        mandan las reglas (conf < 0,60)    │
+│  hub (Node sin deps, 127.0.0.1:4597)                                                │
+│   · memoria compartida FUERA de los repos                                           │
+│   · briefing de sesión · vigilante                                                  │
+│   · organización · gasto · ventana Claude                                           │
 └───────────────┬─────────────────────────────────────────────────────────────────────┘
                 │ (nativo, en el host: trabaja sobre tus carpetas)
                 ▼
@@ -36,7 +36,7 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
 | Capa | Hace | No hace |
 |---|---|---|
 | Cerebro (Claude Code) | Decidir, especificar, revisar, conversar | Escribir código de producción salvo petición explícita |
-| Hub | Memoria, contexto, vigilancia, triaje, panel | Tocar tus repositorios |
+| Hub | Memoria, contexto, vigilancia, panel | Tocar tus repositorios |
 | Manos (OpenCode) | Implementar, depurar, probar, revisar por céntimos | Decidir el diseño o cambiar el alcance |
 
 **Principio de capas**: la herramienta (reparto, esfuerzos, topes, contexto) es genérica; **el repositorio manda** sus indicaciones (CLAUDE.md/AGENTS.md, specs, convenciones). El reconocimiento las lee una vez y las resume fuera del repo.
@@ -51,7 +51,6 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
 | Rol Cerebro + skill `delegar-a-opencode` | `~/.claude/CLAUDE.md` (bloque) y `~/.claude/skills/` | ídem |
 | Hooks de contexto + CLI `estado` | `~/.sistema-cerebro-agentes/hooks/` | ídem |
 | Cerebro Hub (app + panel) | `~/.sistema-cerebro-agentes/hub/` (nativo) o contenedor `cerebro-hub` | ídem |
-| Laya | contenedor `cerebro-laya` (volumen de modelos) | ídem |
 | Memoria y logs del hub | `~/.sistema-cerebro-agentes/hub-data/` | se crea sola |
 | Servidor OpenCode V1 + lanzador del MCP | `~/.sistema-cerebro-agentes/server/` y `launcher.*` | ídem |
 
@@ -61,7 +60,7 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
 2. **Planificación (si la tarea es ambigua o grande)**: el subagente `planificador` saca las preguntas mínimas (máx. 5) + supuestos + plan; el Cerebro te las pregunta antes de generar nada.
 3. **Spec** en la estructura del repo; el reconocimiento del proyecto se delega una sola vez.
 4. **Cadena única**: preparación (Haiku o `explorador-ds`) → ejecución (`implementador`/`debugger`) → validación (`testeador`/`revisor`).
-5. **Triaje**: si hay duda de a quién mandar algo, Laya decide (con reglas de respaldo); queda registrado.
+5. **Reparto**: ODD decide si hay un motivo concreto para delegar (explorar mucho, trabajo en paralelo, verificar un cambio de riesgo); lo pequeño lo hace Claude. A quién, lo dice la tabla fija de la regla 10 de `CLAUDE.md`; no se consulta a ningún modelo.
 6. **Vigilancia y visibilidad**: el hub avisa de atascos; el Cerebro te enseña hitos del job con `trabajo_estado` (estado, tiempo, coste, último paso) y la barra de estado de Claude muestra el trabajo en curso; el `subdirector` (Haiku) puede revisar extractos y cancelar/redirigir.
 7. **Cierre**: veredicto del `revisor` contra la spec, resumen al usuario y `ESTADO.md` al día; al ~70 % de contexto, `/clear` sin pérdidas.
 
@@ -76,7 +75,7 @@ Dos puertas de entrada, un hub común y una capa de ejecución barata:
 ## Ciclo de vida de los servicios
 
 - **OpenCode V1** (MCP): lo asegura el lanzador (`launcher.ps1/sh`) al primer uso; datos aislados en `server-data/`, puerto dinámico desde 4599.
-- **Hub y Laya**: contenedores con `restart: unless-stopped`; autoarranque al iniciar sesión (Windows). El hub nativo (`hub.ps1/hub.sh`) sigue disponible como alternativa.
+- **Hub**: contenedor con `restart: unless-stopped`; autoarranque al iniciar sesión (Windows). El hub nativo (`hub.ps1/hub.sh`) sigue disponible como alternativa.
 - **Panel antiguo** de actividad: `panel.ps1/h.sh`, puerto 4598. El panel del hub está en 4597.
 
 ## Búsqueda (indice.db, /api/buscar, CLI buscar.mjs)
@@ -154,7 +153,7 @@ El evento `job` es **idempotente por `jobId`**: `registrar` rehidrata del disco 
 
 `config/hub/lib/salud-agentes.mjs` deriva del **ledger** la salud de cada agente con respaldo configurado en `reglas.json` → `respaldo` (`local-codigo` → `implementador` por defecto). Sobre sus últimos `ventana` (6) trabajos **terminales** (excluye `cancelado`) calcula la tasa de fallo (`fallido` + `atascado`) y los fallos seguidos; con ≥ `minimoMuestras` (3) y (tasa > `maxTasaFallo`, 0.5, o fallos seguidos ≥ `maxFallosSeguidos`, 2) `resolver('local-codigo')` lo **degrada** a `implementador` (`{agente, degradado:true, motivo}` — «local-codigo degradado a implementador: 3 de 5 fallaron»). Pasado `enfriamientoMin` (60) desde el último fallo devuelve el original **a modo de prueba** (`prueba:true`); un acierto limpia el contador y un fallo reinicia el enfriamiento. Sin fichero propio: **todo se deriva del ledger**, así que sobrevive a reinicios.
 
-El triaje (`lib/triaje.mjs`) aplica ese `resolver()` a la decisión final —tanto por Laya como por reglas— y lo explica en `motivo`; `logs/decisiones.jsonl` incluye `degradado`. En `reglas.json`, la regla de `implementador` elige `local-codigo` cuando el encargo es **acotado** (contiene `archivo`/`fichero`/`función`/`test`/`spec`/`criterio` y no `arquitectura`/`migración`/`refactor global`/`varios módulos`/`todo el`); depuración, revisión y arquitectura (`prioridad`) no cambian. `GET /api/agentes/salud` devuelve `{agentes:[{agente, muestras, tasaFallo, fallosSeguidos, degradado, proximaPrueba}]}` y el panel lo muestra en «Triaje·Laya» («local-codigo · 4/6 OK · activo» o «degradado hasta HH:MM»).
+El encargo acotado se reparte por la tabla fija de `CLAUDE.md`/`cerebro.md` (código pequeño y bien delimitado → `local-codigo`, salvo que esté degradado). `GET /api/agentes/salud` devuelve `{agentes:[{agente, muestras, tasaFallo, fallosSeguidos, degradado, proximaPrueba}]}` y el panel lo muestra en la pestaña «Datos», tarjeta «Salud de agentes» («local-codigo · 4/6 OK · activo» o «degradado hasta HH:MM»). Desde la spec 20 ya no hay triaje por Laya: `resolver()` queda como utilidad de la librería.
 
 ## Guía de uso de MCPs (spec 13)
 
@@ -177,13 +176,13 @@ Los agentes **no se hablan entre sí**: el hub media (no hay servidores A2A real
 
 `config/hub/lib/a2a.mjs` (sin dependencias; lanzador, ledger, métricas y salud inyectados) implementa:
 
-- **C1 · Directorio (`GET /api/a2a/agentes`)** — Agent Card ligera de cada agente del catálogo: frontmatter de `config/opencode/agents/*.md` y `config/claude/agents/*.md` + `reglas.json` + salud del ledger (`{name, description, version, skills, modelo, esfuerzo, capa, solo_lectura, coste_estimado, salud}`).
+- **C1 · Directorio (`GET /api/a2a/agentes`)** — Agent Card ligera de cada agente del catálogo: frontmatter de `config/opencode/agents/*.md` y `config/claude/agents/*.md` + `reglas.json` (presupuestos) + salud del ledger (`{name, description, version, skills, modelo, esfuerzo, capa, solo_lectura, coste_estimado, salud}`).
 - **C2 · Consulta (`POST /api/a2a/consultar`)** — síncrona y mediada: solo agentes de **lectura** (`explorador-ds`, `revisor`, `testeador`, `redactor-ds`); profundidad 1 y máx. 3 en curso (409); tope de coste por `presupuestos` (aborta la sesión al superarlo); timeout 120 s; respuesta recortada a 1200 con «…».
 - **C3 · Buzón (`POST/GET /api/a2a/mensajes`, `POST /api/a2a/mensajes/responder`)** — asíncrono por tarea en `hub-data/a2a.json` (read-merge-write): estados `pendiente|respondido|expirado`, TTL 30 min y máx. 20 pendientes por destinatario (429). Una respuesta no genera otro mensaje de tipo `pregunta`.
-- **C4 · Triaje en el camino** — la consulta y el lanzamiento de jobs del hub registran la decisión de triaje (`decisiones.jsonl`) si no hay una reciente para el mismo encargo.
-- **C5 · Reparto (`GET /api/reparto?dias=7`)** — agrega ledger + métricas (spec 11) + decisiones: `{trabajos, completados, fallidos, cancelados, coste, mediaMs}` por agente, por capa, `%` de jobs con triaje previo y `consultasA2A {total, coste, mediaRespuestaChars}`. Tarjeta «Reparto» en el panel (pestaña «Datos»). Evento de métricas `a2a` (`subtipo consulta|mensaje`, `de`, `para`, `estado`, `chars`, `coste`, `ms`; **sin prompts ni respuestas**).
+- **C4 · (retirado)** — registraba la decisión de triaje de cada encargo; se quitó con Laya en la spec 20.
+- **C5 · Reparto (`GET /api/reparto?dias=7`)** — agrega ledger + métricas (spec 11): `{trabajos, completados, fallidos, cancelados, coste, mediaMs}` por agente, por capa y `consultasA2A {total, coste, mediaRespuestaChars}`. Tarjeta «Reparto» en el panel (pestaña «Datos»). Evento de métricas `a2a` (`subtipo consulta|mensaje`, `de`, `para`, `estado`, `chars`, `coste`, `ms`; **sin prompts ni respuestas**).
 
-El `%` con triaje previo es una heurística: cuenta un job si existe una decisión con `fecha` ≤ su `creado` y a menos de 30 min antes, del mismo agente (o de su original si se degradó). El **origen del agente `?` en el ledger (C6)**: las entradas se creaban sin `agente` cuando el fichero del job aún no exponía `agent`/`session.agent` (o lo traía como `"Object"`); al reconciliar, el ledger ahora **completa** `agente`/`directorio` con el registro del job aunque el estado sea terminal (que sigue siendo inmutable). Quedan sin resolver los jobs cuyo fichero **nunca** registró el agente (p. ej. cancelados con `session.agent` ausente o `"Object"`): no hay dato del que deducirlo y **no se inventa** (aparecen como `?` en el reparto).
+El **origen del agente `?` en el ledger (C6)**: las entradas se creaban sin `agente` cuando el fichero del job aún no exponía `agent`/`session.agent` (o lo traía como `"Object"`); al reconciliar, el ledger ahora **completa** `agente`/`directorio` con el registro del job aunque el estado sea terminal (que sigue siendo inmutable). Quedan sin resolver los jobs cuyo fichero **nunca** registró el agente (p. ej. cancelados con `session.agent` ausente o `"Object"`): no hay dato del que deducirlo y **no se inventa** (aparecen como `?` en el reparto).
 
 ## Evolución
 

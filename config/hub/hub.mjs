@@ -24,7 +24,6 @@ import { crearOpenCode } from './lib/opencode.mjs'
 import { crearVigilante } from './lib/vigilante.mjs'
 import { crearOrganizacion } from './lib/organizacion.mjs'
 import { crearVentana } from './lib/ventana.mjs'
-import { crearTriaje } from './lib/triaje.mjs'
 import { crearActividad } from './lib/actividad.mjs'
 import { clasificarAlerta } from './lib/errores.mjs'
 import { crearVivo } from './lib/vivo.mjs'
@@ -175,16 +174,12 @@ const oc = crearOpenCode({ systemDir: SYSTEM_DIR, host: OPENCODE_HOST })
 const organizacion = crearOrganizacion({ home: HOME, opencodeDir: OPENCODE_DIR, claudeDir: CLAUDE_DIR })
 const ventana = crearVentana({ baseDir: path.join(CLAUDE_DIR, 'projects') })
 
-// Reglas de reparto: las del usuario (en la carpeta de datos) mandan sobre las de serie
+// Reglas de configuración (presupuestos, respaldo, nudges…): las del usuario (en la carpeta de datos) mandan sobre las de serie
 function cargarReglas() {
   const leer = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return null } }
-  return leer(path.join(DATA_DIR, 'reglas.json')) || leer(path.join(__dirname, 'reglas.json')) || { reglas: [], porDefecto: {} }
+  return leer(path.join(DATA_DIR, 'reglas.json')) || leer(path.join(__dirname, 'reglas.json')) || {}
 }
 const reglas = cargarReglas()
-// L4 (spec 12) · el respaldo de salud se engancha al triaje cuando el ledger ya existe
-// (más abajo); hasta entonces `resolver` no cambia nada.
-let saludResolver = (agente) => ({ agente, degradado: false })
-const triaje = crearTriaje({ reglas, logDecisiones: path.join(LOGS_DIR, 'decisiones.jsonl'), resolver: (agente) => saludResolver(agente) })
 
 // ----------------------------------------------------------------- aprobaciones (R4/R8 · spec 10)
 // El hub CLASIFICA comandos/peticiones, aplica las reglas duras del guardián (R8) y mantiene
@@ -474,14 +469,13 @@ const ledger = crearLedger({
 
 let ultimoAvisoConcurrencia = 0
 
-// L2/L3/L4 (spec 12) · salud por agente derivada del ledger; el triaje la consulta.
+// L2/L3 (spec 12) · salud por agente derivada del ledger.
 const salud = crearSaludAgentes({ ledger, reglas })
-saludResolver = (agente) => salud.resolver(agente)
 
 // ------------------------------------------------- mediador A2A-lite (spec 14)
 // Los agentes no se hablan entre sí: el hub media. `directorio` (C1), `consultar` (C2)
-// por el lanzador con tope de coste y profundidad 1, buzón asíncrono (C3), triaje en el
-// camino (C4) y reparto medido (C5). Datos del buzón en `hub-data/a2a.json`.
+// por el lanzador con tope de coste y profundidad 1, buzón asíncrono (C3) y reparto
+// medido (C5). Datos del buzón en `hub-data/a2a.json`.
 const VERSION_SISTEMA = (() => {
   // Instalado, `VERSION` puede no estar junto al hub; se prueban las ubicaciones conocidas.
   for (const f of [path.join(__dirname, '..', '..', 'VERSION'), path.join(SYSTEM_DIR, 'VERSION')]) {
@@ -493,13 +487,6 @@ const VERSION_SISTEMA = (() => {
 // existen (desarrollo desde el repo), se cae a `config/opencode/agents` y `config/claude/agents`.
 const agentesOCDir = fs.existsSync(path.join(OPENCODE_DIR, 'agents')) ? path.join(OPENCODE_DIR, 'agents') : path.join(__dirname, '..', 'opencode', 'agents')
 const agentesCLDir = fs.existsSync(path.join(CLAUDE_DIR, 'agents')) ? path.join(CLAUDE_DIR, 'agents') : path.join(__dirname, '..', 'claude', 'agents')
-function leerDecisiones() {
-  let texto = ''
-  try { texto = fs.readFileSync(path.join(LOGS_DIR, 'decisiones.jsonl'), 'utf8') } catch { return [] }
-  const out = []
-  for (const l of texto.split('\n')) { if (!l.trim()) continue; try { out.push(JSON.parse(l)) } catch { /* línea rota */ } }
-  return out
-}
 const a2a = crearA2A({
   dirDatos: DATA_DIR,
   agentesDir: agentesOCDir,
@@ -511,8 +498,6 @@ const a2a = crearA2A({
   ledger,
   metricas,
   salud,
-  triaje,
-  leerDecisiones,
 })
 
 /** Estados del ledger que disparan el evento `job` (spec 11 · M2). */
@@ -690,12 +675,6 @@ function registrarMetricaCron(r) {
   try {
     if (!r || !r.jobId) return
     const j = cron.obtener(r.jobId)
-    // Spec 14 · C4 · el lanzamiento de un job desde el hub registra la decisión de triaje
-    // (si no hay una reciente para el mismo encargo). Best-effort: no bloquea el cron.
-    try {
-      const encargo = j?.prompt || j?.nombre
-      if (encargo) { const p = a2a.registrarTriajeSiHaceFalta(encargo, { ref: r.jobId }); if (p && p.catch) p.catch(() => { /* nada */ }) }
-    } catch { /* nada */ }
     metricas.registrar(limpiarNulos({
       tipo: 'cron',
       id: r.jobId,
@@ -733,12 +712,10 @@ const servidor = http.createServer(async (req, res) => {
   try {
     if (ruta === '/api/salud') {
       const v1 = await oc.get('/config', 2500)
-      const laya = await triaje.disponible()
       return enviarJson(res, {
         ok: true, app: 'cerebro-hub', version: '0.2.0', puerto: LISTEN_PORT,
         datos: DATA_DIR, memoria: MEMORIA_DIR,
         servidorV1: oc.puerto() || null, servidorV1Ok: v1.ok,
-        laya,
         alertas: vigilante.alertas().length, hora: Date.now(),
       })
     }
@@ -1245,29 +1222,14 @@ const servidor = http.createServer(async (req, res) => {
     if (ruta === '/api/gasto') return enviarJson(res, await gasto())
     if (ruta === '/api/ventana') return enviarJson(res, { ok: true, ...(await ventana.calcular()) })
     if (ruta === '/api/reglas') return enviarJson(res, { ok: true, reglas })
-    if (ruta === '/api/laya') return enviarJson(res, { ok: true, url: process.env.LAYA_URL || 'http://127.0.0.1:8000', disponible: await triaje.disponible() })
     if (ruta === '/api/agentes/salud' && req.method === 'GET') {
       // L5 (spec 12) · salud por agente con respaldo: muestras, tasa, fallos seguidos y si
-      // está degradado (con la hora de la próxima prueba). El panel lo pinta en «Triaje·Laya».
+      // está degradado (con la hora de la próxima prueba). El panel lo pinta en «Datos».
       const agentes = Object.keys(reglas.respaldo || {}).map((ag) => {
         const e = salud.estado(ag)
         return { agente: ag, muestras: e.muestras, tasaFallo: e.tasaFallo, fallosSeguidos: e.fallosSeguidos, degradado: e.degradado, enPrueba: Boolean(e.enPrueba), proximaPrueba: e.proximaPrueba }
       })
       return enviarJson(res, { ok: true, agentes })
-    }
-    if (ruta === '/api/triaje' && req.method === 'POST') {
-      const b = await cuerpoJson(req)
-      if (!b.tarea) return enviarJson(res, { ok: false, error: 'falta tarea' }, 400)
-      const d = await triaje.decidir({ tarea: b.tarea, contexto: b.contexto || '' })
-      return enviarJson(res, { ok: true, ...d, presupuestos: reglas.presupuestos || {}, paraleloMax: reglas.paraleloMax ?? 2 })
-    }
-    if (ruta === '/api/decisiones') {
-      let texto = ''
-      try { texto = fs.readFileSync(path.join(LOGS_DIR, 'decisiones.jsonl'), 'utf8') } catch { /* sin log */ }
-      const lineas = texto.trim().split('\n').filter(Boolean).slice(-30).reverse()
-      const decisiones = []
-      for (const l of lineas) { try { decisiones.push(JSON.parse(l)) } catch { /* nada */ } }
-      return enviarJson(res, { ok: true, decisiones })
     }
     if (ruta === '/favicon.ico') { res.writeHead(204); return res.end() }
 

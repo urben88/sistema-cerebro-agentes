@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gestor del stack Docker del Cerebro Hub (hub + Laya).
+# Gestor del stack Docker del Cerebro Hub (hub).
 # Uso: bash gestion.sh [up|down|status|logs|restart] [--build]
 set -u
 ACCION="${1:-up}"

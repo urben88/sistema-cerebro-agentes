@@ -847,7 +847,6 @@ function pintarCabecera() {
   const partes = [modo]
   partes.push(s ? 'hub ok' : 'hub —')
   if (s) partes.push(s.servidorV1 ? `V1 :${s.servidorV1}${s.servidorV1Ok === false ? ' (sin respuesta)' : ''}` : 'V1 apagado')
-  if (s) partes.push(s.laya?.disponible ? 'Laya' : 'Laya no')
   const chip = $('chipConexion')
   chip.textContent = partes.join(' · ')
   chip.className = `chip conexion modo-${estado.conexion === 'sse' ? 'sse' : estado.demo ? 'demo' : 'poll'}`
@@ -1100,7 +1099,7 @@ function pintarMetricas(resumen, activas) {
   cont.append(card)
 }
 
-// Spec 14 · C5 · tarjeta «Reparto»: carga por agente y capa, % con triaje previo y A2A.
+// Spec 14 · C5 · tarjeta «Reparto»: carga por agente y capa y consultas A2A.
 function pintarRepartoCarga(d) {
   const cont = vaciar($('repartoCarga'))
   if (!cont) return
@@ -1128,10 +1127,9 @@ function pintarRepartoCarga(d) {
     tabla.append(tb)
     cont.append(tabla)
   }
-  const t = datos.triaje || {}
   const c = datos.consultasA2A || {}
   const capas = (datos.capas || []).map((x) => `${x.capa}: ${x.trabajos}`).join(' · ')
-  cont.append(h('div', { clase: 'desc tenue', texto: `Triaje previo: ${t.pct || 0}% (${t.conDecision || 0}/${t.total || 0})${capas ? ` · por capa — ${capas}` : ''}` }))
+  cont.append(h('div', { clase: 'desc tenue', texto: `Por capa — ${capas || 'sin datos'}` }))
   cont.append(h('div', { clase: 'desc tenue', texto: `Consultas A2A: ${c.total || 0} · coste $${(c.coste || 0).toFixed(2)} · respuesta media ${c.mediaRespuestaChars || 0} chars` }))
 }
 
@@ -1153,33 +1151,6 @@ function pintarVentana(v) {
     tr.append(h('td', { clase: 'tenue', texto: k(d.c7) }))
     tr.append(h('td', { clase: 'tenue', texto: fmt(d.mensajes) }))
     tb.append(tr)
-  }
-}
-
-function pintarTriaje(laya, dec) {
-  const cont = vaciar($('layaEstado'))
-  const card = h('div', { clase: 'agente' })
-  const cab = h('div')
-  cab.append(h('span', { clase: 'nombre', texto: 'Laya' }))
-  cab.append(h('span', { clase: `badge ${laya?.disponible ? 'verde' : 'gris'}`, texto: laya?.disponible ? 'disponible' : 'no disponible (triaje por reglas)' }))
-  card.append(cab)
-  card.append(h('div', { clase: 'desc', texto: laya?.url || '' }))
-  cont.append(card)
-
-  const contDec = vaciar($('decisiones'))
-  const lista = (dec?.decisiones || []).slice(0, 8)
-  if (!lista.length) { contDec.append(h('p', { clase: 'tenue', texto: 'Sin decisiones registradas todavía.' })); return }
-  for (const d of lista) {
-    const c = h('div', { clase: 'agente' })
-    const cab2 = h('div')
-    cab2.append(h('span', { clase: 'badge azul', texto: d.capa }))
-    cab2.append(' ')
-    cab2.append(h('span', { clase: 'nombre', texto: d.agente || '?' }))
-    if (d.esfuerzo) cab2.append(h('span', { clase: 'chip modelo', texto: String(d.esfuerzo) }))
-    if (d.confianza != null) cab2.append(h('span', { clase: 'tenue', texto: `p=${Number(d.confianza).toFixed(2)}` }))
-    c.append(cab2)
-    c.append(h('div', { clase: 'desc', texto: `${(d.tarea || '').slice(0, 100)} · ${d.fuente || ''}` }))
-    contDec.append(c)
   }
 }
 
@@ -1576,7 +1547,6 @@ const PESTANAS = [
   ['proyectos', 'Proyectos'],
   ['vigilante', 'Vigilante'],
   ['trabajos', 'Trabajos'],
-  ['triaje', 'Triaje·Laya'],
   ['datos', 'Datos'],
   ['mcps', 'MCPs'],
   ['hallazgos', 'Hallazgos'],
@@ -1762,11 +1732,9 @@ async function refrescarLigero() {
 
 async function refrescarPesado() {
   try {
-    const [gasto, ventana, laya, dec, mcps, hallazgos, equipo, logs, aprob, skillsPend, skillsUso, cronDatos, metricasRes, metricasAct, agentesSalud, repartoDatos] = await Promise.all([
+    const [gasto, ventana, mcps, hallazgos, equipo, logs, aprob, skillsPend, skillsUso, cronDatos, metricasRes, metricasAct, agentesSalud, repartoDatos] = await Promise.all([
       fetch('/api/gasto').then((r) => r.json()),
       fetch('/api/ventana').then((r) => r.json()),
-      fetch('/api/laya').then((r) => r.json()),
-      fetch('/api/decisiones').then((r) => r.json()),
       fetch('/api/mcps').then((r) => r.json()),
       fetch('/api/hallazgos').then((r) => r.json()),
       fetch('/api/gasto/equipo').then((r) => r.json()).catch(() => null),
@@ -1782,7 +1750,6 @@ async function refrescarPesado() {
     ])
     pintarGasto(gasto)
     pintarVentana(ventana)
-    pintarTriaje(laya, dec)
     pintarSaludAgentes(estado.demo ? { agentes: [{ agente: 'local-codigo', muestras: 6, tasaFallo: 0.33, fallosSeguidos: 0, degradado: false, proximaPrueba: null }] } : agentesSalud)
     pintarMcps(mcps)
     pintarHallazgos(hallazgos)
@@ -1794,7 +1761,7 @@ async function refrescarPesado() {
     pintarSkills(estado.demo ? { pendientes: [] } : skillsPend, estado.demo ? { uso: {}, candidatos: [] } : skillsUso)
     pintarProgramadas(estado.demo ? { jobs: [], avisos: [] } : cronDatos)
     pintarMetricas(estado.demo ? { eventos: 0, bytes: 0, porTipo: {} } : (metricasRes || {}), estado.demo ? true : (metricasAct ? metricasAct.activas : true))
-    pintarRepartoCarga(estado.demo ? { agentes: [], capas: [], triaje: { conDecision: 0, total: 0, pct: 0 }, consultasA2A: { total: 0, coste: 0, mediaRespuestaChars: 0 } } : repartoDatos)
+    pintarRepartoCarga(estado.demo ? { agentes: [], capas: [], consultasA2A: { total: 0, coste: 0, mediaRespuestaChars: 0 } } : repartoDatos)
   } catch { /* nada */ }
 }
 

@@ -4,12 +4,11 @@
  *
  * Sin dependencias (solo `node:assert`) y SIN jobs ni servidores reales: el `lanzador` va
  * simulado y todos los datos viven en `os.tmpdir()`. Comprueba:
- *   · C1 · Agent Card ligera (frontmatter + reglas + salud).
+ *   · C1 · Agent Card ligera (frontmatter + salud).
  *   · C2 · consulta mediada: validaciones, profundidad 1, concurrencia, recorte a ≤1200,
  *          coste/ms, job en el ledger y evento `a2a` en métricas (sin texto), tope de coste.
  *   · C3 · buzón: TTL, límite de pendientes, respuestas que no generan preguntas, persistencia.
- *   · C4 · triaje en el camino (una decisión por encargo y ventana).
- *   · C5 · reparto medido (por agente, por capa, % con triaje previo y consultas A2A).
+ *   · C5 · reparto medido (por agente, por capa y consultas A2A).
  *
  * Uso: node scripts/test-a2a.mjs  (sale 0 si todo pasa)
  */
@@ -60,7 +59,6 @@ const baseDirs = () => {
 }
 const REGLAS = {
   presupuestos: { 'explorador-ds': 0.2, revisor: 0.5, testeador: 0.3, 'redactor-ds': 0.2 },
-  reglas: [{ agente: 'explorador-ds', esfuerzo: 'low', capa: 'opencode' }],
 }
 
 console.log('=== Pruebas del mediador A2A-lite ===')
@@ -282,27 +280,8 @@ await prueba('C3: el buzón persiste en a2a.json y se recupera en otra instancia
   assert.equal(a2.listarMensajes({ estado: 'respondido' }).body.mensajes.length, 0)
 })
 
-// 11 · C4 · triaje en el camino (una decisión por encargo y ventana).
-await prueba('C4: la consulta registra el triaje una sola vez por encargo/ventana', async () => {
-  const { oc, cl } = baseDirs()
-  let T = Date.parse('2026-10-14T12:00:00.000Z')
-  const decisiones = []
-  const triaje = {
-    llamadas: 0,
-    async decidir({ tarea }) { this.llamadas++; decisiones.push({ tarea, agente: 'explorador-ds', fecha: new Date(T).toISOString() }); return { agente: 'explorador-ds', capa: 'opencode', esfuerzo: 'low', fuente: 'reglas', motivo: 'test' } },
-  }
-  const a2a = crearA2A({ dirDatos: path.join(raiz, 't11'), agentesDir: oc, claudeAgentesDir: cl, reglas: REGLAS, lanzador: lanzadorSim(), triaje, leerDecisiones: () => decisiones, ahora: () => T })
-  await a2a.consultar({ de: 'cerebro', para: 'explorador-ds', pregunta: 'misma pregunta', directory: DIR })
-  assert.equal(triaje.llamadas, 1)
-  await a2a.consultar({ de: 'cerebro', para: 'explorador-ds', pregunta: 'misma pregunta', directory: DIR })
-  assert.equal(triaje.llamadas, 1, 'no debía repetir la decisión dentro de la ventana')
-  T += 20 * 60 * 1000 // fuera de la ventana de 10 min
-  await a2a.consultar({ de: 'cerebro', para: 'explorador-ds', pregunta: 'misma pregunta', directory: DIR })
-  assert.equal(triaje.llamadas, 2)
-})
-
-// 12 · C5 · reparto medido.
-await prueba('C5: reparto() agrega por agente, por capa, % con triaje y consultas A2A', () => {
+// 11 · C5 · reparto medido.
+await prueba('C5: reparto() agrega por agente, por capa y consultas A2A', () => {
   const { oc, cl } = baseDirs()
   fs.writeFileSync(path.join(oc, 'explorador-ds.md'), '---\ndescription: E\nmodel: m\nvariant: low\n---\n')
   fs.writeFileSync(path.join(oc, 'implementador.md'), '---\ndescription: I\nmodel: m\nvariant: high\n---\n')
@@ -322,8 +301,7 @@ await prueba('C5: reparto() agrega por agente, por capa, % con triaje y consulta
   metricas.registrar({ tipo: 'a2a', subtipo: 'consulta', de: 'cerebro', para: 'explorador-ds', estado: 'completado', chars: 100, coste: 0.03, ms: 500 })
   metricas.registrar({ tipo: 'a2a', subtipo: 'consulta', de: 'cerebro', para: 'revisor', estado: 'completado', chars: 300, coste: 0.05, ms: 700 })
   metricas.registrar({ tipo: 'a2a', subtipo: 'mensaje', de: 'a', para: 'b', estado: 'pendiente', chars: 10 })
-  const decisiones = [{ tarea: 'algo', agente: 'explorador-ds', fecha: new Date(T - 60 * 1000).toISOString() }]
-  const a2a = crearA2A({ dirDatos: dir, agentesDir: oc, claudeAgentesDir: cl, reglas: REGLAS, ledger, metricas, leerDecisiones: () => decisiones, ahora: () => T })
+  const a2a = crearA2A({ dirDatos: dir, agentesDir: oc, claudeAgentesDir: cl, reglas: REGLAS, ledger, metricas, ahora: () => T })
   const { status, body } = a2a.reparto({ dias: 7 })
   assert.equal(status, 200)
   const exp = body.agentes.find((a) => a.agente === 'explorador-ds')
@@ -336,10 +314,6 @@ await prueba('C5: reparto() agrega por agente, por capa, % con triaje y consulta
   assert.equal(imp.cancelados, 1)
   // Por capa: explorador-ds e implementador son opencode.
   assert.ok(body.capas.some((c) => c.capa === 'opencode' && c.trabajos === 3))
-  // % con triaje previo: j1 y j2 (explorador-ds, decisión dentro de 30 min) cuentan; j3 no.
-  assert.equal(body.triaje.total, 3)
-  assert.equal(body.triaje.conDecision, 2)
-  assert.equal(body.triaje.pct, 67)
   assert.deepEqual(body.consultasA2A, { total: 2, coste: 0.08, mediaRespuestaChars: 200 })
 })
 

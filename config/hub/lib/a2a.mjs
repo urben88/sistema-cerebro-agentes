@@ -14,9 +14,7 @@
  *                            y evento `a2a` en métricas (sin texto).
  *   · C3 · buzón asíncrono por tarea en `hub-data/a2a.json` (read-merge-write): estados
  *          `pendiente|respondido|expirado`, TTL 30 min y máx. 20 pendientes por destinatario.
- *   · C4 · registra la decisión de triaje (`decisiones.jsonl`) cuando no hay una reciente
- *          para el mismo encargo.
- *   · C5 · `reparto()` agrega ledger + métricas (spec 11) + decisiones.
+ *   · C5 · `reparto()` agrega ledger + métricas (spec 11).
  *
  * Sin dependencias (Node >= 22). El lanzador, el ledger, las métricas y la salud se
  * inyectan para poder probar sin servidores ni jobs reales.
@@ -38,10 +36,6 @@ export const TIMEOUT_DEFECTO = 120 * 1000
 export const TTL_MENSAJE = 30 * 60 * 1000
 /** Máximo de mensajes pendientes por destinatario (429 al superarlo). */
 export const MAX_PENDIENTES = 20
-/** Ventana de frescura de la decisión de triaje (no se repite antes de 10 min). */
-export const VENTANA_TRIAJE = 10 * 60 * 1000
-/** Ventana para considerar que un job tuvo una decisión de triaje previa (C5). */
-const VENTANA_TRIAJE_PREVIO = 30 * 60 * 1000
 
 /** Agentes a los que SÍ se puede consultar (solo lectura; imposible que escriban código). */
 export const SOLO_LECTURA = new Set(['explorador-ds', 'revisor', 'testeador', 'redactor-ds'])
@@ -99,13 +93,11 @@ function listarMd(dir) {
  *   claudeAgentesDir  · carpeta de agentes de Claude (`config/claude/agents`).
  *   skillsDir         · carpeta de skills de Claude (para la descripción; opcional).
  *   version           · versión del sistema para la Agent Card.
- *   reglas            · reglas de reparto (`presupuestos`, `reglas`, `respaldo`).
+ *   reglas            · configuración del hub (`presupuestos`, `respaldo`).
  *   lanzador          · `config/hub/lib/lanzador.mjs` (lanzarJob/esperarJob/costeSesion/abortarSesion).
  *   ledger            · `config/hub/lib/ledger.mjs` (opcional).
  *   metricas          · `config/hub/lib/metricas.mjs` (opcional).
  *   salud             · `config/hub/lib/salud-agentes.mjs` (opcional).
- *   triaje            · `config/hub/lib/triaje.mjs` (opcional; C4).
- *   leerDecisiones    · `() => []` con las decisiones de `decisiones.jsonl` (C5).
  *   ahora             · reloj inyectable (ms).
  *   intervaloVigilanciaMs · cada cuánto se revisa el coste de una consulta en curso.
  */
@@ -120,8 +112,6 @@ export function crearA2A({
   ledger = null,
   metricas = null,
   salud = null,
-  triaje = null,
-  leerDecisiones = () => [],
   ahora = () => Date.now(),
   intervaloVigilanciaMs = 3000,
 } = {}) {
@@ -173,7 +163,6 @@ export function crearA2A({
         const name = archivo.replace(/\.md$/i, '')
         let fm = {}
         try { fm = leerFrontmatter(fs.readFileSync(path.join(dir, archivo), 'utf8')) } catch { /* ilegible */ }
-        const regla = (reglas?.reglas || []).find((r) => r && r.agente === name) || null
         const skills = (Array.isArray(fm.skills) ? fm.skills : []).map((s) => ({
           id: String(s), name: String(s), description: descripcionSkill(String(s)),
         }))
@@ -185,7 +174,7 @@ export function crearA2A({
           version,
           skills,
           modelo: fm.model || null,
-          esfuerzo: fm.variant || fm.effort || regla?.esfuerzo || null,
+          esfuerzo: fm.variant || fm.effort || null,
           capa,
           solo_lectura: SOLO_LECTURA.has(name),
           coste_estimado: presupuestoDe(name),
@@ -195,33 +184,6 @@ export function crearA2A({
     }
     agentes.sort((a, b) => (a.capa === b.capa ? a.name.localeCompare(b.name) : (a.capa === 'claude' ? -1 : 1)))
     return ok({ ok: true, agentes, solo_lectura: [...SOLO_LECTURA] })
-  }
-
-  // ----- C4 · decisión de triaje en el camino.
-
-  /**
-   * Registra la decisión de triaje para `encargo` en `decisiones.jsonl` si no hay ya una
-   * reciente (misma tarea, dentro de `VENTANA_TRIAJE`). Lo usa la consulta mediada y el
-   * lanzamiento de trabajos del hub. No bloquea: un fallo del triaje no impide seguir.
-   */
-  async function registrarTriajeSiHaceFalta(encargo, { ref = null } = {}) {
-    try {
-      const tarea = textoCorto(encargo, PREGUNTA_MAX)
-      if (!tarea.trim() || !triaje?.decidir) return { registrada: false }
-      let decisiones = []
-      try { decisiones = leerDecisiones() || [] } catch { decisiones = [] }
-      const ahoraMs = ahora()
-      const reciente = decisiones.some((d) => {
-        if (!d || typeof d.tarea !== 'string' || d.tarea !== tarea) return false
-        const t = Date.parse(d.fecha)
-        return Number.isFinite(t) ? ahoraMs - t <= VENTANA_TRIAJE : false
-      })
-      if (reciente) return { registrada: false, motivo: 'decisión reciente para el mismo encargo' }
-      const d = await triaje.decidir({ tarea, contexto: ref ? `origen: ${ref}` : '' })
-      return { registrada: true, decision: d }
-    } catch {
-      return { registrada: false, motivo: 'el triaje falló' }
-    }
   }
 
   // ----- C2 · consulta síncrona mediada.
@@ -324,9 +286,6 @@ export function crearA2A({
     enCurso++
     const t0 = ahora()
     try {
-      // C4 · triaje del encargo (sin duplicar si ya hay decisión reciente).
-      await registrarTriajeSiHaceFalta(pregunta, { ref: `a2a:${de}->${para}` })
-
       const l = await lanzador.lanzarJob({
         agente: para,
         directory,
@@ -465,7 +424,7 @@ export function crearA2A({
     return ok({ ok: true, mensaje: m })
   }
 
-  // ----- C5 · reparto medido (ledger + métricas + decisiones).
+  // ----- C5 · reparto medido (ledger + métricas).
 
   function reparto({ dias = 7 } = {}) {
     const d = Number.isFinite(Number(dias)) && Number(dias) > 0 ? Math.floor(Number(dias)) : 7
@@ -513,22 +472,6 @@ export function crearA2A({
       delete a._sumMs; delete a._nMs
     }
 
-    // % de trabajos con decisión de triaje previa (decisión ≤ creado y ≤ 30 min antes,
-    // con el mismo agente o su original). Heurística documentada en `docs/pruebas.md`.
-    let decisiones = []
-    try { decisiones = leerDecisiones() || [] } catch { decisiones = [] }
-    let conTriaje = 0
-    for (const e of entradas) {
-      const c = num(e.creado)
-      const hay = decisiones.some((dc) => {
-        if (!dc) return false
-        const t = Date.parse(dc.fecha)
-        if (!Number.isFinite(t) || t > c || c - t > VENTANA_TRIAJE_PREVIO) return false
-        return dc.agente === e.agente || dc.agenteOriginal === e.agente
-      })
-      if (hay) conTriaje++
-    }
-
     const porCapa = new Map()
     for (const a of porAgente.values()) {
       const capa = capas.get(a.agente) || 'desconocido'
@@ -553,7 +496,6 @@ export function crearA2A({
       generado: ahora(),
       agentes: [...porAgente.values()].sort((a, b) => b.trabajos - a.trabajos),
       capas: [...porCapa.values()].sort((a, b) => b.trabajos - a.trabajos),
-      triaje: { conDecision: conTriaje, total: entradas.length, pct: entradas.length ? Math.round((conTriaje / entradas.length) * 100) : 0 },
       consultasA2A,
     })
   }
@@ -565,7 +507,6 @@ export function crearA2A({
     listarMensajes,
     responder,
     reparto,
-    registrarTriajeSiHaceFalta,
     // Utilidad para que el hub pueda revisar el buzón persistido de una vez.
     mensajes: () => listarMensajes(),
   }

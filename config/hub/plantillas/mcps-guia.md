@@ -13,7 +13,7 @@ Inventario: `memoria/global/MCPS.md`.
 | Un servidor remoto (comandos, ficheros) | `ssh` |
 | Notas/memoria propia de Pieces | `pieces` |
 | Anotaciones de UI pendientes | `agentation` |
-| Delegar código en OpenCode | `opencode` (reparto: `triaje`) |
+| Delegar código en OpenCode | `opencode` (estado: `triaje`) |
 | Crear/editar un doc (claude.ai) | *Claude Docs* |
 
 ### `context7` — docs de librerías
@@ -70,11 +70,11 @@ Inventario: `memoria/global/MCPS.md`.
 - **Ejemplo**: «Lanza `implementador` aquí con esta spec».
 - **Herramientas**: `opencode_fire`, `opencode_wait`, `opencode_job_input`, `opencode_review_changes`.
 
-### `triaje` — reparto y estado
-- **Úsalo cuando** dudes a qué agente mandar algo o quieras ver/parar trabajos.
-- **No lo uses para** ejecutar el trabajo (solo decide, informa o para).
-- **Ejemplo**: «¿A qué agente mando esto?».
-- **Herramientas**: `triaje_decidir`, `trabajo_estado`, `parar_trabajos`.
+### `triaje` — estado de trabajos
+- **Úsalo cuando** quieras ver el progreso de los trabajos de OpenCode o pararlos.
+- **No lo uses para** ejecutar el trabajo (solo informa o para).
+- **Ejemplo**: «¿Cómo van los trabajos?».
+- **Herramientas**: `trabajo_estado`, `parar_trabajos`.
 
 ### Claude Docs — docs en claude.ai
 - **Úsalo cuando** el usuario pida crear o editar un doc en claude.ai.
