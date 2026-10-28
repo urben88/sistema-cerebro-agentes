@@ -53,9 +53,17 @@ for (const evento of Object.keys(s.hooks)) {
   else delete s.hooks[evento]
 }
 
+// Sustituye solo nuestros grupos (los que llaman a un hook GESTIONADO) y conserva los
+// ajenos (p. ej. `gentle-ai review stop-hook`), que antes se perdían en cada install.
+const esPropio = (g) => Array.isArray(g?.hooks) && g.hooks.some((h) => typeof h?.command === 'string' && GESTIONADOS.some((f) => h.command.includes(f)))
+function reemplazarPropios(evento, nuevos) {
+  const ajenos = (Array.isArray(s.hooks[evento]) ? s.hooks[evento] : []).filter((g) => !esPropio(g))
+  s.hooks[evento] = [...nuevos, ...ajenos]
+}
+
 function registrarContexto(evento, matcher, archivo) {
   if (!existe(archivo)) { faltan.push(archivo); return }
-  s.hooks[evento] = [{ matcher, hooks: [{ type: 'command', command: comando(archivo) }] }]
+  reemplazarPropios(evento, [{ matcher, hooks: [{ type: 'command', command: comando(archivo) }] }])
 }
 registrarContexto('SessionStart', 'startup|resume|clear|compact', 'session-start.mjs')
 registrarContexto('PreCompact', 'manual|auto', 'pre-compact.mjs')
@@ -69,7 +77,7 @@ registrarContexto('PreCompact', 'manual|auto', 'pre-compact.mjs')
   else faltan.push('session-end.mjs')
   if (existe('cerrar-trabajos.mjs')) grupos.push({ hooks: [{ type: 'command', command: comando('cerrar-trabajos.mjs'), timeout: 8 }] })
   else faltan.push('cerrar-trabajos.mjs')
-  if (grupos.length) s.hooks.SessionEnd = grupos
+  if (grupos.length) reemplazarPropios('SessionEnd', grupos)
 }
 
 // Latidos de actividad (panel «La oficina»): se añaden sin pisar los hooks del usuario
