@@ -93,12 +93,12 @@ await prueba('S4 · buscar con hub apagado y Engram: muestra Engram y sale 0', a
   assert.match(r.out, /Quitar Laya/)
 })
 
-await prueba('S4 · hub apagado y Engram sin coincidencias: sale 0', async () => {
+await prueba('S4 · hub apagado y Engram sin coincidencias: error del hub y sale 1 (como antes)', async () => {
   const vacio = path.join(raiz, 'engram-vacio.mjs')
   fs.writeFileSync(vacio, "const a = process.argv.slice(2)\nconsole.log(a[0] === 'version' ? 'engram 3.6.0' : 'No memories found')\n")
   const r = await correr('buscar.mjs', ['nada'], { ENGRAM_BIN: vacio, ENGRAM_SETTINGS: PLUGIN_ON, HUB_URL: HUB_APAGADO })
-  assert.equal(r.code, 0, r.err)
-  assert.match(r.out, /Sin resultados/)
+  assert.equal(r.code, 1)
+  assert.match(r.err, /No se pudo hablar con el hub/)
 })
 
 await prueba('S4 · buscar sin Engram y hub apagado: igual que antes (sale 1)', async () => {

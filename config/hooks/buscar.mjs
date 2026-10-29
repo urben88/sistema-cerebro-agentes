@@ -66,7 +66,7 @@ const engramRes = await pEngram
 const deEngram = engramRes || []
 if (soloEngram && engramRes === null) { console.error('Engram no responde o su plugin no está activo (revisa: node doctor.mjs).'); process.exit(1) }
 if (!soloEngram && engramRes === null && engramDisponible()) console.error('Aviso: la búsqueda en Engram falló; se muestran solo los resultados del hub.')
-if (fallo && !(conEngram && engramRes !== null)) { console.error(fallo); process.exit(1) }
+if (fallo && !deEngram.length) { console.error(fallo); process.exit(1) }
 if (fallo) console.error(`${fallo.split('\n')[0]} · se muestran solo los resultados de Engram.`)
 resultados = [...resultados, ...deEngram]
 // --limite sigue siendo el tope de lo que se muestra, también al unir las dos memorias.
