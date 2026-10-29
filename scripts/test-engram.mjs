@@ -93,6 +93,14 @@ await prueba('S4 · buscar con hub apagado y Engram: muestra Engram y sale 0', a
   assert.match(r.out, /Quitar Laya/)
 })
 
+await prueba('S4 · hub apagado y Engram sin coincidencias: sale 0', async () => {
+  const vacio = path.join(raiz, 'engram-vacio.mjs')
+  fs.writeFileSync(vacio, "const a = process.argv.slice(2)\nconsole.log(a[0] === 'version' ? 'engram 3.6.0' : 'No memories found')\n")
+  const r = await correr('buscar.mjs', ['nada'], { ENGRAM_BIN: vacio, ENGRAM_SETTINGS: PLUGIN_ON, HUB_URL: HUB_APAGADO })
+  assert.equal(r.code, 0, r.err)
+  assert.match(r.out, /Sin resultados/)
+})
+
 await prueba('S4 · buscar sin Engram y hub apagado: igual que antes (sale 1)', async () => {
   const r = await correr('buscar.mjs', ['Laya'], { ...sinEngram, HUB_URL: HUB_APAGADO })
   assert.equal(r.code, 1)
@@ -125,6 +133,13 @@ await prueba('S4 · buscar une hub y Engram; --tipo engram solo Engram', async (
     assert.doesNotMatch(solo.out, /Del hub/)
     assert.match(solo.out, /\[engram:decision\]/)
     assert.equal(pedidas.length, 1, 'con --tipo engram no se consulta el hub')
+    const tope = await correr('buscar.mjs', ['Laya', '--limite', '1'], { ...conEngram, HUB_URL: url })
+    assert.match(tope.out, /^1 resultado\(s\)/m, '--limite es el tope de lo que se muestra')
+    const proyecto = await correr('buscar.mjs', ['Laya', '--proyecto', 'p'], { ...conEngram, HUB_URL: url })
+    assert.doesNotMatch(proyecto.out, /engram:/, 'con --proyecto Engram no entra')
+    assert.match(proyecto.out, /Del hub/)
+    const filtro = await correr('buscar.mjs', ['Laya', '--tipo', 'bitacora'], { ...conEngram, HUB_URL: HUB_APAGADO })
+    assert.equal(filtro.code, 1, 'hub apagado con --tipo del hub sigue saliendo 1')
   } finally { srv.close() }
 })
 

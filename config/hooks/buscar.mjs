@@ -42,9 +42,11 @@ if (valorDe('--tipo')) params.set('tipo', valorDe('--tipo'))
 // Spec 23 · S4 · también busca en Engram (si responde) y une los resultados.
 const soloEngram = valorDe('--tipo') === 'engram'
 const limite = Number(valorDe('--limite')) || 10
-// Con otro --tipo, el filtro es del hub y Engram no entra.
+// Con otro --tipo o con --proyecto (slug del hub), el filtro es del hub y Engram no entra.
+if (soloEngram && valorDe('--proyecto')) { console.error('--proyecto no se aplica a Engram: quítalo o usa otro --tipo.'); process.exit(1) }
+const conEngram = soloEngram || (!valorDe('--tipo') && !valorDe('--proyecto'))
 // Arranca ya: va en paralelo con la consulta al hub (null = Engram ausente o fallido).
-const pEngram = !valorDe('--tipo') || soloEngram ? buscarEngram(consulta, { limite }) : Promise.resolve([])
+const pEngram = conEngram ? buscarEngram(consulta, { limite }) : Promise.resolve([])
 
 let resultados = []
 let modo = null
@@ -64,9 +66,11 @@ const engramRes = await pEngram
 const deEngram = engramRes || []
 if (soloEngram && engramRes === null) { console.error('Engram no responde o su plugin no está activo (revisa: node doctor.mjs).'); process.exit(1) }
 if (!soloEngram && engramRes === null && engramDisponible()) console.error('Aviso: la búsqueda en Engram falló; se muestran solo los resultados del hub.')
-if (fallo && !deEngram.length) { console.error(fallo); process.exit(1) }
+if (fallo && !(conEngram && engramRes !== null)) { console.error(fallo); process.exit(1) }
 if (fallo) console.error(`${fallo.split('\n')[0]} · se muestran solo los resultados de Engram.`)
 resultados = [...resultados, ...deEngram]
+// --limite sigue siendo el tope de lo que se muestra, también al unir las dos memorias.
+if (valorDe('--limite')) resultados = resultados.slice(0, limite)
 
 if (!resultados.length) {
   console.log(`Sin resultados para «${consulta}».`)
