@@ -8,8 +8,12 @@
  *   node buscar.mjs "consulta" [--proyecto x] [--limite n] [--tipo tipo]
  *
  * El hub escucha por defecto en 127.0.0.1:4597 (como el resto de hooks; se puede
- * cambiar con HUB_URL). Si el hub no responde, avisa y sale con código 1.
+ * cambiar con HUB_URL). Si Engram responde, añade sus resultados (tipo `engram:<tipo>`;
+ * `--tipo engram` busca solo ahí; spec 23 · S4). Si no responde ni el hub ni Engram,
+ * avisa y sale con código 1.
  */
+import { buscarEngram } from './engram.mjs'
+
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
 const args = process.argv.slice(2)
 
@@ -22,7 +26,7 @@ const consulta = args[0] && !args[0].startsWith('--') ? args[0] : null
 
 function uso() {
   console.log('Uso: node buscar.mjs "consulta" [--proyecto x] [--limite n] [--tipo tipo]')
-  console.log('  tipos: bitacora | estado | contexto | checkpoint | decision | hallazgo | skill')
+  console.log('  tipos: bitacora | estado | contexto | checkpoint | decision | hallazgo | skill | engram')
 }
 
 if (!consulta || args.includes('--help') || args.includes('-h')) {
@@ -35,26 +39,40 @@ if (valorDe('--proyecto')) params.set('proyecto', valorDe('--proyecto'))
 if (valorDe('--limite')) params.set('limite', valorDe('--limite'))
 if (valorDe('--tipo')) params.set('tipo', valorDe('--tipo'))
 
-try {
-  const r = await fetch(`${HUB}/api/buscar?${params}`, { signal: AbortSignal.timeout(8000) })
-  const j = await r.json()
-  if (!j.ok) { console.error(`Error: ${j.error || `HTTP ${r.status}`}`); process.exit(1) }
-  const resultados = Array.isArray(j.resultados) ? j.resultados : []
-  if (!resultados.length) {
-    console.log(`Sin resultados para «${consulta}».`)
-    if (j.modo === 'fallback') console.log('(búsqueda en modo fallback: sin FTS5)')
-    process.exit(0)
+// Spec 23 · S4 · también busca en Engram (si responde) y une los resultados.
+const soloEngram = valorDe('--tipo') === 'engram'
+const limite = Number(valorDe('--limite')) || 10
+// Con otro --tipo, el filtro es del hub y Engram no entra.
+const deEngram = !valorDe('--tipo') || soloEngram ? buscarEngram(consulta, { limite }) : []
+
+let resultados = []
+let modo = null
+let fallo = null
+if (!soloEngram) {
+  try {
+    const r = await fetch(`${HUB}/api/buscar?${params}`, { signal: AbortSignal.timeout(8000) })
+    const j = await r.json()
+    if (!j.ok) fallo = `Error: ${j.error || `HTTP ${r.status}`}`
+    else { resultados = Array.isArray(j.resultados) ? j.resultados : []; modo = j.modo }
+  } catch (e) {
+    fallo = `No se pudo hablar con el hub (${HUB}): ${e?.message || e}\nArranca el hub: bash ~/.sistema-cerebro-agentes/hub.sh (o hub.ps1 en Windows).`
   }
-  console.log(`${resultados.length} resultado(s) para «${consulta}»${j.modo === 'fallback' ? ' (modo fallback)' : ''}:\n`)
-  for (const x of resultados) {
-    const proyecto = x.proyecto ? ` · ${x.proyecto}` : ''
-    console.log(`[${x.tipo}]${proyecto}${x.fecha ? ` · ${x.fecha}` : ''}`)
-    console.log(`  ${x.titulo}`)
-    if (x.snippet) console.log(`  ${x.snippet.replace(/\s+/g, ' ').trim()}`)
-    console.log('')
-  }
-} catch (e) {
-  console.error(`No se pudo hablar con el hub (${HUB}): ${e?.message || e}`)
-  console.error('Arranca el hub: bash ~/.sistema-cerebro-agentes/hub.sh (o hub.ps1 en Windows).')
-  process.exit(1)
+}
+// Sin hub y sin nada de Engram, se avisa y se sale con 1, como siempre.
+if (fallo && !deEngram.length) { console.error(fallo); process.exit(1) }
+if (fallo) console.error(`${fallo.split('\n')[0]} · se muestran solo los resultados de Engram.`)
+resultados = [...resultados, ...deEngram]
+
+if (!resultados.length) {
+  console.log(`Sin resultados para «${consulta}».`)
+  if (modo === 'fallback') console.log('(búsqueda en modo fallback: sin FTS5)')
+  process.exit(0)
+}
+console.log(`${resultados.length} resultado(s) para «${consulta}»${modo === 'fallback' ? ' (modo fallback)' : ''}:\n`)
+for (const x of resultados) {
+  const proyecto = x.proyecto ? ` · ${x.proyecto}` : ''
+  console.log(`[${x.tipo}]${proyecto}${x.fecha ? ` · ${x.fecha}` : ''}`)
+  console.log(`  ${x.titulo}`)
+  if (x.snippet) console.log(`  ${x.snippet.replace(/\s+/g, ' ').trim()}`)
+  console.log('')
 }

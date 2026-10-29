@@ -8,16 +8,18 @@
  *   · `opencode mcp list`
  *   · `defaultMode` de ~/.claude/settings.json distinto de bypassPermissions
  *   · hook `gentle-ai review stop-hook` presente
+ *   · Engram responde y su plugin está activo (spec 23)
  *
  * Uso: node doctor.mjs [--json]
  * Pruebas: DOCTOR_SETTINGS (ruta de settings.json), DOCTOR_OMITIR (ids separados por coma),
- * DOCTOR_REPO (raíz del repo donde buscar scripts/verificar.*).
+ * DOCTOR_REPO (raíz del repo donde buscar scripts/verificar.*); ENGRAM_BIN (binario de Engram).
  * Sale siempre con 0: es un informe, no una puerta.
  */
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { engramDisponible } from './engram.mjs'
 
 const SETTINGS = process.env.DOCTOR_SETTINGS || path.join(os.homedir(), '.claude', 'settings.json')
 const OMITIR = new Set((process.env.DOCTOR_OMITIR || '').split(',').map((s) => s.trim()).filter(Boolean))
@@ -79,6 +81,14 @@ else {
 {
   const hay = Object.values(settings?.hooks || {}).some((grupos) => Array.isArray(grupos) && grupos.some((g) => Array.isArray(g?.hooks) && g.hooks.some((h) => typeof h?.command === 'string' && h.command.includes('gentle-ai review stop-hook'))))
   punto('stop-hook', hay ? 'verde' : 'rojo', hay ? 'gentle-ai review stop-hook registrado' : 'falta `gentle-ai review stop-hook` (ejecuta install o gentle-ai sync)')
+}
+
+// 6 · Engram (spec 23 · S5): binario que responde y plugin activo en Claude Code
+if (OMITIR.has('engram')) punto('engram', 'amarillo', 'omitido')
+else {
+  const plugin = settings?.enabledPlugins?.['engram@engram'] === true
+  if (!engramDisponible()) punto('engram', 'rojo', 'engram no responde (ejecuta install o gentle-ai install)')
+  else punto('engram', plugin ? 'verde' : 'amarillo', plugin ? 'engram responde y su plugin está activo' : 'engram responde, pero el plugin engram@engram no está activo en settings.json')
 }
 
 if (process.argv.includes('--json')) console.log(JSON.stringify(puntos))

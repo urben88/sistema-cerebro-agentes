@@ -742,7 +742,8 @@ const servidor = http.createServer(async (req, res) => {
     if (ruta === '/api/briefing') {
       const cwd = u.searchParams.get('cwd') || '.'
       const proyecto = memoria.buscarProyecto(cwd)
-      const texto = memoria.briefing(cwd, { alertas: vigilante.alertas(), jobs: oc.leerJobs(80), hallazgos: leerHallazgos('propuesto') })
+      const sinBitacora = u.searchParams.get('engram') === '1' // spec 23 · S2
+      const texto = memoria.briefing(cwd, { alertas: vigilante.alertas(), jobs: oc.leerJobs(80), hallazgos: leerHallazgos('propuesto'), sinBitacora })
       // Spec 11 · M3 · chars inyectados por sesión y proyecto (sin volcar el texto).
       try {
         metricas.registrar(limpiarNulos({

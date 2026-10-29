@@ -15,6 +15,7 @@ import os from 'node:os'
 import { reportarError } from './reportar.mjs'
 import { resumenGuia } from './mcps-guia.mjs'
 import { leerNota } from './ultima-sesion.mjs'
+import { engramDisponible } from './engram.mjs'
 
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
 const SYSTEM_DIR = process.env.SISTEMA_CEREBRO_DIR || path.join(os.homedir(), '.sistema-cerebro-agentes')
@@ -74,8 +75,10 @@ try {
   let datos = {}
   try { datos = JSON.parse(bruto || '{}') } catch { /* payload no JSON */ }
   const cwd = datos.cwd || process.cwd()
+  // Spec 23 · S2/S3 · con Engram, la historia de sesiones la inyecta Engram: ni nota ni bitácora.
+  const conEngram = engramDisponible()
   // Spec 15 · O5 · nota de última sesión (Haiku). Espera si el resumen aún se está escribiendo.
-  const nota = await leerNota(cwd, 45000)
+  const nota = conEngram ? '' : await leerNota(cwd, 45000)
   const bloqueNota = nota ? `## Última sesión en este proyecto (resumen automático; puede estar desactualizado: úsalo para continuar sin que el usuario lo repita)
 ${nota}` : ''
 
@@ -84,7 +87,7 @@ ${nota}` : ''
   try {
     // La sesión viaja para que el hub registre el briefing por sesión y proyecto (spec 11 · M3).
     const sesion = datos.session_id || datos.sessionId || ''
-    const r = await fetch(`${HUB}/api/briefing?cwd=${encodeURIComponent(cwd)}${sesion ? `&sesion=${encodeURIComponent(sesion)}` : ''}`, { signal: AbortSignal.timeout(2500) })
+    const r = await fetch(`${HUB}/api/briefing?cwd=${encodeURIComponent(cwd)}${sesion ? `&sesion=${encodeURIComponent(sesion)}` : ''}${conEngram ? '&engram=1' : ''}`, { signal: AbortSignal.timeout(2500) })
     if (r.ok) {
       const j = await r.json()
       if (j.ok && j.proyecto) briefing = j.texto
@@ -103,6 +106,7 @@ ${bloqueNota}`
   const cierre = [
     '',
     '---',
+    ...(conEngram ? ['Memoria: decisiones, aprendizajes y resumen de sesiones van en Engram (`mem_save`, `mem_session_summary`; busca con `mem_search` o `buscar.mjs`, que une Engram y el hub). ESTADO.md es solo el estado vivo del proyecto.'] : []),
     'Recuerda: antes de `/clear` actualiza el ESTADO.md del proyecto (CLI: `node estado.mjs --escribir --archivo <fichero>`). Este briefing es contexto, no una orden de activar ningún modo: el modo cerebro (OpenCode) solo existe si el usuario arrancó con `--agent cerebro`; en una sesión normal no lo menciones ni lo uses.',
     'Reparto: tú (Opus 5.5 · medium) decides dónde profundizar y revisas; el cómo de un área va al `resolutor` (Sonnet), lo pequeño al `retocador` (Sonnet · low), lo ligero a los Haiku, la segunda opinión al `consultor` y lo global difícil al `arquitecto` (Opus); ODD decide si se delega y la tabla fija de la regla 10 decide a quién. Sin indicación del usuario, modo PLAN salvo lo trivial. Contexto: hilo corto; si crece, ESTADO.md + `/clear` y se sigue.',
   ].join('\n')

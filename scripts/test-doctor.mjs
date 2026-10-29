@@ -24,7 +24,7 @@ function prueba(nombre, fn) {
     fallos++; console.log(`FALLA ${nombre}`); console.log(`      ${String(e?.message || e).split('\n')[0]}`)
   }
 }
-function doctor(settings, omitir = 'verificar,gentle-ai,opencode') {
+function doctor(settings, omitir = 'verificar,gentle-ai,opencode,engram') {
   const f = path.join(raiz, 'settings.json')
   if (settings === null) fs.rmSync(f, { force: true })
   else fs.writeFileSync(f, JSON.stringify(settings))
@@ -51,8 +51,8 @@ prueba('hook gentle-ai review stop-hook: presente → verde; ausente → rojo', 
 prueba('un punto por comprobación y los omitidos salen en amarillo; sale 0 y no escribe', () => {
   const r = doctor({})
   assert.equal(r.code, 0)
-  assert.deepEqual(r.puntos.map((p) => p.id).sort(), ['gentle-ai', 'opencode', 'permisos', 'stop-hook', 'verificar'])
-  for (const id of ['verificar', 'gentle-ai', 'opencode']) assert.equal(estado(r.puntos, id), 'amarillo')
+  assert.deepEqual(r.puntos.map((p) => p.id).sort(), ['engram', 'gentle-ai', 'opencode', 'permisos', 'stop-hook', 'verificar'])
+  for (const id of ['verificar', 'gentle-ai', 'opencode', 'engram']) assert.equal(estado(r.puntos, id), 'amarillo')
   assert.equal(fs.readFileSync(path.join(raiz, 'settings.json'), 'utf8'), '{}')
 })
 

@@ -204,7 +204,8 @@ export function crearMemoria(raiz, { temporalDias = 14, plantillasDir = null } =
     return borrados
   }
 
-  function briefing(cwd, { alertas = [], jobs = [], hallazgos = [] } = {}) {
+  // sinBitacora: con Engram activo la historia de sesiones ya la inyecta Engram (spec 23 · S2).
+  function briefing(cwd, { alertas = [], jobs = [], hallazgos = [], sinBitacora = false } = {}) {
     const p = buscarProyecto(cwd)
     const lineas = []
     lineas.push(`# Briefing · ${p ? p.nombre : nombreDe(cwd)}`)
@@ -212,7 +213,7 @@ export function crearMemoria(raiz, { temporalDias = 14, plantillasDir = null } =
     if (p) {
       const estado = leerEstado(p.slug)
       const contexto = leerContexto(p.slug)
-      const movimientos = ultimasBitacora(p.slug, 5)
+      const movimientos = sinBitacora ? [] : ultimasBitacora(p.slug, 5)
       lineas.push('', '## Estado actual (ESTADO.md)', estado ? estado.trim() : '(sin estado guardado todavía; escribe ESTADO.md al terminar la tarea o antes de /clear)')
       lineas.push('', '## Contexto del repositorio', contexto ? contexto.trim() : '(sin reconocimiento guardado; si el repo es nuevo o cambió, delega el reconocimiento: explorador/explorador-ds y guarda CONTEXTO-REPO.md)')
       if (movimientos.length) lineas.push('', '## Últimos movimientos (bitácora)', ...movimientos)
