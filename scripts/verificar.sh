@@ -98,9 +98,12 @@ for c in start plan implement verify review status handoff; do [ -f "$HOME/.clau
 test_item "$ODD_OK" 'Comandos /odd:* instalados (~/.claude/commands/odd)' 'Ejecuta install.sh'
 if grep -q 'Read(~/.claude/.credentials.json)' "$HOME/.claude/settings.json" 2>/dev/null && grep -q 'Bash(git push:\*)' "$HOME/.claude/settings.json" 2>/dev/null; then test_item 0 'Permisos prudentes en settings.json (deny credenciales, ask git push)'; else test_item 1 'Faltan los permisos prudentes en settings.json' 'Ejecuta install.sh'; fi
 OC_CFG_TXT="$(cat "$HOME/.config/opencode/opencode.jsonc" "$HOME/.config/opencode/opencode.json" 2>/dev/null || true)"
-# Se mira donde lo lee OpenCode (opencode mcp list, solo lectura), no solo el texto del archivo.
-OC_MCP="$(opencode mcp list 2>&1 || true)"
-if printf '%s' "$OC_MCP" | grep -qE 'engram[[:space:]]+connected'; then test_item 0 'engram conectado en OpenCode (opencode mcp list)'; else test_item 1 'engram no conectado en OpenCode' 'Ejecuta install.sh (gentle-ai install --agents claude-code,opencode) y revisa: opencode mcp list'; fi
+# Se mira en el servidor V1 que usa el sistema (GET /mcp, solo lectura). OpenCode v2 ya no
+# lista los MCP con `opencode mcp list`; queda como respaldo si el servidor no responde.
+ENGRAM_OC=1
+if [ -n "${SRV_PORT:-}" ] && curl -fsS -m 20 "http://127.0.0.1:$SRV_PORT/mcp" 2>/dev/null | grep -qE '"engram":\{"status":"connected"'; then ENGRAM_OC=0
+elif opencode mcp list 2>&1 | grep -qE 'engram[[:space:]]+connected'; then ENGRAM_OC=0; fi
+if [ "$ENGRAM_OC" -eq 0 ]; then test_item 0 'engram conectado en OpenCode (servidor V1, GET /mcp)'; else test_item 1 'engram no conectado en OpenCode' 'Reinicia el servidor V1 (servidor.sh --stop y luego servidor.sh) o ejecuta install.sh --reinstalar'; fi
 DEF_AGENT="$(printf '%s' "$OC_CFG_TXT" | grep -oE '"default_agent"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed -E 's/.*"([^"]*)"$/\1/' || true)"
 if [ -n "$DEF_AGENT" ]; then
   if [ "$DEF_AGENT" = "cerebro-oc" ]; then test_item 0 'default_agent de OpenCode es cerebro-oc'; else test_item 1 "default_agent de OpenCode es cerebro-oc (ahora: $DEF_AGENT)" 'Ejecuta install.sh (o node config/claude/agente-defecto.mjs)'; fi

@@ -111,9 +111,14 @@ foreach ($n in @('opencode.jsonc', 'opencode.json')) {
   $pc = Join-Path $UserHome ".config\opencode\$n"
   if (Test-Path -LiteralPath $pc) { $ocCfgTxt += [System.IO.File]::ReadAllText($pc) }
 }
-# Se mira donde lo lee OpenCode (opencode mcp list, solo lectura), no solo el texto del archivo.
-$ocMcp = if (Get-Command opencode -ErrorAction SilentlyContinue) { (& opencode mcp list 2>&1 | Out-String) } else { '' }
-Test-Item ($ocMcp -match 'engram\s+connected') 'engram conectado en OpenCode (opencode mcp list)' 'Ejecuta install.ps1 (gentle-ai install --agents claude-code,opencode) y revisa: opencode mcp list'
+# Se mira en el servidor V1 que usa el sistema (GET /mcp, solo lectura). OpenCode v2 ya no
+# lista los MCP con `opencode mcp list`; queda como respaldo si el servidor no responde.
+$engramOc = $false
+if ($srvOk) {
+  try { $engramOc = ((Invoke-RestMethod -Uri "http://127.0.0.1:$srvPort/mcp" -TimeoutSec 20).engram.status -eq 'connected') } catch { }
+}
+if (-not $engramOc -and (Get-Command opencode -ErrorAction SilentlyContinue)) { $engramOc = ((& opencode mcp list 2>&1 | Out-String) -match 'engram\s+connected') }
+Test-Item $engramOc 'engram conectado en OpenCode (servidor V1, GET /mcp)' 'Reinicia el servidor V1 (servidor.ps1 -Stop y luego servidor.ps1) o ejecuta install.ps1 -Reinstalar'
 if ($ocCfgTxt -match '"default_agent"\s*:\s*"([^"]*)"') {
   Test-Item ($Matches[1] -eq 'cerebro-oc') "default_agent de OpenCode es cerebro-oc (ahora: $($Matches[1]))" 'Ejecuta install.ps1 (o node config/claude/agente-defecto.mjs)'
 }
