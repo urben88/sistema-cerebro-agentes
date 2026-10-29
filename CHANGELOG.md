@@ -5,6 +5,21 @@ Versionado semántico (MAJOR.MINOR.PATCH).
 
 ## [Sin publicar]
 
+### Añadido (spec 25 · instalador con control y flujo de errores)
+
+- **Registro de lo instalado** (`~/.sistema-cerebro-agentes/instalado.json`, `scripts/instalado.mjs`): huella sha256 por componente (hub, hooks, panel, mods, MCP, agentes de Claude y de OpenCode, comandos, skill, Docker) y la configuración de Gentle AI.
+- **Solo lo que cambió**: lo que está igual sale como `[=] sin cambios`; si cambió en el repo se actualiza con copia. La imagen Docker del hub solo se reconstruye si cambió el hub o el stack.
+- **Cambios a mano**: pregunta `[s] sobrescribir (con copia) / [n] conservar / [d] ver diferencias`. Con `-Force`/`--force` o sin consola interactiva conserva lo tuyo y lo avisa.
+- **Opciones nuevas**: `-Reinstalar`/`--reinstalar` (ignora el registro) y `-SinVerificar`/`--sin-verificar`. `-Check` dice qué haría con cada componente.
+- **Gentle AI** solo se ejecuta si falta o si cambian su versión o su configuración; después se reinicia el servidor OpenCode V1 para que reconecte Engram.
+- **Flujo de errores**: cada paso acaba en `OK`, `sin cambios`, `aviso` o `error`; un error no corta los demás y lo que falla a medias se restaura desde su copia. Log en `~/.sistema-cerebro-agentes/logs/install-<fecha>.log`, resumen con causa y arreglo, y código de salida 1 si hubo errores. Al final ejecuta `verificar -Smoke`.
+- Pruebas: `scripts/test-instalador.mjs` (dentro de `verificar`).
+
+### Corregido
+
+- **`verificar`: Engram en OpenCode** se comprueba en el servidor V1 (`GET /mcp`). OpenCode v2 ya no lista los MCP con `opencode mcp list` y la comprobación fallaba aunque Engram estaba conectado.
+- `install` ejecuta Gentle AI con `--persona neutral` (español sin voseo).
+
 ### Cambiado (spec 23 · Engram como memoria, junto al hub)
 
 - **Briefing sin duplicados**: con Engram activo, `session-start` no inyecta la bitácora ni la nota de última sesión (Engram ya inyecta su contexto). Pide al hub `/api/briefing?engram=1`.

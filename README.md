@@ -87,7 +87,25 @@ cd ~/sistema-cerebro-agentes
 bash install.sh
 ```
 
-El instalador es **idempotente**, hace **copia de seguridad** de todo lo que reemplaza en `~/.sistema-cerebro-agentes/backups/` y no toca nada más de tu configuración. `install -Check` (`--check` en bash) solo informa, sin escribir.
+El instalador es **idempotente**, hace **copia de seguridad** de todo lo que reemplaza en `~/.sistema-cerebro-agentes/backups/` y no toca nada más de tu configuración. Todo lo instala en tu usuario (`~/.sistema-cerebro-agentes`, `~/.claude`, `~/.config/opencode`), no en la carpeta del repo.
+
+**Qué reinstala.** Guarda un registro en `~/.sistema-cerebro-agentes/instalado.json` con la huella de cada componente (hub, hooks, panel, mods, MCP, agentes, comandos, skill, Docker) y la configuración de Gentle AI. En cada ejecución:
+
+| Situación | Qué hace |
+|---|---|
+| Igual que la última vez | `[=] sin cambios`: lo salta |
+| Cambió en el repo | Lo actualiza (con copia) |
+| Lo cambiaste a mano | Pregunta: `[s] sobrescribir (con copia) / [n] conservar / [d] ver diferencias` |
+| Falla a medias | Restaura ese componente desde su copia y sigue con los demás |
+
+Gentle AI solo se vuelve a ejecutar si falta o si cambian su versión o su configuración; si se ejecuta, se reinicia el servidor OpenCode V1 para que reconecte Engram. Al final ejecuta `verificar -Smoke` y enseña un resumen por paso (`OK`, `sin cambios`, `aviso`, `error`), con la causa y cómo arreglar cada error. Si hubo errores, sale con código 1. Todo queda en `~/.sistema-cerebro-agentes/logs/install-<fecha>.log`.
+
+| Windows | macOS / Linux | Para qué |
+|---|---|---|
+| `-Check` | `--check` | Solo informa (prerrequisitos y qué haría con cada componente), sin escribir |
+| `-Reinstalar` | `--reinstalar` | Ignora el registro y reinstala todo |
+| `-Force` | `--force` | No pregunta: conserva lo que cambiaste a mano y lo avisa |
+| `-SinVerificar` | `--sin-verificar` | No ejecuta la verificación final |
 
 **Gentle AI.** Antes de aplicar lo nuestro, `install` instala el binario (versión fijada 4.3.1 en Windows) y ejecuta `gentle-ai install --agents claude-code,opencode --preset full-gentleman --persona neutral --claude-orchestrator-modules` (persona neutral: español sin voseo). Luego aplica encima agentes, bloque de `CLAUDE.md`, comandos `/odd:*`, permisos y el `default_agent` de OpenCode (`cerebro-oc`, que Gentle AI cambia a `gentle-orchestrator`). Con `SIN_GENTLE_AI=1` se omite este paso. Si más tarde lanzas `gentle-ai sync` por tu cuenta, puede volver a cambiar el `default_agent`: repite `install`. Las instalaciones antiguas pierden el contenedor `cerebro-laya` (con su imagen y volumen).
 

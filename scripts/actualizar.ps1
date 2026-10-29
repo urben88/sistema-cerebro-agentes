@@ -41,7 +41,7 @@ if (-not $SkipPull) {
 }
 
 Write-Host '== Reinstalando ==' -ForegroundColor Cyan
-$install = Invoke-Cli 'powershell' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $RepoRoot 'install.ps1'), '-Force')
+$install = Invoke-Cli 'powershell' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $RepoRoot 'install.ps1'), '-Force', '-SinVerificar')
 Write-Host $install.Output
 if ($install.Code -ne 0) { throw 'La instalacion fallo' }
 

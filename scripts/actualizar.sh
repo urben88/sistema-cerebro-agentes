@@ -22,7 +22,7 @@ if [ "$SKIP_PULL" -eq 0 ]; then
 fi
 
 echo '== Reinstalando =='
-bash install.sh --force
+bash install.sh --force --sin-verificar
 
 printf '\nActualizado a la versión %s.\n' "$(tr -d '\n' < VERSION)"
 

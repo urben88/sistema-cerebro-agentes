@@ -279,6 +279,11 @@ $s23 = Join-Path $RepoRoot 'scripts\test-engram.mjs'
 & node $s23 | Out-Null
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de Engram junto al hub' 'Ejecuta: node scripts\test-engram.mjs'
 
+Write-Step 'Instalador con control (spec 25)'
+$s25 = Join-Path $RepoRoot 'scripts\test-instalador.mjs'
+& node $s25 | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas del instalador (registro, cambios a mano, -Check)' 'Ejecuta: node scripts\test-instalador.mjs'
+
 Write-Step 'Ledger de trabajos (R3 · spec 10)'
 $ledgerPruebas = Join-Path $RepoRoot 'scripts\test-ledger.mjs'
 & node $ledgerPruebas | Out-Null

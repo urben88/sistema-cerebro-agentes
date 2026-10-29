@@ -16,14 +16,16 @@ El instalador sabe qué había instalado antes, actualiza solo lo que cambió, p
 ## Tareas
 | ID | Specs | Ruta | Estado | Commit |
 |---|---|---|---|---|
-| T1 | S1, S2, S4 | inline | pendiente | |
-| T2 | S3 | inline | pendiente | |
-| T3 | S5 | inline | pendiente | |
-| T4 | S6, S7 | inline | pendiente | |
-| T5 | S8 | inline | pendiente | |
+| T1 | S1, S2, S4 | inline | hecho | ver Log L4 |
+| T2 | S3 | inline | hecho | ver Log L4 |
+| T3 | S5 | inline | hecho | ver Log L4 |
+| T4 | S6, S7 | inline | hecho | ver Log L4 |
+| T5 | S8 | inline | hecho | ver Log L4 |
 | T6 | todos | verificador independiente (`analista`, item 5) | pendiente | |
 
 ## Log
 - **L1 (2026-10-29, usuario):** «Tengo una duda, a la hora de instalar estás haciendo comprobaciones de si ya tiene el archivo, si no lo tiene ProPuntar para instalar, si ya tenía tu instalado no volver a reinstalar, a no ser que tú lo decidas. A la hora de instalar tiene que saber si lo tenías instalado antes para reinstalar o no. Esto es importante. Es decir, tener un mayor control a la hora de instalar para dar opciones al usuario. y todas estas instalaciones se hacen en modo general o instala algo en local, es decir, instala algo donde está el instalador en esa misma ruta o lo hace de manera genérica.»
 - **L2 (2026-10-29, usuario):** «Quiero mejorar el instalador, que sea más potente, que tenga más funcionalidades y tenga un flujo de error, para comprobar errores, instalación, hacer lo que has comentado antes.»
 - **L3:** Hoy todo se copia siempre (con backup) salvo `opencode-ai` y las imágenes Docker; no hay preguntas (`-Force` no hace nada). Todo es global (`~/.sistema-cerebro-agentes`, `~/.claude`, `~/.config/opencode`, `~/.local/bin`, Inicio de Windows, Docker); en el repo solo se lee `config/`. El reinstalar `gentle-ai` tumbó Engram en el servidor V1 (no se reinicia). Mirror de Engram pendiente: Engram desconectado en esta sesión.
+- **L4 (2026-10-29):** Hecho T1-T5. Registro y huellas en `scripts/instalado.mjs` (lo usan ps1 y sh). Pruebas `scripts/test-instalador.mjs`: 19/19. Instalación real en Windows: 1.ª pasada todo OK y `verificar -Smoke` 102/0; 2.ª pasada todo `[=] sin cambios` y Gentle AI saltado; con un comando /odd tocado a mano y `-Force` se conserva y avisa. No probado en real: la pregunta interactiva [s/n/d] (sin consola en la sesión) ni `install.sh` completo (solo `--check` con HOME falso).
+- **L5 (2026-10-29):** La X «engram conectado en OpenCode» no venía del servidor V1 (Engram sí estaba conectado en `GET /mcp`): OpenCode v2.2.0 ya no lista MCP con `opencode mcp list`. `verificar` mira ahora el servidor V1 (commit 854f40f).

@@ -271,6 +271,9 @@ step 'Engram junto al hub (spec 23)'
 if engram version 2>&1 | grep -qi engram; then test_item 0 'Engram responde en Claude Code (engram version)'; else test_item 1 'Engram no responde en Claude Code' 'Ejecuta install.sh (gentle-ai install) y revisa el PATH'; fi
 if node "$REPO_ROOT/scripts/test-engram.mjs" >/dev/null 2>&1; then test_item 0 'Pruebas de Engram junto al hub'; else test_item 1 'Pruebas de Engram junto al hub' 'Ejecuta: node scripts/test-engram.mjs'; fi
 
+step 'Instalador con control (spec 25)'
+if node "$REPO_ROOT/scripts/test-instalador.mjs" >/dev/null 2>&1; then test_item 0 'Pruebas del instalador (registro, cambios a mano, --check)'; else test_item 1 'Pruebas del instalador' 'Ejecuta: node scripts/test-instalador.mjs'; fi
+
 if node "$REPO_ROOT/scripts/test-nudges.mjs" >/dev/null 2>&1; then
   test_item 0 'Pruebas de nudges y límites de memoria'
 else
