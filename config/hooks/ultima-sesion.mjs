@@ -22,7 +22,8 @@ export function lanzarResumen(transcript, cwd) {
   const dir = dirUltimaSesion()
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, `${slugProyecto(cwd)}.pendiente`), '')
-  const script = path.join(path.dirname(fileURLToPath(import.meta.url)), 'resumir-sesion.mjs')
+  // RESUMIR_SCRIPT: solo pruebas (spec 23), para observar si se lanza el resumen.
+  const script = process.env.RESUMIR_SCRIPT || path.join(path.dirname(fileURLToPath(import.meta.url)), 'resumir-sesion.mjs')
   const hijo = spawn(process.execPath, [script, transcript, cwd], {
     detached: true,
     stdio: 'ignore',

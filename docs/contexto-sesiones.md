@@ -38,8 +38,8 @@ Engram (lo instala Gentle AI) y el hub funcionan a la vez, cada uno con lo suyo:
 | Estado vivo del proyecto y contexto del repo | Hub (`ESTADO.md`, `CONTEXTO-REPO.md`) |
 | Alertas, trabajos, gasto, aprobaciones y panel | Hub |
 
-- Los hooks detectan Engram con `engram version`. Sin Engram, todo funciona como antes.
-- `buscar.mjs` une los resultados de los dos (`[engram:<tipo>]`). `--tipo engram` busca solo en Engram. Si el hub está apagado, sigue mostrando lo de Engram.
+- Los hooks dan Engram por activo si su plugin (`engram@engram`) está activo y `engram version` responde. Si no, todo funciona como antes.
+- `buscar.mjs` une los resultados de los dos (`[engram:<tipo>]`). `--tipo engram` busca solo en Engram (sale con 1 si no está activo). Si el hub está apagado, sigue mostrando lo de Engram.
 - `/odd:doctor` y `verificar` comprueban que Engram responde y que su plugin está activo.
 - `ENGRAM_DESACTIVADO=1` hace que los hooks ignoren Engram, y `ENGRAM_BIN` cambia el binario (pruebas).
 - La bitácora y las notas antiguas siguen en `hub-data/memoria`; no se borran ni se importan solas.

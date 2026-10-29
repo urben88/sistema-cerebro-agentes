@@ -19,7 +19,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { engramDisponible } from './engram.mjs'
+import { engramResponde } from './engram.mjs'
 
 const SETTINGS = process.env.DOCTOR_SETTINGS || path.join(os.homedir(), '.claude', 'settings.json')
 const OMITIR = new Set((process.env.DOCTOR_OMITIR || '').split(',').map((s) => s.trim()).filter(Boolean))
@@ -87,7 +87,7 @@ else {
 if (OMITIR.has('engram')) punto('engram', 'amarillo', 'omitido')
 else {
   const plugin = settings?.enabledPlugins?.['engram@engram'] === true
-  if (!engramDisponible()) punto('engram', 'rojo', 'engram no responde (ejecuta install o gentle-ai install)')
+  if (!engramResponde()) punto('engram', 'rojo', 'engram no responde (ejecuta install o gentle-ai install)')
   else punto('engram', plugin ? 'verde' : 'amarillo', plugin ? 'engram responde y su plugin está activo' : 'engram responde, pero el plugin engram@engram no está activo en settings.json')
 }
 

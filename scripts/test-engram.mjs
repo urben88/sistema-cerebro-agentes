@@ -53,8 +53,17 @@ function correr(script, args, env, entrada = '') {
     h.stdin.end(entrada)
   })
 }
-const conEngram = { ENGRAM_BIN: FALSO }
+const PLUGIN_ON = path.join(raiz, 'settings-on.json')
+const PLUGIN_OFF = path.join(raiz, 'settings-off.json')
+fs.writeFileSync(PLUGIN_ON, JSON.stringify({ enabledPlugins: { 'engram@engram': true } }))
+fs.writeFileSync(PLUGIN_OFF, JSON.stringify({ enabledPlugins: { 'engram@engram': false } }))
+const conEngram = { ENGRAM_BIN: FALSO, ENGRAM_SETTINGS: PLUGIN_ON }
+const soloBinario = { ENGRAM_BIN: FALSO, ENGRAM_SETTINGS: PLUGIN_OFF }
 const sinEngram = { ENGRAM_DESACTIVADO: '1' }
+// Espía del resumen Haiku: deja una marca en vez de llamar a Claude.
+const ESPIA = path.join(raiz, 'espia.mjs')
+const MARCA = path.join(raiz, 'resumen-lanzado')
+fs.writeFileSync(ESPIA, `import fs from 'node:fs'\nfs.writeFileSync(${JSON.stringify(MARCA)}, 'si')\n`)
 
 // Proyecto con memoria del hub y nota de última sesión, para el briefing local.
 const datos = path.join(raiz, 'hub-data')
@@ -89,6 +98,12 @@ await prueba('S4 · buscar sin Engram y hub apagado: igual que antes (sale 1)', 
   assert.equal(r.code, 1)
   assert.match(r.err, /No se pudo hablar con el hub/)
   assert.doesNotMatch(r.out, /engram/)
+})
+
+await prueba('S4 · --tipo engram sin Engram: avisa y sale 1', async () => {
+  const r = await correr('buscar.mjs', ['Laya', '--tipo', 'engram'], { ...soloBinario, HUB_URL: HUB_APAGADO })
+  assert.equal(r.code, 1)
+  assert.match(r.err, /Engram no responde/)
 })
 
 await prueba('S4 · buscar une hub y Engram; --tipo engram solo Engram', async () => {
@@ -128,6 +143,11 @@ await prueba('S2 · briefing local sin Engram: con la nota de última sesión (c
   assert.match(texto, /Nota Haiku/)
 })
 
+await prueba('S2 · binario sin plugin activo: briefing como antes (con nota)', async () => {
+  const r = await correr('session-start.mjs', [], { ...baseSesion, ...soloBinario }, entradaSesion)
+  assert.match(JSON.parse(r.out).hookSpecificOutput.additionalContext, /Nota Haiku/)
+})
+
 await prueba('S2 · el hook pide al hub el briefing sin bitácora solo con Engram', async () => {
   const pedidas = []
   const srv = http.createServer((req, res) => {
@@ -152,12 +172,20 @@ await prueba('S2 · memoria.briefing omite la bitácora con sinBitacora', () => 
   assert.match(corto, /Tarea de prueba en curso/)
 })
 
-await prueba('S3 · session-end con Engram no lanza el resumen Haiku', async () => {
+await prueba('S3 · session-end lanza el resumen Haiku solo sin Engram activo', async () => {
   const transcript = path.join(raiz, 't.jsonl')
   fs.writeFileSync(transcript, '{}\n')
-  const r = await correr('session-end.mjs', [], { ...baseSesion, ...conEngram }, JSON.stringify({ cwd, reason: 'other', transcript_path: transcript }))
-  assert.equal(r.code, 0)
-  assert.ok(!fs.existsSync(path.join(datos, 'memoria', 'ultima-sesion', `${slugNota}.pendiente`)), 'no debe marcar resumen pendiente')
+  const entrada = JSON.stringify({ cwd, reason: 'other', transcript_path: transcript })
+  const lanzado = async (env) => {
+    fs.rmSync(MARCA, { force: true })
+    const r = await correr('session-end.mjs', [], { ...baseSesion, RESUMIR_SCRIPT: ESPIA, ...env }, entrada)
+    assert.equal(r.code, 0)
+    for (let i = 0; i < 50 && !fs.existsSync(MARCA); i++) await new Promise((ok) => setTimeout(ok, 100))
+    return fs.existsSync(MARCA)
+  }
+  assert.equal(await lanzado(conEngram), false, 'con Engram activo no se lanza')
+  assert.equal(await lanzado(soloBinario), true, 'con el plugin apagado se lanza, como antes')
+  assert.equal(await lanzado(sinEngram), true, 'sin Engram se lanza, como antes')
 })
 
 await prueba('S5 · doctor: punto engram verde / amarillo / rojo', async () => {

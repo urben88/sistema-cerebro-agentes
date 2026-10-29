@@ -12,7 +12,7 @@
  * `--tipo engram` busca solo ahí; spec 23 · S4). Si no responde ni el hub ni Engram,
  * avisa y sale con código 1.
  */
-import { buscarEngram } from './engram.mjs'
+import { buscarEngram, engramDisponible } from './engram.mjs'
 
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
 const args = process.argv.slice(2)
@@ -43,7 +43,8 @@ if (valorDe('--tipo')) params.set('tipo', valorDe('--tipo'))
 const soloEngram = valorDe('--tipo') === 'engram'
 const limite = Number(valorDe('--limite')) || 10
 // Con otro --tipo, el filtro es del hub y Engram no entra.
-const deEngram = !valorDe('--tipo') || soloEngram ? buscarEngram(consulta, { limite }) : []
+// Arranca ya: va en paralelo con la consulta al hub (null = Engram ausente o fallido).
+const pEngram = !valorDe('--tipo') || soloEngram ? buscarEngram(consulta, { limite }) : Promise.resolve([])
 
 let resultados = []
 let modo = null
@@ -59,6 +60,10 @@ if (!soloEngram) {
   }
 }
 // Sin hub y sin nada de Engram, se avisa y se sale con 1, como siempre.
+const engramRes = await pEngram
+const deEngram = engramRes || []
+if (soloEngram && engramRes === null) { console.error('Engram no responde o su plugin no está activo (revisa: node doctor.mjs).'); process.exit(1) }
+if (!soloEngram && engramRes === null && engramDisponible()) console.error('Aviso: la búsqueda en Engram falló; se muestran solo los resultados del hub.')
 if (fallo && !deEngram.length) { console.error(fallo); process.exit(1) }
 if (fallo) console.error(`${fallo.split('\n')[0]} · se muestran solo los resultados de Engram.`)
 resultados = [...resultados, ...deEngram]
