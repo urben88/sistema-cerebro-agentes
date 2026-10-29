@@ -89,7 +89,7 @@ bash install.sh
 
 El instalador es **idempotente**, hace **copia de seguridad** de todo lo que reemplaza en `~/.sistema-cerebro-agentes/backups/` y no toca nada más de tu configuración. `install -Check` (`--check` en bash) solo informa, sin escribir.
 
-**Gentle AI.** Antes de aplicar lo nuestro, `install` instala el binario (versión fijada 4.3.1 en Windows) y ejecuta `gentle-ai install --agents claude-code,opencode --preset full-gentleman --persona gentleman --claude-orchestrator-modules`. Luego aplica encima agentes, bloque de `CLAUDE.md`, comandos `/odd:*`, permisos y el `default_agent` de OpenCode (`cerebro-oc`, que Gentle AI cambia a `gentle-orchestrator`). Con `SIN_GENTLE_AI=1` se omite este paso. Si más tarde lanzas `gentle-ai sync` por tu cuenta, puede volver a cambiar el `default_agent`: repite `install`. Las instalaciones antiguas pierden el contenedor `cerebro-laya` (con su imagen y volumen).
+**Gentle AI.** Antes de aplicar lo nuestro, `install` instala el binario (versión fijada 4.3.1 en Windows) y ejecuta `gentle-ai install --agents claude-code,opencode --preset full-gentleman --persona neutral --claude-orchestrator-modules` (persona neutral: español sin voseo). Luego aplica encima agentes, bloque de `CLAUDE.md`, comandos `/odd:*`, permisos y el `default_agent` de OpenCode (`cerebro-oc`, que Gentle AI cambia a `gentle-orchestrator`). Con `SIN_GENTLE_AI=1` se omite este paso. Si más tarde lanzas `gentle-ai sync` por tu cuenta, puede volver a cambiar el `default_agent`: repite `install`. Las instalaciones antiguas pierden el contenedor `cerebro-laya` (con su imagen y volumen).
 
 Después: **reinicia Claude Code** y verifica:
 

@@ -259,8 +259,8 @@ else
     # gentle-ai sube defaultMode a bypassPermissions; permisos.mjs (paso 5b) lo devuelve.
     MODO_PREVIO="$(node -e "try{const s=require(process.argv[1]);process.stdout.write(String((s.permissions||{}).defaultMode||'(ninguno)'))}catch{process.stdout.write('(ninguno)')}" "$HOME/.claude/settings.json" 2>/dev/null || echo '(ninguno)')"
     export MODO_PREVIO
-    note "gentle-ai install --agents $AGENTES_G --preset full-gentleman --persona gentleman --claude-orchestrator-modules"
-    if GR="$("$GENTLE_EXE" install --agents "$AGENTES_G" --preset full-gentleman --persona gentleman --claude-orchestrator-modules 2>&1)"; then
+    note "gentle-ai install --agents $AGENTES_G --preset full-gentleman --persona neutral --claude-orchestrator-modules"
+    if GR="$("$GENTLE_EXE" install --agents "$AGENTES_G" --preset full-gentleman --persona neutral --claude-orchestrator-modules 2>&1)"; then
       ok 'Gentle AI configurado (ODD, RDD, Engram, CodeGraph, Context7, skills)'
     else
       warn 'gentle-ai install no terminó bien; se sigue con lo demás'

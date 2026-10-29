@@ -9,3 +9,7 @@ backups/
 node_modules/
 
 .playwright-mcp/
+
+# Generados por gentle-ai/engram en local
+.atl/
+.engram/
