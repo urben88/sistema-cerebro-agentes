@@ -267,6 +267,13 @@ else
       printf '%s\n' "$GR" | tail -n 15
       WARNINGS+=('Revisa la salida de gentle-ai install y repite install')
     fi
+    # Spec 23 · S6 · Engram es la memoria del sistema (los hooks la usan junto al hub).
+    if EV="$(engram version 2>&1)" && printf '%s' "$EV" | grep -qi engram; then
+      ok "Engram responde ($EV): memoria de decisiones y sesiones"
+    else
+      warn 'Engram no responde: los hooks seguirán solo con la memoria del hub'
+      WARNINGS+=('Instala Engram con gentle-ai install (o revisa el PATH) y comprueba: engram version')
+    fi
   fi
 fi
 

@@ -267,6 +267,13 @@ $s22d = Join-Path $RepoRoot 'scripts\test-doctor.mjs'
 & node $s22d | Out-Null
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de /odd:doctor' 'Ejecuta: node scripts\test-doctor.mjs'
 
+Write-Step 'Engram junto al hub (spec 23)'
+$ev = try { (& engram version 2>&1 | Out-String) } catch { '' }
+Test-Item ($ev -match 'engram') 'Engram responde en Claude Code (engram version)' 'Ejecuta install.ps1 (gentle-ai install) y revisa el PATH'
+$s23 = Join-Path $RepoRoot 'scripts\test-engram.mjs'
+& node $s23 | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de Engram junto al hub' 'Ejecuta: node scripts\test-engram.mjs'
+
 Write-Step 'Ledger de trabajos (R3 · spec 10)'
 $ledgerPruebas = Join-Path $RepoRoot 'scripts\test-ledger.mjs'
 & node $ledgerPruebas | Out-Null

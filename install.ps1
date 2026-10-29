@@ -393,6 +393,13 @@ if ($env:SIN_GENTLE_AI) {
       Write-Host $gr.Output -ForegroundColor DarkGray
       $warnings.Add('Revisa la salida de gentle-ai install y repite install')
     }
+    # Spec 23 · S6 · Engram es la memoria del sistema (los hooks la usan junto al hub).
+    $ev = try { (& engram version 2>&1 | Out-String).Trim() } catch { '' }
+    if ($ev -match 'engram') { Write-Ok "Engram responde ($ev): memoria de decisiones y sesiones" }
+    else {
+      Write-Warn 'Engram no responde: los hooks seguiran solo con la memoria del hub'
+      $warnings.Add('Instala Engram con gentle-ai install (o revisa el PATH) y comprueba: engram version')
+    }
   }
 }
 
