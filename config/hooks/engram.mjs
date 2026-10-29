@@ -1,5 +1,6 @@
 /**
- * Puente con Engram (spec 23 · S1): saber si está activo y buscar en él.
+ * Puente con Engram (spec 23 · S1): saber si está activo, buscar en él y, desde la
+ * spec 24, guardar en él las entradas nuevas de bitácora.
  *
  * Engram es la memoria de decisiones y sesiones (lo instala Gentle AI); el hub
  * deja de repetir lo que Engram ya hace. Todo va en el host porque el hub corre
@@ -89,4 +90,35 @@ export function buscarEngram(consulta, { limite = 10, cwd } = {}) {
     hijo.on('error', () => { clearTimeout(reloj); res(null) })
     hijo.on('close', (code) => { clearTimeout(reloj); res(code === 0 ? parsearBusqueda(out) : null) })
   })
+}
+
+/**
+ * Guarda una nota en Engram (spec 24 · S1) con `engram save`, en la carpeta del proyecto
+ * para que Engram detecte el proyecto. Devuelve true si sale con 0; nunca lanza.
+ */
+export function guardarEngram(titulo, contenido, { cwd, tipo = 'manual', timeout = 4000 } = {}) {
+  const [cmd, args] = comando(['save', titulo, contenido, '--type', tipo])
+  return new Promise((res) => {
+    let hijo
+    try { hijo = spawn(cmd, args, { windowsHide: true, cwd: cwd || process.cwd(), stdio: 'ignore' }) } catch { return res(false) }
+    const reloj = setTimeout(() => { try { hijo.kill() } catch { /* nada */ } res(false) }, timeout)
+    hijo.on('error', () => { clearTimeout(reloj); res(false) })
+    hijo.on('close', (code) => { clearTimeout(reloj); res(code === 0) })
+  })
+}
+
+/**
+ * Añade una entrada de bitácora (spec 24 · S2-S3): a Engram si está activo; si no,
+ * o si Engram falla, al hub como siempre. Devuelve la respuesta del hub o
+ * `{ ok: true }`, con `destino` 'engram' | 'hub'. Si el hub no responde, lanza.
+ */
+export async function anotarBitacora({ hub, cwd, titulo, texto = '', timeout = 6000 }) {
+  if (engramDisponible() && await guardarEngram(titulo, texto || titulo, { cwd })) return { ok: true, destino: 'engram' }
+  const r = await fetch(`${hub}/api/memoria/bitacora`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cwd, titulo, texto }),
+    signal: AbortSignal.timeout(timeout),
+  })
+  return { ...(await r.json()), destino: 'hub' }
 }

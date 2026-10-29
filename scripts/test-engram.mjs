@@ -28,9 +28,13 @@ const SALIDA_BUSQUEDA = `Found 1 memories:
     2026-10-28 20:01:58 | project: demo | scope: project
 `
 const FALSO = path.join(raiz, 'engram-falso.mjs')
-fs.writeFileSync(FALSO, `const a = process.argv.slice(2)
+// `save` deja sus argumentos y su carpeta en GUARDADO; ENGRAM_FALLA_SAVE=1 lo hace fallar.
+const GUARDADO = path.join(raiz, 'engram-guardado.json')
+fs.writeFileSync(FALSO, `import fs from 'node:fs'
+const a = process.argv.slice(2)
 if (a[0] === 'version') console.log('engram 3.6.0')
 else if (a[0] === 'search') process.stdout.write(${JSON.stringify(SALIDA_BUSQUEDA)})
+else if (a[0] === 'save' && process.env.ENGRAM_FALLA_SAVE !== '1') fs.writeFileSync(${JSON.stringify(GUARDADO)}, JSON.stringify({ args: a, cwd: process.cwd() }))
 else process.exit(1)
 `)
 const HUB_APAGADO = 'http://127.0.0.1:9'
@@ -213,6 +217,53 @@ await prueba('S5 · doctor: punto engram verde / amarillo / rojo', async () => {
   assert.equal(await doctor({ enabledPlugins: { 'engram@engram': true } }, conEngram), 'verde')
   assert.equal(await doctor({}, conEngram), 'amarillo')
   assert.equal(await doctor({ enabledPlugins: { 'engram@engram': true } }, { ENGRAM_BIN: path.join(raiz, 'no-existe') }), 'rojo')
+})
+
+await prueba('Spec 24 · S1/S2 · estado --bitacora: con Engram, a Engram; si falla o sin Engram, al hub', async () => {
+  const recibidas = []
+  const srv = http.createServer((req, res) => {
+    let cuerpo = ''
+    req.on('data', (c) => { cuerpo += c })
+    req.on('end', () => {
+      recibidas.push({ url: req.url, cuerpo: JSON.parse(cuerpo || '{}') })
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ ok: true }))
+    })
+  })
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r))
+  const url = `http://127.0.0.1:${srv.address().port}`
+  const bitacora = (env) => correr('estado.mjs', ['--bitacora', 'Título de prueba', '--texto', 'Detalle', '--cwd', cwd], { HUB_URL: url, ...env })
+  try {
+    fs.rmSync(GUARDADO, { force: true })
+    let r = await bitacora(conEngram)
+    assert.equal(r.code, 0)
+    assert.match(r.out, /Entrada guardada en Engram\./)
+    const g = JSON.parse(fs.readFileSync(GUARDADO, 'utf8'))
+    assert.deepEqual(g.args, ['save', 'Título de prueba', 'Detalle', '--type', 'manual'])
+    assert.equal(path.resolve(g.cwd), path.resolve(cwd))
+    assert.equal(recibidas.length, 0, 'con Engram no se escribe en el hub')
+
+    r = await bitacora({ ...conEngram, ENGRAM_FALLA_SAVE: '1' })
+    assert.equal(r.code, 0)
+    assert.match(r.out, /Entrada añadida a la bitácora\./)
+    assert.equal(recibidas.length, 1, 'si Engram falla, va al hub')
+
+    fs.rmSync(GUARDADO, { force: true })
+    r = await bitacora(sinEngram)
+    assert.equal(r.code, 0)
+    assert.match(r.out, /Entrada añadida a la bitácora\./)
+    assert.equal(recibidas.length, 2)
+    assert.equal(recibidas[1].url, '/api/memoria/bitacora')
+    assert.deepEqual(recibidas[1].cuerpo, { cwd, titulo: 'Título de prueba', texto: 'Detalle' })
+    assert.equal(fs.existsSync(GUARDADO), false, 'sin Engram no se llama a engram save')
+  } finally { srv.close() }
+})
+
+await prueba('Spec 24 · S2 · estado --bitacora sin texto guarda el título como contenido', async () => {
+  fs.rmSync(GUARDADO, { force: true })
+  const r = await correr('estado.mjs', ['--bitacora', 'Solo título', '--cwd', cwd], { HUB_URL: HUB_APAGADO, ...conEngram })
+  assert.equal(r.code, 0)
+  assert.deepEqual(JSON.parse(fs.readFileSync(GUARDADO, 'utf8')).args, ['save', 'Solo título', 'Solo título', '--type', 'manual'])
 })
 
 try { fs.rmSync(raiz, { recursive: true, force: true }) } catch { /* nada */ }

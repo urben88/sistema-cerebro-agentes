@@ -15,6 +15,10 @@ Versionado semántico (MAJOR.MINOR.PATCH).
 - **Flujo de errores**: cada paso acaba en `OK`, `sin cambios`, `aviso` o `error`; un error no corta los demás y lo que falla a medias se restaura desde su copia. Log en `~/.sistema-cerebro-agentes/logs/install-<fecha>.log`, resumen con causa y arreglo, y código de salida 1 si hubo errores. Al final ejecuta `verificar -Smoke`.
 - Pruebas: `scripts/test-instalador.mjs` (dentro de `verificar`).
 
+### Cambiado (spec 24 · bitácora en Engram)
+
+- **Bitácora en Engram**: con Engram activo, `estado.mjs --bitacora` y la nota de trabajos cancelados al cerrar la sesión se guardan en Engram (`engram save`, tipo `manual`); si Engram falla, van al hub como antes. `BITACORA.md` deja de crecer y la compresión con Haiku ya no se dispara. ESTADO.md y CONTEXTO-REPO.md siguen en el hub.
+
 ### Corregido
 
 - **`verificar`: Engram en OpenCode** se comprueba en el servidor V1 (`GET /mcp`). OpenCode v2 ya no lista los MCP con `opencode mcp list` y la comprobación fallaba aunque Engram estaba conectado.

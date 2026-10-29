@@ -6,7 +6,8 @@
  * Llega por stdin el JSON del evento (`reason`: prompt_input_exit, logout, clear,
  * other…) con el `cwd`. Cancela los trabajos activos de ese directorio (y del
  * proyecto de la sesión, por si Claude cambió de carpeta) abortando sus sesiones
- * en el servidor OpenCode V1. Deja constancia en la bitácora del hub si cancela algo.
+ * en el servidor OpenCode V1. Si cancela algo, lo anota en la bitácora (en Engram si
+ * está activo; si no, en el hub).
  *
  * Silencioso y a prueba de fallos: nunca bloquea el cierre. El registro en
  * settings-merge le da 8 s de presupuesto; en el caso normal tarda menos de 1 s.
@@ -54,12 +55,9 @@ try {
 
   if (total > 0) {
     try {
-      await fetch(`${HUB}/api/memoria/bitacora`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cwd, titulo: `Sesión cerrada (${reason})`, texto: `Se cancelaron ${total} trabajo(s) de OpenCode en segundo plano.` }),
-        signal: AbortSignal.timeout(1200),
-      })
+      // Spec 24 · S3: con Engram activo, la nota va a Engram; si falla, al hub.
+      const { anotarBitacora } = await import('./engram.mjs')
+      await anotarBitacora({ hub: HUB, cwd, titulo: `Sesión cerrada (${reason})`, texto: `Se cancelaron ${total} trabajo(s) de OpenCode en segundo plano.`, timeout: 1200 })
     } catch { /* hub apagado: mejor esfuerzo */ }
   }
   // Sin process.exit(): en Windows, salir con sockets de fetch cerrándose revienta

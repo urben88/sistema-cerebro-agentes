@@ -5,6 +5,7 @@
  *   node estado.mjs --leer                     · muestra el ESTADO.md
  *   node estado.mjs --escribir --archivo f.md  · guarda ese fichero como ESTADO.md
  *   node estado.mjs --bitacora "título"        · añade una entrada a la bitácora
+ *                                                (con Engram activo, va a Engram)
  *   node estado.mjs --checkpoint "motivo"      · guarda un checkpoint
  *   (--cwd RUTA para otro proyecto; por defecto, la carpeta actual)
  */
@@ -53,9 +54,11 @@ try {
   } else if (args.includes('--bitacora')) {
     if (!titulo) { console.error('Falta el título de la bitácora'); process.exit(1) }
     const texto = valorDe('--texto') || ''
-    const j = await llamar('/api/memoria/bitacora', { cwd, titulo, texto })
+    // Spec 24 · S2: con Engram activo, la entrada va a Engram; si falla, al hub.
+    const { anotarBitacora } = await import('./engram.mjs')
+    const j = await anotarBitacora({ hub: HUB, cwd, titulo, texto })
     if (!j.ok) { console.error(`Error: ${j.error}`); process.exit(1) }
-    console.log('Entrada añadida a la bitácora.')
+    console.log(j.destino === 'engram' ? 'Entrada guardada en Engram.' : 'Entrada añadida a la bitácora.')
   } else if (args.includes('--checkpoint')) {
     const j = await llamar('/api/memoria/checkpoint', { cwd, motivo: motivo || 'manual', nota: '' })
     if (!j.ok) { console.error(`Error: ${j.error}`); process.exit(1) }

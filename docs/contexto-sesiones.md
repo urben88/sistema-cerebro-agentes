@@ -39,6 +39,7 @@ Engram (lo instala Gentle AI) y el hub funcionan a la vez, cada uno con lo suyo:
 | Alertas, trabajos, gasto, aprobaciones y panel | Hub |
 
 - Los hooks dan Engram por activo si su plugin (`engram@engram`) está activo y `engram version` responde. Si no, todo funciona como antes.
+- Bitácora (spec 24): con Engram activo, las entradas nuevas (`estado.mjs --bitacora` y el aviso de trabajos cancelados al cerrar) van a Engram; si Engram falla, van al hub. Por eso `BITACORA.md` deja de crecer y la compresión con Haiku ya no salta. La bitácora antigua se queda en el hub y `buscar` la sigue encontrando.
 - `buscar.mjs` une los resultados de los dos (`[engram:<tipo>]`). `--tipo engram` busca solo en Engram (sale con 1 si no está activo). Si el hub está apagado, sigue mostrando lo de Engram.
 - `/odd:doctor` y `verificar` comprueban que Engram responde y que su plugin está activo.
 - `ENGRAM_DESACTIVADO=1` hace que los hooks ignoren Engram, y `ENGRAM_BIN` cambia el binario (pruebas).
