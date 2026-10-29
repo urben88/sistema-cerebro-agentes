@@ -17,10 +17,11 @@ Fuera de alcance: las rutas `/api/memoria/*`, el panel y los datos de `hub-data/
 ## Tareas
 | ID | Specs | Ruta | Estado | Commit |
 |---|---|---|---|---|
-| T1 | S1–S4 | inline | pendiente | |
-| T2 | S5–S6 | inline | pendiente | |
-| T3 | S7 | inline | pendiente | |
+| T1 | S1–S5 (doctor) | inline | hecho (RED 7 fallos → GREEN) | 2c34a85 |
+| T2 | S5 (verificar)–S6 | inline | hecho (sintaxis ps1/sh OK; verificar.ps1 completo pendiente) | fd5aa6f |
+| T3 | S7 | inline | hecho | este commit |
 
 ## Log
 - **L1 (2026-10-29, usuario):** «Vale, pues entonces quiero que esta herramienta y también su instalación aplique engram y también adapte para que se puedan usar los dos a la vez. Es decir, si tengo que recortar cosas del hub porque ya lo hace engram, puedes hacer eso.»
 - **L2:** El plugin de Engram ya engancha SessionStart (también tras compactar), UserPromptSubmit, SubagentStop y SessionEnd. Por eso se recortan el bloque de bitácora, la nota de última sesión y el resumen Haiku. PreCompact no lo cubre Engram, así que el checkpoint del hub se queda. Integración en el host (hooks y CLI), no en el servidor del hub: va en Docker y no ve el binario de Engram.
+- **L3:** test-engram 10/10 PASA; test-buscar, test-nudges, test-doctor, test-compresion, test-metricas y test-mcps-guia PASAN. En vivo, `buscar.mjs "Laya"` une el hub y Engram, y `doctor` da `engram` en verde. Falta lanzar `verificar.ps1` completo (el modo automático bloqueó `-ExecutionPolicy Bypass`) y desplegar: `install` y reconstruir el contenedor del hub para `?engram=1`.

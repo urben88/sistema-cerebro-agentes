@@ -20,13 +20,29 @@ El **slug** del proyecto se deriva de su ruta absoluta (nombre + hash corto); la
 
 ## El ciclo de una sesión
 
-1. **Al abrir** (hook `SessionStart`, matchers `startup|resume|clear|compact`): el hub inyecta el *briefing* del proyecto actual: `ESTADO.md` + `CONTEXTO-REPO.md` + últimos movimientos de la bitácora + alertas del vigilante + trabajos en curso. Si el hub está apagado, el hook lee la memoria del disco directamente; si el proyecto no tiene memoria, no dice nada.
+1. **Al abrir** (hook `SessionStart`, matchers `startup|resume|clear|compact`): el hub inyecta el *briefing* del proyecto actual: `ESTADO.md` + `CONTEXTO-REPO.md` + últimos movimientos de la bitácora + alertas del vigilante + trabajos en curso. Con Engram activo, la bitácora no entra: el historial de sesiones lo inyecta Engram (ver «Engram junto al hub»). Si el hub está apagado, el hook lee la memoria del disco directamente; si el proyecto no tiene memoria, no dice nada.
 2. **Mientras trabajas**: el agente mantiene el `ESTADO.md` al día (una página: tarea activa, quién la tiene, siguiente paso, decisiones y bloqueos).
 3. **Al 70 % de contexto**: el agente vuelca el estado y te avisa; haces `/clear` y la siguiente sesión arranca informada, sin explicar nada.
    El aviso de contexto (`aviso-contexto.mjs`) mide **tokens reales** de la última respuesta, avisa al pasar de 100k y cada +50k más (`CONTEXTO_AVISO`, `CONTEXTO_PASO`), sin repetir el mismo nivel. Llega al agente y también se muestra al usuario en la consola.
 4. **Antes de compactar** (hook `PreCompact`, manual o automático): se guarda un *checkpoint* completo en `checkpoints/` y se recuerda completar el `ESTADO.md`.
 5. **Al cerrar con `/clear`** (hook `SessionEnd`): checkpoint de seguridad.
-6. **Nota de última sesión**: al cerrar o hacer `/clear`, `session-end.mjs` lanza en segundo plano `resumir-sesion.mjs`, que pide a Haiku (`claude -p --model haiku`) un resumen de ≤ 5 líneas y lo guarda en `memoria/ultima-sesion/<proyecto>.md`. Las sesiones triviales (menos de 2 mensajes del usuario) no pisan la nota. Al abrir, `session-start.mjs` la inyecta; si el resumen sigue en curso, espera hasta 60 s.
+6. **Nota de última sesión**: al cerrar o hacer `/clear`, `session-end.mjs` lanza en segundo plano `resumir-sesion.mjs`, que pide a Haiku (`claude -p --model haiku`) un resumen de ≤ 5 líneas y lo guarda en `memoria/ultima-sesion/<proyecto>.md`. Las sesiones triviales (menos de 2 mensajes del usuario) no pisan la nota. Al abrir, `session-start.mjs` la inyecta; si el resumen sigue en curso, espera hasta 60 s. Con Engram activo no se lanza ni se espera: Engram ya guarda las sesiones.
+
+## Engram junto al hub (spec 23)
+
+Engram (lo instala Gentle AI) y el hub funcionan a la vez, cada uno con lo suyo:
+
+| Qué | Dónde |
+|---|---|
+| Decisiones, aprendizajes, tareas ODD y resumen de sesiones | Engram (`mem_save`, `mem_session_summary`, `mem_search`) |
+| Estado vivo del proyecto y contexto del repo | Hub (`ESTADO.md`, `CONTEXTO-REPO.md`) |
+| Alertas, trabajos, gasto, aprobaciones y panel | Hub |
+
+- Los hooks detectan Engram con `engram version`. Sin Engram, todo funciona como antes.
+- `buscar.mjs` une los resultados de los dos (`[engram:<tipo>]`). `--tipo engram` busca solo en Engram. Si el hub está apagado, sigue mostrando lo de Engram.
+- `/odd:doctor` y `verificar` comprueban que Engram responde y que su plugin está activo.
+- `ENGRAM_DESACTIVADO=1` hace que los hooks ignoren Engram, y `ENGRAM_BIN` cambia el binario (pruebas).
+- La bitácora y las notas antiguas siguen en `hub-data/memoria`; no se borran ni se importan solas.
 
 ## CLI `estado` (para agentes y para ti)
 

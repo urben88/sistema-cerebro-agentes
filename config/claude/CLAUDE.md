@@ -31,10 +31,10 @@ El flujo de trabajo es **ODD** (bloques `gentle-ai:*` de abajo). Este bloque sol
 - Una tarea es una sola cadena, sin fanout. Los subagentes no lanzan otros. Usa el agente `local` (Ollama) solo si el usuario lo pide.
 
 ## Memoria (un sitio para cada cosa)
-- **Engram:** decisiones, aprendizajes y tareas ODD. Sigue su protocolo.
-- **ESTADO.md del hub:** el estado de la sesión del proyecto. Al ~70 % de contexto, guárdalo (`estado.mjs --escribir`) y sugiere `/clear`.
+- **Engram:** decisiones, aprendizajes, tareas ODD y resumen de cada sesión (`mem_session_summary`). Sigue su protocolo.
+- **ESTADO.md del hub:** solo el estado vivo del proyecto (tarea activa, siguiente paso, bloqueos). Al ~70 % de contexto, guárdalo (`estado.mjs --escribir`) y sugiere `/clear`.
 - **Auto-memory de Claude:** solo preferencias del usuario.
-- Antes de preguntar por algo previo, búscalo: `node ~/.sistema-cerebro-agentes/hooks/buscar.mjs "consulta"`.
+- Antes de preguntar por algo previo, búscalo: `mem_search`, o `node ~/.sistema-cerebro-agentes/hooks/buscar.mjs "consulta"`, que une Engram y el hub.
 - Sin resumen del repo, delega el reconocimiento al `explorador`. Respeta sus specs (`docs/specs`, `openspec/`…) y sus agentes propios (`.claude/agents/`).
 
 ## Carga mental del usuario

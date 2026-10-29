@@ -3,6 +3,16 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado semántico (MAJOR.MINOR.PATCH).
 
+## [Sin publicar]
+
+### Cambiado (spec 23 · Engram como memoria, junto al hub)
+
+- **Briefing sin duplicados**: con Engram activo, `session-start` no inyecta la bitácora ni la nota de última sesión (Engram ya inyecta su contexto). Pide al hub `/api/briefing?engram=1`.
+- **Sin resumen Haiku repetido**: con Engram activo, `session-end` no lanza `resumir-sesion.mjs`.
+- **`buscar.mjs` une Engram y el hub** (`[engram:<tipo>]`, `--tipo engram`); con el hub apagado sigue mostrando Engram.
+- **Comprobaciones**: `/odd:doctor` añade el punto `engram`; `install` y `verificar` comprueban `engram version`; nuevas pruebas `scripts/test-engram.mjs`.
+- Sin Engram (o con `ENGRAM_DESACTIVADO=1`) todo funciona como antes. Las rutas `/api/memoria/*` y los datos de `hub-data` no cambian.
+
 ## [0.11.0] - 2026-10-28
 
 ### Añadido (specs 20 y 21 · Gentle AI en el instalador y configuración global adaptada a ODD)
