@@ -98,7 +98,7 @@ El instalador es **idempotente**, hace **copia de seguridad** de todo lo que ree
 | Lo cambiaste a mano | Pregunta: `[s] sobrescribir (con copia) / [n] conservar / [d] ver diferencias` |
 | Falla a medias | Restaura ese componente desde su copia y sigue con los demás |
 
-Gentle AI solo se vuelve a ejecutar si falta o si cambian su versión o su configuración; si se ejecuta, se reinicia el servidor OpenCode V1 para que reconecte Engram. Al final ejecuta `verificar -Smoke` y enseña un resumen por paso (`OK`, `sin cambios`, `aviso`, `error`), con la causa y cómo arreglar cada error. Si hubo errores, sale con código 1. Todo queda en `~/.sistema-cerebro-agentes/logs/install-<fecha>.log`.
+Gentle AI solo se vuelve a ejecutar si falta, si cambian su versión o su configuración, o si faltan sus bloques en `~/.claude/CLAUDE.md`; si se ejecuta, se reinicia el servidor OpenCode V1 para que reconecte Engram. Al final ejecuta `verificar -Smoke` y enseña un resumen por paso (`OK`, `sin cambios`, `aviso`, `error`), con la causa y cómo arreglar cada error. Si hubo errores, sale con código 1. Todo queda en `~/.sistema-cerebro-agentes/logs/install-<fecha>.log`.
 
 | Windows | macOS / Linux | Para qué |
 |---|---|---|

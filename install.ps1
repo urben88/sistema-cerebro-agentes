@@ -156,8 +156,10 @@ function Install-Componente([string]$Nombre, [string]$Titulo, [string[]]$Pares, 
     return $true
   } catch {
     $causa = $_.Exception.Message
-    foreach ($d in $destinos) { if ($existia.ContainsKey($d)) { try { Restore-Item $d $existia[$d] } catch { } } }
-    Write-Err "$Titulo fallo: $causa (se ha restaurado lo anterior)"
+    $restaurado = $true
+    foreach ($d in $destinos) { if ($existia.ContainsKey($d)) { try { Restore-Item $d $existia[$d] } catch { $restaurado = $false } } }
+    if ($restaurado) { Write-Err "$Titulo fallo: $causa (se ha restaurado lo anterior)" }
+    else { Write-Err "$Titulo fallo: $causa (no se pudo restaurar todo; copia en $BackupDir)"; $causa += " (restauracion incompleta; copia en $BackupDir)" }
     Add-Paso $Titulo 'error' $causa $Arreglo
     return $false
   }

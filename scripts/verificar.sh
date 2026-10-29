@@ -101,7 +101,7 @@ OC_CFG_TXT="$(cat "$HOME/.config/opencode/opencode.jsonc" "$HOME/.config/opencod
 # Se mira en el servidor V1 que usa el sistema (GET /mcp, solo lectura). OpenCode v2 ya no
 # lista los MCP con `opencode mcp list`; queda como respaldo si el servidor no responde.
 ENGRAM_OC=1
-if [ -n "${SRV_PORT:-}" ] && curl -fsS -m 20 "http://127.0.0.1:$SRV_PORT/mcp" 2>/dev/null | grep -qE '"engram":\{"status":"connected"'; then ENGRAM_OC=0
+if [ -n "${SRV_PORT:-}" ] && curl -fsS -m 20 "http://127.0.0.1:$SRV_PORT/mcp" 2>/dev/null | grep -qE '"engram"[[:space:]]*:[[:space:]]*\{[[:space:]]*"status"[[:space:]]*:[[:space:]]*"connected"'; then ENGRAM_OC=0
 elif opencode mcp list 2>&1 | grep -qE 'engram[[:space:]]+connected'; then ENGRAM_OC=0; fi
 if [ "$ENGRAM_OC" -eq 0 ]; then test_item 0 'engram conectado en OpenCode (servidor V1, GET /mcp)'; else test_item 1 'engram no conectado en OpenCode' 'Reinicia el servidor V1 (servidor.sh --stop y luego servidor.sh) o ejecuta install.sh --reinstalar'; fi
 DEF_AGENT="$(printf '%s' "$OC_CFG_TXT" | grep -oE '"default_agent"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed -E 's/.*"([^"]*)"$/\1/' || true)"

@@ -132,8 +132,10 @@ instalar_componente(){
     COMP_INSTALADO=1
   else
     causa="$(tail -n 1 "$errf")"; [ -n "$causa" ] || causa="código $rc"
-    for ((i = 0; i < ${#destinos[@]}; i++)); do restore_item "${destinos[$i]}" "${existia[$i]}" || true; done
-    err "$titulo falló: $causa (se ha restaurado lo anterior)"
+    local restaurado=1
+    for ((i = 0; i < ${#destinos[@]}; i++)); do restore_item "${destinos[$i]}" "${existia[$i]}" || restaurado=0; done
+    if [ "$restaurado" -eq 1 ]; then err "$titulo falló: $causa (se ha restaurado lo anterior)"
+    else err "$titulo falló: $causa (no se pudo restaurar todo; copia en $BACKUP_DIR)"; causa="$causa (restauración incompleta; copia en $BACKUP_DIR)"; fi
     add_paso "$titulo" 'error' "$causa" "$arreglo"
   fi
   rm -f "$errf"

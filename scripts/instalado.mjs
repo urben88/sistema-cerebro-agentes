@@ -62,7 +62,8 @@ function pares(args) {
 }
 
 const huellaOrigen = (ps) => sha(ps.map((p) => huella(p.origen, listar(p.origen))).join('|'))
-const huellaDestino = (ps, archivos) => sha(ps.map((p, i) => huella(p.destino, archivos[i] || [])).join('|'))
+// Se mide sobre los destinos REGISTRADOS: añadir o quitar un par en el repo es «actualizar», no «tocado».
+const huellaDestino = (destinos, archivos) => sha(destinos.map((d, i) => huella(d, archivos[i] || [])).join('|'))
 
 function leer(registro) {
   try {
@@ -81,16 +82,17 @@ function guardar(registro, r) {
 
 export function estado(registro, nombre, ps) {
   const c = leer(registro).componentes[nombre]
-  if (!c || !c.origen || !Array.isArray(c.archivos)) return 'nuevo'
+  if (!c || !c.origen || !Array.isArray(c.archivos) || !Array.isArray(c.destinos)) return 'nuevo'
   if (ps.every((p) => !fs.existsSync(p.destino))) return 'nuevo'
-  if (huellaDestino(ps, c.archivos) !== c.destino) return 'tocado'
+  if (huellaDestino(c.destinos, c.archivos) !== c.destino) return 'tocado'
   return huellaOrigen(ps) === c.origen ? 'igual' : 'actualizar'
 }
 
 export function registrar(registro, nombre, ps) {
   const r = leer(registro)
   const archivos = ps.map((p) => listar(p.origen))
-  r.componentes[nombre] = { ...(r.componentes[nombre] || {}), origen: huellaOrigen(ps), destino: huellaDestino(ps, archivos), archivos, fecha: new Date().toISOString() }
+  const destinos = ps.map((p) => p.destino)
+  r.componentes[nombre] = { ...(r.componentes[nombre] || {}), origen: huellaOrigen(ps), destino: huellaDestino(destinos, archivos), destinos, archivos, fecha: new Date().toISOString() }
   guardar(registro, r)
 }
 
@@ -98,8 +100,9 @@ function diferencias(registro, nombre, ps) {
   // Lista lo que difiere entre el repo y lo instalado y, si hay git, enseña el diff de cada archivo.
   const c = leer(registro).componentes[nombre] || {}
   let hay = 0
-  ps.forEach((p, i) => {
-    const rels = [...new Set([...listar(p.origen), ...((c.archivos || [])[i] || [])])].sort()
+  ps.forEach((p) => {
+    const j = (c.destinos || []).indexOf(p.destino)
+    const rels = [...new Set([...listar(p.origen), ...(j >= 0 ? (c.archivos || [])[j] || [] : [])])].sort()
     for (const rel of rels) {
       const o = rel ? path.join(p.origen, ...rel.split('/')) : p.origen
       const d = rel ? path.join(p.destino, ...rel.split('/')) : p.destino

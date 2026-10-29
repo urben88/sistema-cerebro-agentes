@@ -53,6 +53,13 @@ try {
     assert.equal(d.code, 0); assert.match(d.out, /dos\.mjs/); assert.match(d.out, /falta en lo instalado/); assert.doesNotMatch(d.out, /uno\.mjs/)
   })
   prueba('nada instalado → nuevo (se instala sin preguntar)', () => { fs.rmSync(dst, { recursive: true }); fs.rmSync(fdst); assert.equal(estado(), 'nuevo') })
+  prueba('añadir un par al componente (agente nuevo) → actualizar, no tocado', () => {
+    copiar(src, dst); copiar(fsrc, fdst); h('registrar', reg, 'hooks', ...pares)
+    const nsrc = path.join(tmp, 'repo', 'b.md'); escribir(nsrc, 'agente nuevo')
+    assert.equal(h('estado', reg, 'hooks', ...pares, nsrc, path.join(tmp, 'casa', 'b.md')).out, 'actualizar')
+  })
+  prueba('quitar un par del componente → actualizar, no tocado', () => assert.equal(h('estado', reg, 'hooks', src, dst).out, 'actualizar'))
+  fs.rmSync(dst, { recursive: true }); fs.rmSync(fdst)
   prueba('valor guarda y lee la configuración de gentle-ai', () => {
     assert.equal(h('valor', reg, 'gentle-ai').out, '')
     h('valor', reg, 'gentle-ai', 'version=4.3.1 install --persona neutral')
