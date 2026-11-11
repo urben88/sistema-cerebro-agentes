@@ -1,0 +1,94 @@
+{
+  "nombre": "Propuesta",
+  "descripcion": "Como el actual, pero con Fable solo en consultor (low) y arquitecto (high).",
+  "claude": {
+    "adaptador-mcps": {
+      "model": "haiku",
+      "effort": "medium"
+    },
+    "analista": {
+      "model": "haiku",
+      "effort": "medium"
+    },
+    "arquitecto": {
+      "model": "fable",
+      "effort": "high"
+    },
+    "ayudante": {
+      "model": "haiku",
+      "effort": "low"
+    },
+    "cerebro": {
+      "model": "opus",
+      "effort": "medium"
+    },
+    "consultor": {
+      "model": "fable",
+      "effort": "low"
+    },
+    "explorador": {
+      "model": "haiku",
+      "effort": "low"
+    },
+    "planificador": {
+      "model": "haiku",
+      "effort": "medium"
+    },
+    "redactor": {
+      "model": "haiku",
+      "effort": "low"
+    },
+    "resolutor": {
+      "model": "sonnet",
+      "effort": "medium"
+    },
+    "retocador": {
+      "model": "sonnet",
+      "effort": "low"
+    },
+    "subdirector": {
+      "model": "haiku",
+      "effort": "medium"
+    }
+  },
+  "opencode": {
+    "cerebro-oc": {
+      "model": "deepseek/deepseek-flash",
+      "variant": "max"
+    },
+    "debugger": {
+      "model": "deepseek/deepseek-flash",
+      "variant": "high"
+    },
+    "explorador-ds": {
+      "model": "deepseek/deepseek-flash",
+      "variant": "low"
+    },
+    "implementador": {
+      "model": "deepseek/deepseek-flash",
+      "variant": "low"
+    },
+    "local-codigo": {
+      "model": "ollama/hf.co/bartowski/Ornith-1.5-9B-GGUF:IQ4_XS"
+    },
+    "local": {
+      "model": "ollama/hf.co/bartowski/Qwen_Qwen3.5-9B-GGUF:IQ4_XS"
+    },
+    "planificador": {
+      "model": "deepseek/deepseek-flash",
+      "variant": "high"
+    },
+    "redactor-ds": {
+      "model": "deepseek/deepseek-flash",
+      "variant": "low"
+    },
+    "revisor": {
+      "model": "deepseek/deepseek-flash",
+      "variant": "max"
+    },
+    "testeador": {
+      "model": "deepseek/deepseek-flash",
+      "variant": "low"
+    }
+  }
+}

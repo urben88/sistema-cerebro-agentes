@@ -88,6 +88,12 @@ export function estado(registro, nombre, ps) {
   return huellaOrigen(ps) === c.origen ? 'igual' : 'actualizar'
 }
 
+/** Destinos (en su orden) con los que se registró un componente, o `null` si no consta. Solo lectura. */
+export function destinosRegistrados(registro, nombre) {
+  const c = leer(registro).componentes[nombre]
+  return c && Array.isArray(c.destinos) ? c.destinos.slice() : null
+}
+
 export function registrar(registro, nombre, ps) {
   const r = leer(registro)
   const archivos = ps.map((p) => listar(p.origen))

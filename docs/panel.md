@@ -1,6 +1,6 @@
 # Panel web en tiempo real
 
-Dashboard local de **solo lectura** para ver qué está haciendo el sistema y cómo está configurado.
+Dashboard local para ver qué está haciendo el sistema y cómo está configurado. Tiene tres pestañas: **Panel** (lo de siempre), **Agentes** (perfiles de modelos) y **Modelos** (ficha comparativa).
 
 ## Arrancar
 
@@ -49,10 +49,38 @@ El panel permite crear y editar tus propios bots sin tocar ficheros a mano:
 
 El Cerebro usa el bot que le pidas al delegar (por defecto `implementador`); si tu bot tiene un modelo propio, se respeta.
 
+## Perfiles de modelos (pestaña «Agentes»)
+
+Un perfil dice qué modelo y qué esfuerzo usa cada agente, para Claude Code y para OpenCode. Está en `config/perfiles/<id>.json`:
+
+```json
+{
+  "nombre": "Propuesta",
+  "descripcion": "…",
+  "claude":   { "consultor": { "model": "fable", "effort": "low" } },
+  "opencode": { "revisor":   { "model": "deepseek/deepseek-flash", "variant": "max" } }
+}
+```
+
+- Vienen dos: **actual** (lo que hay hoy) y **propuesta** (igual, con Fable solo en `consultor` low y `arquitecto` high). Para crear otro, copia uno y cámbiale los valores.
+- Un agente que no aparece en el perfil no se toca. Si aparece uno que no existe, se muestra el error y no se aplica nada.
+- En la pestaña eliges el perfil y pulsas **Aplicar**: primero ves qué cambia (agente: antes → después) y confirmas. Se reescriben solo las líneas `model:`, `effort:` y `variant:`, en el repositorio y en la copia instalada; el resto de cada fichero queda igual.
+- La página dice qué perfil coincide con lo instalado, o «personalizado».
+- **Tope de esfuerzo:** un perfil con `fable` y `xhigh` o `max` se rechaza, salvo que lleve `"permitirMasDeHigh": true`.
+- El modelo del hilo principal (`/model`) no entra en los perfiles.
+- **Instalador:** tras aplicar, el registro de `install` (`instalado.json`) se actualiza si esos agentes estaban sin cambios, así que `install` no los toma por editados a mano. Si ya los habías tocado a mano o el repo estaba por delante, no se registra (para que `install` siga avisando) y la página te lo dice.
+- Los perfiles se leen del repositorio (`repoRoot` de `panel-config.json`); si el panel no lo encuentra, la pestaña lo avisa.
+
+## Ficha de modelos (pestaña «Modelos»)
+
+Tabla ordenable (clic en la cabecera) con índice de inteligencia, coste y tiempo por tarea, nivel de Engineering e **inteligencia por dólar**, más una gráfica de inteligencia frente a coste (eje X logarítmico). Los modelos que usa el sistema van con ★. Debajo, plegadas, las capturas originales. Los datos (aproximados, Artificial Analysis, 2026-11-11) están en `config/web/public/modelos.json`; edítalo para añadir modelos.
+
+Pruebas: `node scripts/test-perfiles.mjs` (usa carpetas temporales; no toca tu instalación).
+
 ## Seguridad
 
 - Escucha **solo en `127.0.0.1`** (nunca expuesto a la red).
-- Es de **solo lectura**: no modifica nada. Para editar configuración, hazlo en el repositorio y ejecuta `install` o `scripts/actualizar`.
+- Casi todo es de lectura. Solo modifican ficheros los bots y los perfiles de modelos, y esas rutas aceptan únicamente `POST` desde `127.0.0.1`, con `Content-Type: application/json` y sin cabecera `Origin` ajena al panel. Para el resto de la configuración, edita el repositorio y ejecuta `install` o `scripts/actualizar`.
 - No expone credenciales (`auth.json` y `service.json` quedan excluidos de la lista de ficheros).
 
 ## Cómo funciona

@@ -12,7 +12,7 @@
       <span class="logo">🧠</span>
       <div>
         <h1>Sistema Cerebro → OpenCode</h1>
-        <p class="sub">Panel de control en tiempo real · solo lectura</p>
+        <p class="sub">Panel de control en tiempo real</p>
       </div>
     </div>
     <div class="barra-der">
@@ -25,6 +25,13 @@
 
   <div id="avisoError" class="aviso oculto"></div>
 
+  <nav class="pestanas" id="pestanas">
+    <button class="pestana-btn activa" data-pestana="panel">Panel</button>
+    <button class="pestana-btn" data-pestana="agentes">Agentes</button>
+    <button class="pestana-btn" data-pestana="modelos">Modelos</button>
+  </nav>
+
+  <div class="pestana" id="pestana-panel">
   <section class="pipeline">
     <div class="nodo" id="nodoCerebro">
       <div class="nodo-icono">🧠</div>
@@ -97,6 +104,60 @@
       <div id="listaFicheros"></div>
     </section>
   </main>
+  </div>
+
+  <div class="pestana oculto" id="pestana-agentes">
+    <section class="tarjeta contenido">
+      <h2>Perfiles de modelos <span class="nota">(Claude Code y OpenCode)</span></h2>
+      <p class="nota">Un perfil fija el modelo y el esfuerzo (Claude) o la variante (OpenCode) de cada agente. Al aplicarlo se reescriben solo esas líneas en el repositorio y en lo instalado. El modelo del hilo principal (<code>/model</code>) no cambia.</p>
+      <div class="fila-perfil">
+        <label>Perfil <select id="selPerfil"></select></label>
+        <span id="perfilActivo" class="badge gris">—</span>
+        <button class="boton primario" id="btnAplicar">Aplicar</button>
+      </div>
+      <p class="nota" id="perfilDesc"></p>
+      <div id="perfilPrevia" class="previa oculto"></div>
+      <div id="perfilMsg" class="errores oculto"></div>
+      <div class="tabla-scroll alta">
+        <table id="tablaPerfiles">
+          <thead><tr><th>Origen</th><th>Agente</th><th>Modelo</th><th>Esfuerzo / variante</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div class="pestana oculto" id="pestana-modelos">
+    <section class="tarjeta contenido">
+      <h2>Ficha de modelos <span class="nota" id="modelosFuente"></span></h2>
+      <p class="nota">Valores aproximados. Haz clic en una cabecera para ordenar. «Inteligencia por dólar» = índice ÷ coste por tarea. Los modelos marcados con ★ son los que usa el sistema.</p>
+      <div class="tabla-scroll alta">
+        <table id="tablaModelos">
+          <thead><tr>
+            <th data-col="modelo">Modelo</th><th data-col="proveedor">Proveedor</th><th data-col="indice">Índice</th>
+            <th data-col="dolares">$/tarea</th><th data-col="minutos">Min/tarea</th><th data-col="engineering">Engineering</th><th data-col="porDolar">Inteligencia por dólar</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="tarjeta contenido">
+      <h2>Inteligencia frente a coste por tarea <span class="nota">(eje X logarítmico)</span></h2>
+      <div id="grafica" class="grafica"></div>
+      <div id="leyenda" class="leyenda"></div>
+    </section>
+    <section class="tarjeta contenido">
+      <details>
+        <summary>Capturas originales (fuente)</summary>
+        <div class="capturas">
+          <img src="/capturas/inteligencia-coste.png" alt="Inteligencia frente a coste" loading="lazy">
+          <img src="/capturas/coste.png" alt="Coste" loading="lazy">
+          <img src="/capturas/tiempo.png" alt="Tiempo" loading="lazy">
+          <img src="/capturas/capacidades.png" alt="Capacidades" loading="lazy">
+        </div>
+      </details>
+    </section>
+  </div>
 
   <div id="modal" class="modal oculto">
     <div class="modal-caja">

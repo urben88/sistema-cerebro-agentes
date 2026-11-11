@@ -1,0 +1,170 @@
+{
+  "fuente": "Artificial Analysis",
+  "fecha": "2026-11-11",
+  "aproximado": true,
+  "nota": "Valores aproximados. El índice está leído a ojo de una gráfica; el resto son cifras impresas en las capturas. «usa» marca los modelos que usa el sistema (agentes y perfil propuesta).",
+  "modelos": [
+    {
+      "modelo": "DeepSeek V4.1 Flash (high)",
+      "proveedor": "DeepSeek",
+      "indice": 28.5,
+      "dolares": 0.46,
+      "minutos": 12.6,
+      "engineering": 34,
+      "usa": true
+    },
+    {
+      "modelo": "DeepSeek V4.1 Flash (max)",
+      "proveedor": "DeepSeek",
+      "indice": 32.5,
+      "dolares": 0.6,
+      "minutos": 16.3,
+      "engineering": 38,
+      "usa": true
+    },
+    {
+      "modelo": "GPT-6.1 Sol (xhigh)",
+      "proveedor": "OpenAI",
+      "indice": 52.5,
+      "dolares": 0.76,
+      "minutos": 9.2,
+      "engineering": 57,
+      "usa": false
+    },
+    {
+      "modelo": "GPT-6.1 Sol (max)",
+      "proveedor": "OpenAI",
+      "indice": 54.7,
+      "dolares": 1.27,
+      "minutos": 20.4,
+      "engineering": 60,
+      "usa": false
+    },
+    {
+      "modelo": "Claude Fable 5.2 (low)",
+      "proveedor": "Anthropic",
+      "indice": 54,
+      "dolares": 3.1,
+      "minutos": 6.3,
+      "engineering": 62,
+      "usa": true
+    },
+    {
+      "modelo": "GPT-6 Astra (high)",
+      "proveedor": "OpenAI",
+      "indice": 55,
+      "dolares": 3.24,
+      "minutos": 9.7,
+      "engineering": 59,
+      "usa": false
+    },
+    {
+      "modelo": "GPT-6 Astra (xhigh)",
+      "proveedor": "OpenAI",
+      "indice": 55.3,
+      "dolares": 3.66,
+      "minutos": 11.3,
+      "engineering": 60,
+      "usa": false
+    },
+    {
+      "modelo": "Claude Fable 5.2 (medium)",
+      "proveedor": "Anthropic",
+      "indice": 56.3,
+      "dolares": 3.8,
+      "minutos": 7.7,
+      "engineering": 65,
+      "usa": true
+    },
+    {
+      "modelo": "Claude Opus 5.5 (xhigh)",
+      "proveedor": "Anthropic",
+      "indice": 57.5,
+      "dolares": 6.05,
+      "minutos": 15.7,
+      "engineering": 63,
+      "usa": true
+    },
+    {
+      "modelo": "GPT-6 Astra (max)",
+      "proveedor": "OpenAI",
+      "indice": 57,
+      "dolares": 6.24,
+      "minutos": 23,
+      "engineering": 62,
+      "usa": false
+    },
+    {
+      "modelo": "Gemini 4 Carbon (medium)",
+      "proveedor": "Google",
+      "indice": 58.5,
+      "dolares": 6.59,
+      "minutos": 23.8,
+      "engineering": 64,
+      "usa": false
+    },
+    {
+      "modelo": "Gemini 4 Carbon (low)",
+      "proveedor": "Google",
+      "indice": 54.3,
+      "dolares": 7.19,
+      "minutos": 23.3,
+      "engineering": 60,
+      "usa": false
+    },
+    {
+      "modelo": "Gemini 4 Carbon (high)",
+      "proveedor": "Google",
+      "indice": 60.2,
+      "dolares": 7.76,
+      "minutos": 26.1,
+      "engineering": 65,
+      "usa": false
+    },
+    {
+      "modelo": "Claude Fable 5.2 (high)",
+      "proveedor": "Anthropic",
+      "indice": 62,
+      "dolares": 9.08,
+      "minutos": 16.9,
+      "engineering": 70,
+      "usa": true
+    },
+    {
+      "modelo": "Claude Sonnet 5.5 (max)",
+      "proveedor": "Anthropic",
+      "indice": 54.6,
+      "dolares": 10.02,
+      "minutos": 32.7,
+      "engineering": 58,
+      "usa": true
+    },
+    {
+      "modelo": "Claude Opus 5.5 (max)",
+      "proveedor": "Anthropic",
+      "indice": 59,
+      "dolares": 10.04,
+      "minutos": 25,
+      "engineering": 65,
+      "usa": true
+    },
+    {
+      "modelo": "Claude Fable 5.2 (xhigh)",
+      "proveedor": "Anthropic",
+      "indice": 62.3,
+      "dolares": 14.83,
+      "minutos": 25.8,
+      "engineering": 70,
+      "usa": true
+    },
+    {
+      "modelo": "Claude Fable 5.2 (max)",
+      "proveedor": "Anthropic",
+      "indice": 64.5,
+      "dolares": 26.54,
+      "minutos": 45,
+      "engineering": 73,
+      "usa": true
+    }
+  ]
+}

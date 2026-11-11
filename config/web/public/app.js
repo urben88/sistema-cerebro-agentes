@@ -357,6 +357,166 @@ $('botGuardar').addEventListener('click', guardarBot)
 $('botEliminar').addEventListener('click', eliminarBot)
 $('modalBot').addEventListener('click', (e) => { if (e.target === $('modalBot')) cerrarBot() })
 
+// ---------------------------------------------------------------- pestañas
+
+function mostrarPestana(nombre) {
+  for (const b of document.querySelectorAll('.pestana-btn')) b.classList.toggle('activa', b.dataset.pestana === nombre)
+  for (const p of document.querySelectorAll('.pestana')) p.classList.toggle('oculto', p.id !== `pestana-${nombre}`)
+  if (nombre === 'agentes') cargarPerfiles()
+  if (nombre === 'modelos') cargarFicha()
+  location.hash = nombre === 'panel' ? '' : nombre
+}
+for (const b of document.querySelectorAll('.pestana-btn')) b.addEventListener('click', () => mostrarPestana(b.dataset.pestana))
+
+// ---------------------------------------------------------------- pestaña Agentes: perfiles
+
+let perfilesCache = null
+
+async function postJson(ruta, datos) {
+  const r = await fetch(ruta, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) })
+  return r.json()
+}
+
+function mensajePerfil(texto, bueno) {
+  const el = $('perfilMsg')
+  el.textContent = texto
+  el.className = bueno ? 'ok-msg' : 'errores'
+  el.classList.toggle('oculto', !texto)
+}
+
+function nombrePerfil(id) {
+  const p = perfilesCache && perfilesCache.perfiles.find((x) => x.id === id)
+  return p ? p.nombre : id
+}
+
+function pintarPerfiles() {
+  const r = perfilesCache
+  const sel = $('selPerfil')
+  const previo = sel.value
+  sel.innerHTML = r.perfiles.map((p) => `<option value="${esc(p.id)}"${p.error ? ' disabled' : ''}>${esc(p.nombre)}${p.error ? ' (con errores)' : ''}</option>`).join('')
+  if (previo && r.perfiles.some((p) => p.id === previo)) sel.value = previo
+  const act = $('perfilActivo')
+  act.textContent = r.activo ? `en uso: ${nombrePerfil(r.activo)}` : 'en uso: personalizado'
+  act.className = 'badge ' + (r.activo ? 'verde' : 'ambar')
+  const elegido = r.perfiles.find((p) => p.id === sel.value)
+  $('perfilDesc').textContent = elegido ? (elegido.error || elegido.descripcion) : ''
+  $('tablaPerfiles').querySelector('tbody').innerHTML = r.agentes.map((a) => `
+    <tr>
+      <td><span class="badge ${a.origen === 'claude' ? 'morado' : 'azul'}">${a.origen === 'claude' ? 'Claude' : 'OpenCode'}</span></td>
+      <td>${esc(a.agente)}</td>
+      <td>${esc(a.model || '(hereda)')}</td>
+      <td>${esc(a.effort || a.variant || '—')}${a.fuente === 'repo' ? ' <span class="tenue" title="no está instalado: se muestra el repositorio">(repo)</span>' : ''}</td>
+    </tr>`).join('')
+}
+
+async function cargarPerfiles() {
+  try {
+    const r = await fetch('/api/perfiles').then((x) => x.json())
+    if (!r.ok) { mensajePerfil(r.error || 'No se pudieron leer los perfiles', false); return }
+    perfilesCache = r
+    pintarPerfiles()
+  } catch (e) { mensajePerfil(`Error: ${e}`, false) }
+}
+
+async function previaPerfil() {
+  const id = $('selPerfil').value
+  const caja = $('perfilPrevia')
+  mensajePerfil('', true)
+  const r = await fetch(`/api/perfiles/previa?id=${encodeURIComponent(id)}`).then((x) => x.json())
+  if (!r.ok) { caja.classList.add('oculto'); mensajePerfil((r.errores || ['Error']).join(' · '), false); return }
+  if (!r.cambios.length) { caja.classList.add('oculto'); mensajePerfil(`«${r.nombre}» ya está aplicado: no hay nada que cambiar.`, true); return }
+  caja.innerHTML = `<strong>Aplicar «${esc(r.nombre)}» cambia ${r.cambios.length} valor(es):</strong>
+    <ul>${r.cambios.map((c) => `<li>${esc(c.origen === 'claude' ? 'Claude' : 'OpenCode')} · <b>${esc(c.agente)}</b> · ${esc(c.campo)}: ${esc(c.antes ?? '(sin línea)')} <span class="flecha-cambio">→</span> ${esc(c.despues)}</li>`).join('')}</ul>
+    <div class="fila-botones" style="justify-content:flex-start">
+      <button class="boton primario" id="btnConfirmar">Confirmar y aplicar</button>
+      <button class="boton" id="btnCancelarPerfil">Cancelar</button>
+    </div>`
+  caja.classList.remove('oculto')
+  $('btnCancelarPerfil').addEventListener('click', () => caja.classList.add('oculto'))
+  $('btnConfirmar').addEventListener('click', async () => {
+    $('btnConfirmar').disabled = true
+    try {
+      const a = await postJson('/api/perfiles/aplicar', { id })
+      caja.classList.add('oculto')
+      if (!a.ok) { mensajePerfil((a.errores || [a.error || 'Error']).join(' · '), false); return }
+      const avisos = Object.values(a.registro || {}).filter((v) => v !== 'registrado')
+      mensajePerfil(`Aplicado «${nombrePerfil(id)}»: ${a.cambios.length} valor(es) en ${a.ficheros.length} fichero(s).${avisos.length ? ' Registro del instalador: ' + avisos.join('; ') : ''}`, true)
+      await cargarPerfiles()
+    } catch (e) { mensajePerfil(`Error: ${e}`, false) }
+  })
+}
+
+$('btnAplicar').addEventListener('click', previaPerfil)
+$('selPerfil').addEventListener('change', () => { $('perfilPrevia').classList.add('oculto'); mensajePerfil('', true); if (perfilesCache) pintarPerfiles() })
+
+// ---------------------------------------------------------------- pestaña Modelos
+
+let fichaCache = null
+let orden = { col: 'indice', desc: true }
+const COLORES = { Anthropic: '#f59e0b', OpenAI: '#22c55e', Google: '#3b82f6', DeepSeek: '#a855f7' }
+
+function filasFicha() {
+  return fichaCache.modelos.map((m) => ({ ...m, porDolar: m.dolares > 0 ? m.indice / m.dolares : 0 }))
+}
+
+function pintarTablaModelos() {
+  const filas = filasFicha().sort((a, b) => {
+    const x = a[orden.col]; const y = b[orden.col]
+    const c = typeof x === 'string' ? x.localeCompare(y) : x - y
+    return orden.desc ? -c : c
+  })
+  for (const th of $('tablaModelos').querySelectorAll('th[data-col]')) {
+    th.dataset.base = th.dataset.base || th.textContent
+    th.textContent = th.dataset.base + (th.dataset.col === orden.col ? (orden.desc ? ' ▼' : ' ▲') : '')
+  }
+  $('tablaModelos').querySelector('tbody').innerHTML = filas.map((m) => `
+    <tr class="${m.usa ? 'usado' : ''}">
+      <td>${m.usa ? '★ ' : ''}${esc(m.modelo)}</td>
+      <td><span style="color:${COLORES[m.proveedor] || 'var(--suave)'}">●</span> ${esc(m.proveedor)}</td>
+      <td class="num">${m.indice.toFixed(1)}</td><td class="num">$${m.dolares.toFixed(2)}</td>
+      <td class="num">${m.minutos.toFixed(1)}</td><td class="num">${m.engineering}</td>
+      <td class="num">${m.porDolar.toFixed(1)}</td>
+    </tr>`).join('')
+}
+
+function pintarGrafica() {
+  const filas = filasFicha()
+  const W = 900; const H = 460; const mi = 56; const md = 24; const ms = 20; const mb = 44
+  const xmin = 0.3; const xmax = 40; const ymin = 25; const ymax = 68
+  const X = (v) => mi + ((Math.log10(v) - Math.log10(xmin)) / (Math.log10(xmax) - Math.log10(xmin))) * (W - mi - md)
+  const Y = (v) => H - mb - ((v - ymin) / (ymax - ymin)) * (H - mb - ms)
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Inteligencia frente a coste por tarea">`
+  for (const v of [0.3, 1, 3, 10, 30]) svg += `<line x1="${X(v)}" y1="${ms}" x2="${X(v)}" y2="${H - mb}" stroke="#223047"/><text x="${X(v)}" y="${H - mb + 16}" fill="#93a4c3" font-size="11" text-anchor="middle">$${v}</text>`
+  for (let v = 30; v <= 65; v += 5) svg += `<line x1="${mi}" y1="${Y(v)}" x2="${W - md}" y2="${Y(v)}" stroke="#223047"/><text x="${mi - 8}" y="${Y(v) + 4}" fill="#93a4c3" font-size="11" text-anchor="end">${v}</text>`
+  svg += `<text x="${(mi + W - md) / 2}" y="${H - 6}" fill="#93a4c3" font-size="12" text-anchor="middle">Coste por tarea ($, escala logarítmica)</text>`
+  svg += `<text transform="translate(14 ${(ms + H - mb) / 2}) rotate(-90)" fill="#93a4c3" font-size="12" text-anchor="middle">Índice de inteligencia</text>`
+  filas.forEach((m, i) => {
+    const cx = X(m.dolares); const cy = Y(m.indice)
+    const color = COLORES[m.proveedor] || '#64748b'
+    const alto = i % 2 ? 14 : -9
+    svg += `<g><title>${esc(m.modelo)} · índice ${m.indice} · $${m.dolares}/tarea</title>` +
+      `<circle cx="${cx}" cy="${cy}" r="${m.usa ? 7 : 4.5}" fill="${color}" fill-opacity="${m.usa ? 1 : .75}" stroke="${m.usa ? '#fff' : 'none'}" stroke-width="2"/>` +
+      `<text x="${cx + 8}" y="${cy + alto}" fill="${m.usa ? '#e6edf7' : '#93a4c3'}" font-size="${m.usa ? 11 : 9.5}" font-weight="${m.usa ? 700 : 400}">${m.usa ? '★ ' : ''}${esc(m.modelo)}</text></g>`
+  })
+  $('grafica').innerHTML = svg + '</svg>'
+  $('leyenda').innerHTML = Object.entries(COLORES).map(([p, c]) => `<span><i style="background:${c}"></i>${esc(p)}</span>`).join('') + '<span>★ borde blanco = lo que usa el sistema</span>'
+}
+
+async function cargarFicha() {
+  if (!fichaCache) {
+    try { fichaCache = await fetch('/modelos.json').then((x) => x.json()) } catch { $('modelosFuente').textContent = '(no se pudo cargar modelos.json)'; return }
+    $('modelosFuente').textContent = `· fuente: ${fichaCache.fuente}, ${fichaCache.fecha} (aproximado)`
+    for (const th of $('tablaModelos').querySelectorAll('th[data-col]')) {
+      th.addEventListener('click', () => {
+        orden = { col: th.dataset.col, desc: orden.col === th.dataset.col ? !orden.desc : th.dataset.col !== 'modelo' && th.dataset.col !== 'proveedor' }
+        pintarTablaModelos()
+      })
+    }
+  }
+  pintarTablaModelos()
+  pintarGrafica()
+}
+
 // ---------------------------------------------------------------- ciclo
 
 async function refrescar() {
@@ -384,5 +544,6 @@ async function cargarFicheros() {
 
 refrescar()
 cargarFicheros()
+if (['agentes', 'modelos'].includes(location.hash.slice(1))) mostrarPestana(location.hash.slice(1))
 setInterval(refrescar, 2500)
 setInterval(cargarFicheros, 30000)

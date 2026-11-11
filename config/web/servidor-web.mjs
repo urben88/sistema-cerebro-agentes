@@ -7,7 +7,9 @@
  *  - muestra sesiones y trabajos del MCP en vivo
  *  - lista y permite ABRIR los ficheros de configuración y los agentes
  *
- * Solo escucha en 127.0.0.1 y es de SOLO LECTURA (no modifica nada).
+ * Solo escucha en 127.0.0.1. Casi todo es de lectura; lo único que modifica ficheros son los bots y
+ * los perfiles de modelos, y esas rutas pasan por las guardas de guardas.mjs (solo POST local,
+ * application/json y sin Origin ajeno).
  *
  * Uso: node servidor-web.mjs [--port 4598]
  */
@@ -15,8 +17,9 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execSync } from 'node:child_process'
+import { comprobarEscritura } from './guardas.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HOME = os.homedir()
@@ -291,6 +294,78 @@ function leerCuerpo(req, limite = 65536) {
   })
 }
 
+// ---------------------------------------------------------------- perfiles de modelos
+
+const ID_PERFIL = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/
+const importar = (ruta) => import(pathToFileURL(ruta).href)
+
+/** Módulo de perfiles: el del hub instalado (../hub) o, en el repo, config/hub. */
+async function moduloPerfiles() {
+  return importar(path.join(__dirname, '..', 'hub', 'lib', 'perfiles.mjs'))
+}
+
+/** Funciones del registro del instalador (spec 25), del repo; `null` si no están. */
+async function apiRegistro(root) {
+  try { return await importar(path.join(root, 'scripts', 'instalado.mjs')) } catch { return null }
+}
+
+function contextoPerfiles() {
+  const root = findRepoRoot()
+  if (!root) return null
+  return {
+    root,
+    dir: path.join(root, 'config', 'perfiles'),
+    rutas: {
+      repo: { claude: path.join(root, 'config', 'claude', 'agents'), opencode: path.join(root, 'config', 'opencode', 'agents') },
+      instalado: { claude: path.join(HOME, '.claude', 'agents'), opencode: path.join(HOME, '.config', 'opencode', 'agents') },
+    },
+  }
+}
+
+async function perfilPorId(id) {
+  const ctx = contextoPerfiles()
+  if (!ctx) return { error: 'no se encuentra el repositorio (config/perfiles)' }
+  if (!ID_PERFIL.test(String(id || ''))) return { error: 'id de perfil inválido' }
+  const P = await moduloPerfiles()
+  const p = P.leerPerfiles(ctx.dir).find((x) => x.id === id)
+  if (!p) return { error: `el perfil «${id}» no existe` }
+  if (p.error) return { error: p.error }
+  return { ctx, P, p }
+}
+
+async function apiPerfiles() {
+  const ctx = contextoPerfiles()
+  if (!ctx) return { ok: false, error: 'no se encuentra el repositorio (config/perfiles)' }
+  const P = await moduloPerfiles()
+  const lista = P.leerPerfiles(ctx.dir)
+  return {
+    ok: true,
+    perfiles: lista.map((p) => ({
+      id: p.id,
+      nombre: p.perfil?.nombre || p.id,
+      descripcion: p.perfil?.descripcion || '',
+      permitirMasDeHigh: p.perfil?.permitirMasDeHigh === true,
+      error: p.error || (P.validarPerfil(p.perfil).join(' · ') || null),
+    })),
+    activo: P.perfilActivo(lista, ctx.rutas),
+    agentes: P.leerAgentes(ctx.rutas),
+  }
+}
+
+async function apiPerfilPrevia(id) {
+  const r = await perfilPorId(id)
+  if (r.error) return { ok: false, errores: [r.error] }
+  return { ok: true, ...r.P.comparar(r.p.perfil, r.ctx.rutas), id, nombre: r.p.perfil.nombre }
+}
+
+async function apiPerfilAplicar(datos) {
+  const r = await perfilPorId(datos?.id)
+  if (r.error) return { ok: false, errores: [r.error] }
+  const api = await apiRegistro(r.ctx.root)
+  const registro = api ? { ruta: path.join(SYSTEM_DIR, 'instalado.json'), api } : null
+  return { ...r.P.aplicar(r.p.perfil, r.ctx.rutas, { registro }), id: datos.id }
+}
+
 // ---------------------------------------------------------------- ficheros
 
 function construirFicheros() {
@@ -449,6 +524,7 @@ const MIME = {
   css: 'text/css; charset=utf-8',
   json: 'application/json; charset=utf-8',
   txt: 'text/plain; charset=utf-8',
+  png: 'image/png',
 }
 
 function enviarJson(res, obj, status = 200) {
@@ -457,10 +533,24 @@ function enviarJson(res, obj, status = 200) {
   res.end(cuerpo)
 }
 
+// Rutas que modifican algo: todas pasan por las guardas antes de hacer nada.
+const RUTAS_ESCRITURA = new Set(['/api/bot', '/api/bot/eliminar', '/api/perfiles/aplicar'])
+
 const servidor = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://127.0.0.1')
   const ruta = u.pathname
   try {
+    if (RUTAS_ESCRITURA.has(ruta)) {
+      const veto = comprobarEscritura(req, servidor.address().port)
+      if (veto) return enviarJson(res, { ok: false, error: veto.error, errores: [veto.error] }, veto.status)
+    }
+    if (ruta === '/api/perfiles') return enviarJson(res, await apiPerfiles())
+    if (ruta === '/api/perfiles/previa') return enviarJson(res, await apiPerfilPrevia(u.searchParams.get('id')))
+    if (ruta === '/api/perfiles/aplicar') {
+      let datos = {}
+      try { datos = JSON.parse((await leerCuerpo(req)) || '{}') } catch { return enviarJson(res, { ok: false, errores: ['JSON inválido'] }, 400) }
+      return enviarJson(res, await apiPerfilAplicar(datos))
+    }
     if (ruta === '/api/ping') return enviarJson(res, { ok: true, panel: 'sistema-cerebro-agentes', hora: Date.now() })
     if (ruta === '/api/modelos') return enviarJson(res, { ok: true, modelos: leerModelos() })
     if (ruta === '/api/bot' && req.method === 'POST') {
@@ -489,7 +579,7 @@ const servidor = http.createServer(async (req, res) => {
     if (ruta === '/favicon.ico') { res.writeHead(204); return res.end() }
 
     // estáticos (solo estos tres nombres)
-    const permitidos = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css' }
+    const permitidos = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css', '/modelos.json': 'modelos.json' }
     const archivo = permitidos[ruta]
     if (archivo) {
       const full = path.join(PUBLIC_DIR, archivo)
@@ -497,6 +587,15 @@ const servidor = http.createServer(async (req, res) => {
       const ext = path.extname(archivo).slice(1)
       res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': 'no-store' })
       return res.end(datos)
+    }
+    // capturas de la ficha de modelos (solo PNG con nombre simple dentro de public/capturas)
+    const cap = ruta.match(/^\/capturas\/([A-Za-z0-9._-]+\.png)$/)
+    if (cap && !cap[1].includes('..')) {
+      const full = path.join(PUBLIC_DIR, 'capturas', cap[1])
+      if (fs.existsSync(full)) {
+        res.writeHead(200, { 'Content-Type': MIME.png, 'Cache-Control': 'no-store' })
+        return res.end(fs.readFileSync(full))
+      }
     }
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
     res.end('No encontrado')
