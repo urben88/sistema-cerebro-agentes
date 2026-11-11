@@ -225,6 +225,18 @@ await prueba('S4 fable con xhigh o max se rechaza sin modificar ningún fichero'
   }
   igualesA(antes)
 })
+await prueba('S4 el tope cuenta el modelo que ya tiene el fichero, no solo el del perfil', () => {
+  assert.ok(P.aplicar(perfil('propuesta'), rutas, opciones).ok)
+  const antes = foto()
+  const soloEsfuerzo = { nombre: 'Solo esfuerzo', claude: { arquitecto: { effort: 'max' } } }
+  const r = P.aplicar(soloEsfuerzo, rutas, opciones)
+  assert.equal(r.ok, false)
+  assert.match(r.errores.join(' '), /permitirMasDeHigh/)
+  assert.equal(P.comparar(soloEsfuerzo, rutas).ok, false)
+  igualesA(antes)
+  assert.ok(P.aplicar({ ...soloEsfuerzo, permitirMasDeHigh: true }, rutas, opciones).ok)
+  restaurar()
+})
 await prueba('S4 con "permitirMasDeHigh": true se acepta; fable·high no necesita permiso', () => {
   const p = clon(perfil('propuesta')); p.claude.arquitecto = { model: 'fable', effort: 'xhigh' }; p.permitirMasDeHigh = true
   assert.deepEqual(P.validarPerfil(p), [])

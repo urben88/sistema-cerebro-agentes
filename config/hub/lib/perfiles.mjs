@@ -184,6 +184,13 @@ function planificar(perfil, rutas) {
         const r = editarFrontmatter(antes, campos)
         if (r.error) { errores.push(`${seccion}/${agente}: ${r.error} (${c.ruta})`); continue }
         const actuales = leerCampos(antes)
+        // S4 sobre el resultado: el perfil puede traer solo el esfuerzo (o solo el modelo) y el fichero poner el resto.
+        const final = { ...actuales, ...campos }
+        const nivel = final[CAMPO_ESFUERZO[seccion]]
+        if (perfil.permitirMasDeHigh !== true && /fable/i.test(String(final.model || '')) && NIVELES_ALTOS.has(nivel)) {
+          errores.push(`${seccion}/${agente}: ${final.model} con ${nivel} supera high; añade "permitirMasDeHigh": true al perfil si lo quieres`)
+          continue
+        }
         for (const k of Object.keys(campos)) {
           if (actuales[k] === campos[k]) continue
           const p = (porCampo[k] ||= { antesRepo: null, antesInstalado: null })

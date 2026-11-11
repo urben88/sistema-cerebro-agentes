@@ -53,10 +53,10 @@ Los valores de «Índice» están leídos a ojo de una gráfica; el resto son ci
 
 ## Tasks
 
-- [ ] T1 · S1, S2, S4 · lógica de perfiles (leer, validar, comparar, aplicar) en un módulo propio con tests · delegado (resolutor)
-- [ ] T2 · S3 · endpoints y pestaña «Agentes» · delegado (resolutor)
-- [ ] T3 · S5 · `modelos.json` y pestaña «Modelos» · delegado (resolutor)
-- [ ] T4 · docs: sección breve en `docs/` sobre perfiles · delegado (resolutor)
+- [x] T1 · S1, S2, S4 · lógica de perfiles (leer, validar, comparar, aplicar) en un módulo propio con tests · delegado (resolutor)
+- [x] T2 · S3 · endpoints y pestaña «Agentes» · delegado (resolutor)
+- [x] T3 · S5 · `modelos.json` y pestaña «Modelos» · delegado (resolutor)
+- [x] T4 · docs: sección breve en `docs/` sobre perfiles · delegado (resolutor)
 
 Ruta: delegado por coste (regla del usuario: el hilo principal en Fable tiene cuota semanal propia y limitada).
 
@@ -66,3 +66,4 @@ Ruta: delegado por coste (regla del usuario: el hilo principal en Fable tiene cu
 - L2: la propuesta se recorta respecto al estudio inicial. Una sola petición gastó el 3 % de la cuota semanal de Fable, así que Fable queda solo en `consultor` (low) y `arquitecto` (high); hilo principal, `cerebro` y `resolutor` no cambian.
 - L3 (supuesto): el modelo del hilo principal (`/model`) queda fuera de los perfiles; solo se gestionan agentes.
 - L4: el panel `config/web` deja de ser de solo lectura. Riesgo: ítem 2 (guardas del servidor local) e ítem 5 (toca ficheros instalados).
+- L5: verificación independiente (analista): S1, S2, S5 cumplen; S4 tenía un hueco (perfil con solo `effort` sobre un agente ya en Fable). Corregido comprobando el tope sobre el resultado; test añadido. Commit base 0912c37.
