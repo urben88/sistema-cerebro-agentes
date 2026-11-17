@@ -5,6 +5,19 @@ Versionado semántico (MAJOR.MINOR.PATCH).
 
 ## [Sin publicar]
 
+### Añadido (spec 26 · consola de arranque y parada)
+
+- **Consola del Cerebro**: un doble clic en `Cerebro.cmd` (Windows) o `scripts/consola.sh` (macOS/Linux) abre una consola que levanta el hub (Docker o nativo) y el panel web, abre el navegador y se queda en primer plano. **Al cerrarla se apaga todo** lo que encendió esa consola.
+- **Acceso directo en el Menú Inicio** (`Cerebro.lnk`, vía `scripts/acceso-directo.ps1`): Windows Search solo indexa accesos directos, no ficheros `.cmd` sueltos, así que la consola se puede lanzar desde el buscador (tecla Windows o Win+S) como cualquier otra app. En macOS, `~/Applications/Cerebro.command` ( Spotlight).
+- **Vigilante**: al cerrar la ventana, Windows mata el proceso de PowerShell y el `finally` no llega a ejecutarse. Un proceso detached (`consola-vigilante`) vigila el proceso padre y el latido; cuando la consola muere, apaga lo que encendió. Un vigilante viejo no puede tocar los servicios de una consola nueva.
+- **Nada se borra al apagar**: el compose se detiene (`stop`, no `down`), el contenedor y sus volumenes se quedan; los datos del hub (`hub-data`), la configuración y los ajustes de la consola se conservan.
+- **Ajustes persistentes** en `~/.sistema-cerebro-agentes/consola.json`: qué levantar (hub, panel, navegador, servidor V1) y puertos. Se cambian con `-SinPanel`/`-ConServidor`… y `-Guardar`.
+- **Estado por instancia** (`consola-estado-<pid>.json`): dos consolas a la vez no se pisan; al cerrar una, el hub y el panel se quedan si hay otra viva.
+- **Si el hub en Docker no responde de forma estable, se levanta el nativo** (mismo hub, en el host): red de seguridad ante un contenedor colgado.
+- Otros comandos: `-Accion estado` (consulta), `-Accion parar` (apaga lo que haya), `-Accion config` (ajustes).
+- `verificar` reintenta la comprobación del hub: tras un arranque puede tardar unos segundos y no debe fallar por eso.
+- Instalador: nuevo componente `consola` (Windows y macOS/Linux). Pruebas: `scripts/test-consola.mjs` (dentro de `verificar`). Documentación: `docs/consola.md`.
+
 ### Añadido (spec 25 · instalador con control y flujo de errores)
 
 - **Registro de lo instalado** (`~/.sistema-cerebro-agentes/instalado.json`, `scripts/instalado.mjs`): huella sha256 por componente (hub, hooks, panel, mods, MCP, agentes de Claude y de OpenCode, comandos, skill, Docker) y la configuración de Gentle AI.

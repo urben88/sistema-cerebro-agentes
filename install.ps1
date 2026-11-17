@@ -236,6 +236,13 @@ $Comp = [ordered]@{
   'skill'            = @((Join-Path $ConfigRoot 'claude\skills\delegar-a-opencode'), (Join-Path $UserHome '.claude\skills\delegar-a-opencode'))
   'agentes-opencode' = @(Get-ChildItem -LiteralPath $AgentsOcSrc -Filter '*.md' | Sort-Object Name | ForEach-Object { $_.FullName; (Join-Path $AgentsOcDst $_.Name) })
   'docker'           = @((Join-Path $RepoRoot 'docker'), $dockerDst)
+  'consola'          = @(
+    (Join-Path $RepoRoot 'scripts\consola.ps1'),           (Join-Path $SystemDir 'consola.ps1'),
+    (Join-Path $RepoRoot 'scripts\consola-vigilante.ps1'),  (Join-Path $SystemDir 'consola-vigilante.ps1'),
+    (Join-Path $RepoRoot 'scripts\consola.cmd'),            (Join-Path $SystemDir 'consola.cmd'),
+    (Join-Path $RepoRoot 'scripts\consola-config.mjs'),     (Join-Path $SystemDir 'consola-config.mjs'),
+    (Join-Path $RepoRoot 'scripts\acceso-directo.ps1'),     (Join-Path $SystemDir 'acceso-directo.ps1')
+  )
 }
 if (-not (Test-Path -LiteralPath $modsSrc)) { $Comp.Remove('mods') }
 
@@ -426,7 +433,6 @@ if ($panelNuevo) {
 
 # ---------------------------------------------------------------- 3c. Cerebro Hub
 Write-Step 'Cerebro Hub (memoria compartida, hooks y trabajos)'
-
 $hubNuevo = Install-Componente 'hub' 'Cerebro Hub' $Comp['hub'] {
   if (Test-Path -LiteralPath $hubDst) { Remove-Item -LiteralPath $hubDst -Recurse -Force }
   Copy-Item -LiteralPath (Join-Path $ConfigRoot 'hub') -Destination $hubDst -Recurse -Force
@@ -434,6 +440,23 @@ $hubNuevo = Install-Componente 'hub' 'Cerebro Hub' $Comp['hub'] {
   Copy-Item -LiteralPath (Join-Path $ConfigRoot 'hub\hub.ps1') -Destination (Join-Path $SystemDir 'hub.ps1') -Force
   Write-Ok "Lanzador instalado: $(Join-Path $SystemDir 'hub.ps1')"
 } 'Para el hub (docker compose down o hub.ps1 -Stop) y repite install.ps1'
+
+# Consola de arranque/parada: un doble clic la deja todo encendido y al cerrarla lo apaga.
+$null = Install-Componente 'consola' 'Consola de arranque' $Comp['consola'] {
+  for ($i = 0; $i -lt $Comp['consola'].Count; $i += 2) {
+    Copy-Item -LiteralPath $Comp['consola'][$i] -Destination $Comp['consola'][$i + 1] -Force
+    Write-Ok "Instalado: $($Comp['consola'][$i + 1])"
+  }
+  # Acceso directo en el Menu Inicio: es lo que Windows Search indexa, para
+  # poder lanzar la consola desde el buscador como cualquier otra app.
+  $acceso = Join-Path $SystemDir 'acceso-directo.ps1'
+  if (Test-Path -LiteralPath $acceso) {
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $acceso | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+      Write-Ok "Acceso directo en el Menu Inicio: 'Cerebro' (buscable desde Windows)"
+    }
+  }
+} 'Cierra la consola (consola.ps1 -Accion parar) y repite install.ps1'
 
 $null = Install-Componente 'hooks' 'Hooks de contexto' $Comp['hooks'] {
   if (Test-Path -LiteralPath $hooksDst) { Remove-Item -LiteralPath $hooksDst -Recurse -Force }

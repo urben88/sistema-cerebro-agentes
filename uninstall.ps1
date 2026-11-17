@@ -121,6 +121,13 @@ foreach ($f in @('hub.ps1', 'hub.sh', 'hub', 'hooks', 'mcp', 'mods')) {
 }
 
 # 3e. Docker y autoarranque
+# Acceso directo de la consola en el Menu Inicio (lo que indexa Windows Search).
+$accesoConsola = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Cerebro.lnk'
+if (Test-Path -LiteralPath $accesoConsola) {
+  Backup-Item $accesoConsola
+  Remove-Item -LiteralPath $accesoConsola -Force
+  Write-Ok 'Acceso directo de la consola retirado del Menu Inicio'
+}
 $sch = Invoke-Cli 'schtasks' @('/Delete', '/TN', 'Cerebro Hub', '/F')
 if ($sch.Code -eq 0) { Write-Ok 'Tarea de autoarranque eliminada' }
 $arranque = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\cerebro-hub.cmd'

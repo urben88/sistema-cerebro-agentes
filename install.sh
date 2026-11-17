@@ -168,14 +168,19 @@ P_COMANDOS=("$CONFIG_ROOT/claude/commands/odd" "$CMD_DST")
 P_SKILL=("$CONFIG_ROOT/claude/skills/delegar-a-opencode" "$SKILL_DST")
 P_AGENTES_OC=(); for f in "$CONFIG_ROOT/opencode/agents/"*.md; do P_AGENTES_OC+=("$f" "$AGENTS_DST/$(basename "$f")"); done
 P_DOCKER=("$REPO_ROOT/docker" "$SYSTEM_DIR/docker")
-COMPONENTES=(mcp panel hub hooks mods agentes-claude comandos skill agentes-opencode docker)
-[ -d "$CONFIG_ROOT/mods" ] || COMPONENTES=(mcp panel hub hooks agentes-claude comandos skill agentes-opencode docker)
+P_CONSOLA=("$REPO_ROOT/scripts/consola.sh" "$SYSTEM_DIR/consola.sh" \
+  "$REPO_ROOT/scripts/consola-vigilante.sh" "$SYSTEM_DIR/consola-vigilante.sh" \
+  "$REPO_ROOT/scripts/consola-config.mjs" "$SYSTEM_DIR/consola-config.mjs" \
+  "$REPO_ROOT/scripts/consola.command" "$HOME/Applications/Cerebro.command")
+COMPONENTES=(mcp panel hub consola hooks mods agentes-claude comandos skill agentes-opencode docker)
+[ -d "$CONFIG_ROOT/mods" ] || COMPONENTES=(mcp panel hub consola hooks agentes-claude comandos skill agentes-opencode docker)
 pares_de(){
   case "$1" in
     mcp) printf '%s\n' "${P_MCP[@]}" ;; panel) printf '%s\n' "${P_PANEL[@]}" ;; hub) printf '%s\n' "${P_HUB[@]}" ;;
     hooks) printf '%s\n' "${P_HOOKS[@]}" ;; mods) printf '%s\n' "${P_MODS[@]}" ;; agentes-claude) printf '%s\n' "${P_AGENTES_CL[@]}" ;;
     comandos) printf '%s\n' "${P_COMANDOS[@]}" ;; skill) printf '%s\n' "${P_SKILL[@]}" ;; agentes-opencode) printf '%s\n' "${P_AGENTES_OC[@]}" ;;
     docker) printf '%s\n' "${P_DOCKER[@]}" ;;
+    consola) printf '%s\n' "${P_CONSOLA[@]}" ;;
   esac
 }
 
@@ -319,6 +324,22 @@ inst_panel(){
 }
 instalar_componente panel 'Panel web' inst_panel 'Cierra el panel (panel.sh --stop) y repite install.sh' "${P_PANEL[@]}"
 PANEL_NUEVO=$COMP_INSTALADO
+
+# ---------------------------------------------------------------- 3b-bis. Consola
+# Un doble clic en consola.cmd (Windows) o consola.sh deja todo encendido; al cerrar
+# la consola se apaga. La configuracion y los datos se conservan.
+step 'Consola de arranque (un doble clic enciende y apaga)'
+inst_consola(){
+  local i
+  for ((i = 0; i < ${#P_CONSOLA[@]}; i += 2)); do
+    mkdir -p "$(dirname "${P_CONSOLA[$((i + 1))]}")"
+    cp -f "${P_CONSOLA[$i]}" "${P_CONSOLA[$((i + 1))]}"
+    ok "Instalado: ${P_CONSOLA[$((i + 1))]}"
+  done
+  chmod +x "$SYSTEM_DIR/consola.sh" "$SYSTEM_DIR/consola-vigilante.sh" "$HOME/Applications/Cerebro.command"
+  ok "Aplicación instalable (buscable con Spotlight): Cerebro"
+}
+instalar_componente consola 'Consola de arranque' inst_consola 'Cierra la consola (consola.sh --parar) y repite install.sh' "${P_CONSOLA[@]}"
 node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({ repoRoot: process.argv[2] }, null, 2) + "\n")' "$SYSTEM_DIR/panel-config.json" "$REPO_ROOT"
 
 # Si el panel estaba abierto y ha cambiado, reiniciarlo para aplicar la versión nueva

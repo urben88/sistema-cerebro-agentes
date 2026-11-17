@@ -1,5 +1,11 @@
 # Uso diario
 
+## Encender y apagar todo con una consola
+
+Doble clic en `Cerebro.cmd` (Windows) o en `scripts/consola.sh` (macOS/Linux): abre una consola que levanta el hub y el panel, te abre el navegador, y **al cerrar esa ventana se apaga todo**. La configuracion y los datos se conservan.
+
+Detalle y ajustes: [consola.md](consola.md).
+
 ## Lo básico
 
 1. Abre **Claude Code dentro de la carpeta del proyecto** (`cd mi-proyecto && claude`).

@@ -4,7 +4,7 @@
  * Lo registra settings-merge.mjs en ~/.claude/settings.json como `statusLine`
  * (con refreshInterval), solo si el usuario no tiene una propia.
  *
- * Con `--widget` (spec 15) imprime solo lo propio del sistema —modo, tramo de DeepSeek y trabajo de OpenCode—
+ * Con `--widget` (spec 15) imprime solo lo propio del sistema —modo, servidor de la red local, tramo de DeepSeek y trabajo de OpenCode—
  * en una línea corta (≤ 50 caracteres) para la línea extra de claude-hud (`hud.mjs`), que ya
  * dibuja modelo, contexto, cuotas, coste, git, herramientas y subagentes. Lee el JSON de
  * Claude de CEREBRO_BARRA_DATOS (claude-hud no le pasa stdin).
@@ -16,6 +16,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { crearOpenCode } from './lib/opencode.mjs'
 import { etiquetaDeepseek } from './lib/tarifa-deepseek.mjs'
+import { etiquetaServidor } from './lib/servidor-lan.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HUB = process.env.HUB_URL || 'http://127.0.0.1:4597'
@@ -76,6 +77,8 @@ try {
         `${modelo}${esfuerzo0 ? `·${esfuerzo0}` : ''} ${pct}%`,
         `📁 ${path.basename(dir || '.')}`,
       ]
+  // Servidor de la red local, antes de lo demás: el widget se corta a 50 caracteres.
+  try { const servidor = etiquetaServidor(); if (servidor) partes.push(servidor) } catch { /* sin estado */ }
   // Tramo de precio de DeepSeek (punta / valle a mitad de precio): afecta al gasto de OpenCode.
   try { partes.push(etiquetaDeepseek()) } catch { /* sin tramo */ }
   const lim = datos.rate_limits || {}
@@ -162,7 +165,9 @@ try {
     })
   } catch { /* hub apagado o lento */ }
 
-  console.log(partes.join(' · '))
+  const linea = partes.join(' · ')
+  // claude-hud corta el widget a 50 caracteres: se acorta la cuenta atrás de DeepSeek para que quepa entera.
+  console.log(WIDGET && linea.length > 50 ? linea.replace(/\((?:valle|punta) en /, '(') : linea)
 } catch {
   console.log('')
 }

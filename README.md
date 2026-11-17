@@ -127,6 +127,7 @@ bash scripts/verificar.sh --smoke                                          # mac
 | Verlo dentro de Claude | `/trabajos`, `/errores` o `/parar-todo` en cualquier sesión | El mod «mesa de trabajo» lo muestra en la banda y responde en el transcript |
 | Sin Claude (cuota agotada) | Abre OpenCode en tu proyecto | Arranca `cerebro-oc` (DeepSeek · max): specs y delegación en el resto |
 | Verlo todo | Abre el panel: `~/.sistema-cerebro-agentes/hub.ps1` (o `hub.sh`) → `http://127.0.0.1:4597` | Organización, memoria, gasto y ventana |
+| Encender y apagar todo de una vez | Busca **Cerebro** en Windows (o doble clic en `Cerebro.cmd`) | Abre una consola que levanta hub y panel; **al cerrarla se apaga todo**. Configuración y datos conservados. [Detalle](docs/consola.md) |
 | Cambiar algo | Editor de bots del panel antiguo (`panel.ps1`) o edita el repo y `scripts/actualizar` | Todo queda versionado en este repositorio |
 
 Reglas de oro para que la ventana de Claude dure: **`/clear` al cambiar de tarea**, nada de fanout de subagentes, el código siempre por DeepSeek, y las specs en archivo. Detalles en [docs/ventanas-y-ahorro.md](docs/ventanas-y-ahorro.md).
@@ -193,8 +194,8 @@ sistema-cerebro-agentes/
 │   ├── web/                          ← panel antiguo de actividad (sigue disponible)
 │   └── bin/                          ← comando `cerebro`
 ├── docker/                           ← docker-compose (hub) y gestor
-├── docs/                             ← arquitectura, uso, panel, contexto/sesiones, ahorro, decisiones
-└── scripts/                          ← verificar, actualizar, smoke del MCP, panel
+├── docs/                             ← arquitectura, uso, panel, consola, contexto/sesiones, ahorro, decisiones
+└── scripts/                          ← verificar, actualizar, smoke del MCP, panel, consola
 ```
 
 ## Mover a otra máquina

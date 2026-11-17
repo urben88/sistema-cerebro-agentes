@@ -147,11 +147,19 @@ step 'Cerebro Hub: actividad y latidos'
 HUB_PORT=""
 HUB_PORT_FILE="$HOME/.sistema-cerebro-agentes/hub-port.txt"
 [ -f "$HUB_PORT_FILE" ] && HUB_PORT="$(tr -d '[:space:]' < "$HUB_PORT_FILE")"
-if [ -z "$HUB_PORT" ] && curl -fsS --max-time 3 "http://127.0.0.1:4597/api/salud" 2>/dev/null | grep -q 'cerebro-hub'; then
-  HUB_PORT=4597
-fi
+# Tras un arranque el hub puede tardar unos segundos en responder: se reintenta
+# un rato antes de darlo por caido (si no, la verificacion falla por un arranque en curso).
 HUB_OK=0
-[ -n "$HUB_PORT" ] && curl -fsS --max-time 4 "http://127.0.0.1:$HUB_PORT/api/salud" 2>/dev/null | grep -q 'cerebro-hub' && HUB_OK=1 || true
+for _intento in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  if [ -z "$HUB_PORT" ] && curl -fsS --max-time 5 "http://127.0.0.1:4597/api/salud" 2>/dev/null | grep -q 'cerebro-hub'; then
+    HUB_PORT=4597
+  fi
+  if [ -n "$HUB_PORT" ] && curl -fsS --max-time 6 "http://127.0.0.1:$HUB_PORT/api/salud" 2>/dev/null | grep -q 'cerebro-hub'; then
+    HUB_OK=1
+    break
+  fi
+  sleep 2
+done
 if [ "$HUB_OK" -eq 1 ]; then
   if curl -fsS --max-time 4 "http://127.0.0.1:$HUB_PORT/api/actividad" 2>/dev/null | grep -q '"proyectos"'; then
     test_item 0 'GET /api/actividad devuelve proyectos'
@@ -348,6 +356,25 @@ if node "$REPO_ROOT/scripts/test-modo.mjs" >/dev/null 2>&1; then
   test_item 0 'Pruebas del modo normal/cerebro en la barra de estado'
 else
   test_item 1 'Pruebas del modo normal/cerebro en la barra de estado' 'Ejecuta: node scripts/test-modo.mjs'
+fi
+
+step 'Consola de arranque (spec 26)'
+if node "$REPO_ROOT/scripts/test-consola.mjs" >/dev/null 2>&1; then
+  test_item 0 'Pruebas de la consola (ajustes, arranque y parada)'
+else
+  test_item 1 'Pruebas de la consola (ajustes, arranque y parada)' 'Ejecuta: node scripts/test-consola.mjs'
+fi
+if [ -f "$HOME/.sistema-cerebro-agentes/consola.sh" ]; then
+  test_item 0 'Consola instalada (~/.sistema-cerebro-agentes)'
+else
+  test_item 1 'Consola no instalada' 'Ejecuta install.sh'
+fi
+# macOS: la consola se instala como .command en /Applications (Spotlight la indexa).
+ACCESO_MAC="$HOME/Applications/Cerebro.command"
+if [ -f "$ACCESO_MAC" ] || [ -f "/Applications/Cerebro.command" ]; then
+  test_item 0 'Consola como aplicación (buscable con Spotlight)'
+else
+  test_item 1 'Consola no instalada como aplicación' 'Ejecuta install.sh'
 fi
 
 step 'Opus dirige y configurar-claude (spec 15)'

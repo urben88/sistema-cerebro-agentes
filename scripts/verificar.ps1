@@ -133,19 +133,24 @@ Write-Step 'Cerebro Hub, hooks y trabajos'
 $hubPort = 0
 $hubPortFile = Join-Path $sysDir 'hub-port.txt'
 if (Test-Path -LiteralPath $hubPortFile) { [void][int]::TryParse((Get-Content -LiteralPath $hubPortFile -Raw).Trim(), [ref]$hubPort) }
-if ($hubPort -le 0) {
-  # El hub puede estar en Docker (compose publica 127.0.0.1:4597) aunque no exista hub-port.txt
-  try {
-    $r = Invoke-WebRequest -Uri 'http://127.0.0.1:4597/api/salud' -UseBasicParsing -TimeoutSec 3
-    if ($r.Content -match 'cerebro-hub') { $hubPort = 4597 }
-  } catch { }
-}
+# El hub puede estar en Docker (compose publica 127.0.0.1:4597) aunque no exista hub-port.txt.
+# Tras un arranque puede tardar unos segundos en responder: se reintenta un rato antes
+# de darlo por caido (si no, la verificacion falla por un arranque en curso).
 $hubOk = $false
-if ($hubPort -gt 0) {
-  try {
-    $salud = Invoke-RestMethod -Uri "http://127.0.0.1:$hubPort/api/salud" -TimeoutSec 4
-    $hubOk = ($salud.app -eq 'cerebro-hub')
-  } catch { }
+for ($intento = 0; $intento -lt 12 -and -not $hubOk; $intento++) {
+  if ($hubPort -le 0) {
+    try {
+      $r = Invoke-WebRequest -Uri 'http://127.0.0.1:4597/api/salud' -UseBasicParsing -TimeoutSec 5
+      if ($r.Content -match 'cerebro-hub') { $hubPort = 4597 }
+    } catch { }
+  }
+  if ($hubPort -gt 0) {
+    try {
+      $salud = Invoke-RestMethod -Uri "http://127.0.0.1:$hubPort/api/salud" -TimeoutSec 6
+      $hubOk = ($salud.app -eq 'cerebro-hub')
+    } catch { }
+  }
+  if (-not $hubOk) { Start-Sleep -Seconds 2 }
 }
 Test-Item $hubOk "Cerebro Hub responde en 127.0.0.1:$hubPort" 'Arranca: powershell -File ~/.sistema-cerebro-agentes/hub.ps1 (o docker compose up -d)'
 if ($hubOk) {
@@ -333,6 +338,14 @@ Write-Step 'Barra de estado: modo normal vs cerebro'
 $modoPruebas = Join-Path $RepoRoot 'scripts\test-modo.mjs'
 & node $modoPruebas | Out-Null
 Test-Item ($LASTEXITCODE -eq 0) 'Pruebas del modo normal/cerebro en la barra de estado' 'Ejecuta: node scripts\test-modo.mjs'
+
+Write-Step 'Consola de arranque (spec 26)'
+$consolaPruebas = Join-Path $RepoRoot 'scripts\test-consola.mjs'
+& node $consolaPruebas | Out-Null
+Test-Item ($LASTEXITCODE -eq 0) 'Pruebas de la consola (ajustes, arranque y parada)' 'Ejecuta: node scripts\test-consola.mjs'
+Test-Item (Test-Path -LiteralPath (Join-Path $sysDir 'consola.ps1')) 'Consola instalada (~/.sistema-cerebro-agentes)' 'Ejecuta install.ps1'
+$accesoConsola = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Cerebro.lnk'
+Test-Item (Test-Path -LiteralPath $accesoConsola) 'Acceso directo de la consola en el Menu Inicio (buscable desde Windows)' 'Ejecuta install.ps1'
 
 Write-Step 'Opus dirige y configurar-claude (spec 15)'
 $opusPruebas = Join-Path $RepoRoot 'scripts\test-opus-reparto.mjs'

@@ -87,8 +87,36 @@ assert.match(barra.comandoHud('/opt/s/hub', 'linux'), /node ".*hud.mjs"$/)
 for (const c of ['ccstatusline', 'node "C:/x/hub/estado-linea.mjs"', 'exec "C:/x/hub/hud.cmd"', 'node "C:\\x\\hub\\hud.mjs"']) assert.ok(barra.statusLineEsNuestra({ command: c }), c)
 assert.ok(!barra.statusLineEsNuestra({ command: 'mi-barra.sh' }))
 const estadoLinea = path.join(raiz, 'config/hub/estado-linea.mjs')
-const widget = spawnSync(process.execPath, [estadoLinea, '--widget'], { input: '', encoding: 'utf8', env: { ...process.env, HUB_URL: 'http://127.0.0.1:1', CEREBRO_BARRA_DATOS: JSON.stringify({ session_id: 'w', agent: { name: 'cerebro' }, workspace: { current_dir: tmp } }) } }).stdout.trim()
+const lanzarWidget = (extra) => spawnSync(process.execPath, [estadoLinea, '--widget'], { input: '', encoding: 'utf8', env: { ...process.env, HUB_URL: 'http://127.0.0.1:1', CEREBRO_BARRA_DATOS: JSON.stringify({ session_id: 'w', agent: { name: 'cerebro' }, workspace: { current_dir: tmp } }), ...extra } }).stdout.trim()
+const widget = lanzarWidget({ CEREBRO_SERVIDOR_IP: '' })
 assert.match(widget, /^🧠 cerebro · (🔥 DS punta|🌙 DS valle ½)/, 'el widget lee el JSON del entorno (claude-hud no le pasa stdin)')
+
+// Servidor de la red local: activo solo si hay respuesta real al ping, con caché corta.
+const lan = await import(pathToFileURL(path.join(raiz, 'config/hub/lib/servidor-lan.mjs')).href)
+const cacheLan = path.join(tmp, 'lan.json')
+let pingsLan = 0
+const pingCon = (salida) => () => { pingsLan += 1; return salida }
+const respuestaPing = 'Respuesta desde 192.168.0.100: bytes=32 tiempo=3ms TTL=64'
+const estadoLan = (ping, ahora, ip = '192.168.0.100') => lan.estadoServidor({ ip, ahora, ping, cache: cacheLan })
+assert.equal(estadoLan(pingCon(respuestaPing), 1000), true, 'responde al ping: activo')
+assert.equal(estadoLan(pingCon(''), 2000), true, 'dentro de la caché no se repite el ping')
+assert.equal(pingsLan, 1)
+assert.equal(estadoLan(pingCon('Respuesta desde 192.168.0.220: Host de destino inaccesible.'), 1000 + lan.CACHE_MS), false, 'Windows sale con 0 en «host inaccesible»: no cuenta como activo')
+assert.equal(pingsLan, 2, 'caducada la caché se vuelve a hacer ping')
+assert.equal(estadoLan(pingCon(respuestaPing), 1000 + lan.CACHE_MS, '192.168.0.101'), true, 'otra IP no reutiliza la caché')
+assert.equal(lan.estadoServidor({ ip: '', ping: pingCon(respuestaPing), cache: cacheLan }), null, 'IP vacía: sin comprobación')
+assert.equal(lan.etiquetaServidor({ ip: '192.168.0.100', ping: pingCon(respuestaPing), cache: path.join(tmp, 'lan2.json') }), '🟢 .100')
+assert.equal(lan.etiquetaServidor({ ip: '192.168.0.100', ping: pingCon(''), cache: path.join(tmp, 'lan3.json') }), '🔴 .100')
+assert.equal(lan.etiquetaServidor({ ip: '', cache: cacheLan }), '')
+
+// En el widget va justo tras el modo y cabe entero en los 50 caracteres de claude-hud.
+const tmpLan = path.join(tmp, 'tmp-lan')
+fs.mkdirSync(tmpLan)
+fs.writeFileSync(path.join(tmpLan, lan.NOMBRE_CACHE), JSON.stringify({ ip: '192.168.0.100', ts: Date.now(), activo: false }))
+const conServidor = lanzarWidget({ CEREBRO_SERVIDOR_IP: '192.168.0.100', TEMP: tmpLan, TMP: tmpLan, TMPDIR: tmpLan })
+assert.match(conServidor, /^🧠 cerebro · 🔴 \.100 · (🔥 DS punta|🌙 DS valle ½)/, 'el estado del servidor sale en el widget')
+assert.ok(conServidor.length <= 50, `el widget no debe cortarse: ${conServidor}`)
+assert.match(conServidor, /\(\d/, 'se conserva la cuenta atrás de DeepSeek')
 
 // Tramo de DeepSeek: punta L–V 01–04 y 06–10 UTC; el resto, valle.
 const { tramoDeepseek } = await import(pathToFileURL(path.join(raiz, 'config/hub/lib/tarifa-deepseek.mjs')).href)
