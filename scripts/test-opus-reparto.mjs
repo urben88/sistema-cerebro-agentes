@@ -124,7 +124,7 @@ fs.writeFileSync(path.join(tmpLan, lan.NOMBRE_CACHE), JSON.stringify({ ip: '192.
 const conServidor = lanzarWidget({ CEREBRO_SERVIDOR_IP: '192.168.0.100', TEMP: tmpLan, TMP: tmpLan, TMPDIR: tmpLan })
 assert.match(conServidor, /^🧠 cerebro · 🔴 \.100 · (🔥 DS punta|🌙 DS valle ½)/, 'el estado del servidor sale en el widget')
 assert.ok(conServidor.length <= 50, `el widget no debe cortarse: ${conServidor}`)
-assert.match(conServidor, /\(\d/, 'se conserva la cuenta atrás de DeepSeek')
+assert.match(conServidor, /\((valle|punta) en \d/, 'se conserva la cuenta atrás de DeepSeek')
 
 // Tramo de DeepSeek: punta L–V 01–04 y 06–10 UTC; el resto, valle.
 const { tramoDeepseek } = await import(pathToFileURL(path.join(raiz, 'config/hub/lib/tarifa-deepseek.mjs')).href)
