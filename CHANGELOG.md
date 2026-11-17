@@ -7,6 +7,7 @@ Versionado semántico (MAJOR.MINOR.PATCH).
 
 ### Cambiado
 
+- **DeepSeek solo si lo pides** (D36): en el modo cerebro, el código lo hacen los subagentes de Claude (`retocador`, `resolutor`, `ayudante`). OpenCode y DeepSeek solo entran si los pides en la tarea («usa DeepSeek», «con OpenCode»). La skill `delegar-a-opencode` ya no se activa con cualquier código.
 - **Aviso de contexto relativo** (`aviso-contexto.mjs`): el umbral cuenta lo que ha crecido la sesión sobre su primera respuesta, no el total. Una sesión vacía ya arranca en ~85k tokens (CLAUDE.md, herramientas, skills), así que con 100k fijos el aviso saltaba tras 1–2 mensajes. Ahora `CONTEXTO_AVISO` (100000) son tokens de trabajo y el mensaje muestra los dos datos: «~190k tokens (~105k de trabajo)».
 
 ### Añadido (spec 26 · consola de arranque y parada)

@@ -11,7 +11,7 @@ Detalle y ajustes: [consola.md](consola.md).
 1. Abre **Claude Code dentro de la carpeta del proyecto** (`cd mi-proyecto && claude`).
 2. **Activa el Cerebro** (solo cuando quieras el flujo combinado): escribe `cerebro` en la terminal (continúa tu conversación en modo Cerebro), usa `@cerebro` para una tarea suelta, o `claude --agent cerebro` para una sesión nueva. Para volver al modo normal: `claude --continue`.
 3. Pide lo que quieras en lenguaje natural.
-4. El Cerebro investigará, escribirá la especificación en `docs/specs/`, delegará el código a OpenCode y vigilará el trabajo. Al terminar te dará un resumen.
+4. El Cerebro investigará, escribirá la especificación en `docs/specs/`, repartirá el código entre los subagentes de Claude (`retocador`, `resolutor`) y vigilará el trabajo. **DeepSeek solo entra si lo pides** («usa DeepSeek», «con OpenCode»); el permiso vale para esa tarea. Al terminar te dará un resumen.
 
 ## Modos PLAN y EJECUTAR
 

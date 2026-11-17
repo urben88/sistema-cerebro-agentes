@@ -137,6 +137,10 @@ Las palabras clave del triaje local se afinaron en su momento; el triaje se reti
 
 Decisión del usuario (spec 20): se retira Laya por completo. Ya no hay modelo local de triaje: **ODD decide si se delega** (solo con motivo concreto: explorar mucho, trabajo en paralelo, verificar un cambio de riesgo; lo pequeño lo hace Claude) y **a quién** lo dice una tabla fija en `CLAUDE.md` (regla 10) y en `cerebro.md`/`cerebro-oc.md`. Se quitan la herramienta `triaje_decidir`, `hub/lib/triaje.mjs`, `hub/lib/reparto-claude.mjs`, las rutas `/api/triaje`, `/api/laya` y `/api/decisiones`, el registro `decisiones.jsonl` (C4 de la spec 14), el servicio `cerebro-laya`, `docker/laya/` y la pestaña «Triaje·Laya» del panel. `reglas.json` se queda solo con configuración (`presupuestos`, `respaldo`, `nudge_intervalo`, `bitacora_max_chars`). Se mantienen `trabajo_estado` y `parar_trabajos` en el MCP `triaje` (el nombre del servidor no cambia para no romper configuraciones instaladas) y la salud de agentes, que ahora se ve en la pestaña «Datos».
 
+### D36 — DeepSeek solo si lo pides · 2026-11-17
+
+Decisión del usuario: en el modo cerebro, el código lo hacen por defecto los subagentes de Claude (`retocador`, `resolutor`, `ayudante`; verifica el `analista`). OpenCode (DeepSeek, `local-codigo`, `explorador-ds`, `redactor-ds` y la consulta mediada) solo se usa cuando el usuario lo pide en la tarea; el permiso no se arrastra a la siguiente. Cambian `cerebro.md`, la skill `delegar-a-opencode` (ya no se activa con cualquier código) y `CLAUDE.md`. OpenCode y `cerebro-oc` siguen igual, y el hub sigue usando `redactor-ds` para comprimir la bitácora.
+
 ## Notas técnicas útiles
 
 - **Herramientas clave del MCP (perfil essential):** `opencode_setup`, `opencode_context`, `opencode_status`, `opencode_ask`, `opencode_fire`, `opencode_run`, `opencode_reply`, `opencode_check`, `opencode_wait`, `opencode_job_get/list/cancel/input`, `opencode_question_*`, `opencode_permission_*`, `opencode_conversation`, `opencode_review_changes`.

@@ -52,7 +52,7 @@ El puente entre capas es **[opencode-mcp](https://github.com/AlaeddineMessari/op
 - **Todo dentro de Claude**: el mod «mesa de trabajo» dibuja una **banda sobre el prompt** con los trabajos y subagentes en vivo (con su modelo: Haiku visible) y añade **`/trabajos`**, **`/errores`** y **`/parar-todo`**; además fija el modelo de cada subagente según su definición.
 - **Engram como memoria**: decisiones, aprendizajes y sesiones van en Engram; el hub guarda el estado vivo y la operación. `buscar.mjs` busca en los dos. Ver [contexto de sesiones](docs/contexto-sesiones.md#engram-junto-al-hub-spec-23).
 - **`/clear` sin miedo**: al ~70 % de contexto, el agente vuelca el estado; al abrir la siguiente sesión, todo está de vuelta. Antes de compactar, un hook guarda un checkpoint solo.
-- **Avisos y nota de sesión**: el aviso de contexto (desde 100k tokens y cada +50k) también sale en tu consola, y al cerrar o hacer `/clear` Haiku deja una nota de 5 líneas que se carga sola al volver.
+- **Avisos y nota de sesión**: el aviso de contexto (cuando la sesión crece 100k tokens sobre su arranque, y cada +50k) también sale en tu consola, y al cerrar o hacer `/clear` Haiku deja una nota de 5 líneas que se carga sola al volver.
 - **Reparto por esfuerzos**: DeepSeek low/high/max según el trabajo (`implementador`/`testeador` low, `debugger` high, `revisor` max solo con código con lógica); en Claude, Haiku para lo ligero, `retocador` Sonnet · low y `resolutor` Sonnet · medium (high al depurar), con `consultor`/`arquitecto` en Opus; el código **no consume tu ventana de Claude**.
 - **ODD decide el reparto**: Gentle AI manda el flujo (delegar solo con un motivo concreto; lo pequeño lo hace Claude) y una tabla fija en `CLAUDE.md` dice a quién (buscar → `explorador`, cambio mecánico → `ayudante`, área → `resolutor`…). No hay modelo intermedio.
 - **Comandos `/odd:*`**: `start`, `plan`, `implement`, `verify`, `review`, `status` y `handoff` (`/odd:handoff` guarda el estado antes de `/clear`).
@@ -120,7 +120,7 @@ bash scripts/verificar.sh --smoke                                          # mac
 
 | Quieres | Haz esto | Qué pasa por detrás |
 |---|---|---|
-| Trabajar con Claude | Abre Claude Code en tu proyecto y escribe `cerebro` (o `@cerebro …`) | Briefing inyectado; planificación si hace falta; reparto automático Opus → Sonnet → Haiku → OpenCode; revisión y cierre |
+| Trabajar con Claude | Abre Claude Code en tu proyecto y escribe `cerebro` (o `@cerebro …`) | Briefing inyectado; planificación si hace falta; reparto automático Opus → Sonnet → Haiku (OpenCode/DeepSeek solo si lo pides); revisión y cierre |
 | Que investigue sin tocar nada | Pide `plan …` o «propón…»; para ejecutar, di «ejecuta» o «hazlo» | Sin indicación trabaja en **PLAN** (salvo cambios triviales) y pregunta antes de ejecutar |
 | Planificar algo grande o ambiguo | Pide `planifica …` o abre el `planificador` (Claude: `@planificador …`; OpenCode: cámbialo con Tab) | Entrevista: hasta 5 preguntas que cambian el trabajo + supuestos + plan/spec antes de generar |
 | Parar algo que se quedó corriendo | `cerebro-parar` (o pídele «para todo» al Cerebro) | Cancela los trabajos de OpenCode al momento; `cerebro-parar --seco` solo los lista |
@@ -130,7 +130,7 @@ bash scripts/verificar.sh --smoke                                          # mac
 | Encender y apagar todo de una vez | Busca **Cerebro** en Windows (o doble clic en `Cerebro.cmd`) | Abre una consola que levanta hub y panel; **al cerrarla se apaga todo**. Configuración y datos conservados. [Detalle](docs/consola.md) |
 | Cambiar algo | Editor de bots del panel antiguo (`panel.ps1`) o edita el repo y `scripts/actualizar` | Todo queda versionado en este repositorio |
 
-Reglas de oro para que la ventana de Claude dure: **`/clear` al cambiar de tarea**, nada de fanout de subagentes, el código siempre por DeepSeek, y las specs en archivo. Detalles en [docs/ventanas-y-ahorro.md](docs/ventanas-y-ahorro.md).
+Reglas de oro para que la ventana de Claude dure: **`/clear` al cambiar de tarea**, nada de fanout de subagentes, el código por los subagentes de Claude (o por DeepSeek si lo pides), y las specs en archivo. Detalles en [docs/ventanas-y-ahorro.md](docs/ventanas-y-ahorro.md).
 
 ## La organización (agentes)
 
@@ -144,7 +144,7 @@ Reglas de oro para que la ventana de Claude dure: **`/clear` al cambiar de tarea
 | Documentación | `redactor` / `redactor-ds` | Haiku · **low** / DeepSeek · low | README, docs, changelog |
 | Verificación | `analista` (Claude) | Haiku · medium | Requisitos vs realidad, checklists |
 | Control | `subdirector` (Claude) | Haiku · medium | Bucles y gasto de los trabajos |
-| Resolución (Claude) | `resolutor` | Sonnet · **medium** (high al depurar) | Decide el cómo de un área acotada y la resuelve; en el cerebro, solo si OpenCode falla dos veces |
+| Resolución (Claude) | `resolutor` | Sonnet · **medium** (high al depurar) | Decide el cómo de un área acotada y la resuelve; en el cerebro es quien implementa por defecto |
 | Retoque (Claude) | `retocador` | Sonnet · **low** | Cambios pequeños en 1–2 archivos con algo de criterio (arreglo obvio, adaptar código, tests desde una spec) |
 | Cambio mecánico (Claude) | `ayudante` | Haiku · **low** | Cambios ya decididos con instrucciones exactas (solo en modo EJECUTAR) |
 | Implementación | `implementador` (OC) | DeepSeek · **low** | Código delimitado por una spec |

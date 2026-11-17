@@ -1,11 +1,11 @@
 ---
 name: delegar-a-opencode
-description: Delega trabajo de código a OpenCode (implementar, depurar, revisar o probar) siguiendo el sistema Cerebro → OpenCode. Úsala siempre que haya que escribir, modificar, revisar o probar código de un proyecto; también cuando el usuario mencione OpenCode, "delegar", "implementador", "revisor" o "testeador".
+description: Delega trabajo de código a OpenCode (DeepSeek) para implementar, depurar, revisar o probar, solo cuando el usuario lo pide ("usa DeepSeek", "con OpenCode", "delega en OpenCode", "implementador", "revisor", "testeador"). Sin esa petición, el código lo hacen los subagentes de Claude.
 ---
 
 # Delegar a OpenCode (sistema Cerebro → OpenCode)
 
-Regla de oro: **tú piensas y documentas; OpenCode ejecuta el código**. Ninguna delegación sin spec escrita.
+Regla de oro: **tú piensas y documentas; OpenCode ejecuta el código solo si el usuario lo ha pedido en esta tarea**. Si no lo pidió, usa `retocador`, `resolutor` o `ayudante`. Ninguna delegación sin spec escrita.
 
 ## Filosofía: buscar antes de crear (ahorra tokens)
 

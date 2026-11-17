@@ -4,7 +4,7 @@ El flujo de trabajo es **ODD** (bloques `gentle-ai:*` de abajo). Este bloque sol
 
 ## Modos
 - **Normal (`claude` a secas):** Opus 5.5 · medium analiza, decide y revisa. No hay `opencode_*` en este hilo: no uses OpenCode ni sugieras el cerebro.
-- **Cerebro:** solo con `claude --agent cerebro` o `@cerebro`. Escribe la spec y delega el código en OpenCode (DeepSeek). Frases como «modo cerebro» no lo activan; si preguntan, explica cómo arrancarlo.
+- **Cerebro:** solo con `claude --agent cerebro` o `@cerebro`. Escribe la spec y reparte el código entre los agentes de Claude; OpenCode (DeepSeek) solo si lo pides. Frases como «modo cerebro» no lo activan; si preguntan, explica cómo arrancarlo.
 - **Sin Claude** (cuota agotada): dirige `cerebro-oc` en OpenCode.
 
 ## Reparto barato (amplía los Delegation Triggers de ODD)
@@ -23,7 +23,7 @@ El flujo de trabajo es **ODD** (bloques `gentle-ai:*` de abajo). Este bloque sol
 | Segunda opinión rápida | `consultor` · Opus · low | — |
 | Decisión global difícil | `arquitecto` · Opus · high | — |
 | Revisión RDD | `review-*` de Gentle AI (no se tocan) | reviewer |
-| Código en el cerebro | OpenCode: `implementador` low, `debugger` high, `revisor` max (solo con lógica), `testeador` low | — |
+| Código en el cerebro, si pides DeepSeek | OpenCode: `implementador` low, `debugger` high, `revisor` max (solo con lógica), `testeador` low | — |
 
 - Pasa siempre `subagent_type`, `model` y `effort` explícitos. Nunca uses `general-purpose` ni `fork`: heredan Opus. Dile al usuario en una línea el agente y su modelo.
 - En los encargos al `resolutor` y al `retocador`, indica «Modo: PLAN» o «Modo: EJECUTAR». Sin orden de ejecutar, todo es solo lectura (el «Authorize» de ODD).

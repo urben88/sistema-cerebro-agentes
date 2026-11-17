@@ -67,6 +67,14 @@ assert.match(fm('retocador'), /^model: sonnet$/m)
 assert.match(fm('retocador'), /^effort: low$/m)
 assert.match(fm('consultor'), /^model: opus$/m)
 assert.match(fm('consultor'), /^effort: low$/m)
+// DeepSeek (OpenCode) only on request: by default the cerebro writes code with Claude subagents.
+const cerebro = fs.readFileSync(path.join(raiz, 'config/claude/agents/cerebro.md'), 'utf8')
+assert.match(fm('cerebro'), /^description: .*DeepSeek\) solo si el usuario lo pide/m, 'cerebro: OpenCode solo a petición')
+assert.match(cerebro, /^## DeepSeek solo si lo pides$/m, 'cerebro: sección de la regla')
+const skillOc = fs.readFileSync(path.join(raiz, 'config/claude/skills/delegar-a-opencode/SKILL.md'), 'utf8').split(/\r?\n---/)[0]
+assert.doesNotMatch(skillOc, /siempre que haya que escribir/, 'la skill no se activa con cualquier código')
+assert.match(skillOc, /solo cuando el usuario lo pide/, 'la skill exige la petición del usuario')
+assert.match(fs.readFileSync(path.join(raiz, 'config/claude/CLAUDE.md'), 'utf8'), /OpenCode \(DeepSeek\) solo si lo pides/, 'CLAUDE.md: la regla del modo cerebro')
 const oc = (n) => fs.readFileSync(path.join(raiz, 'config/opencode/agents', `${n}.md`), 'utf8')
 assert.match(oc('implementador'), /^variant: low$/m)
 assert.match(oc('debugger'), /^variant: high$/m)
@@ -124,7 +132,7 @@ fs.writeFileSync(path.join(tmpLan, lan.NOMBRE_CACHE), JSON.stringify({ ip: '192.
 const conServidor = lanzarWidget({ CEREBRO_SERVIDOR_IP: '192.168.0.100', TEMP: tmpLan, TMP: tmpLan, TMPDIR: tmpLan })
 assert.match(conServidor, /^🧠 cerebro · 🔴 \.100 · (🔥 DS punta|🌙 DS valle ½)/, 'el estado del servidor sale en el widget')
 assert.ok(conServidor.length <= 50, `el widget no debe cortarse: ${conServidor}`)
-assert.match(conServidor, /\((valle|punta) en \d/, 'se conserva la cuenta atrás de DeepSeek')
+assert.match(conServidor, /\((?:(?:valle|punta) en )?\d/, 'se conserva la cuenta atrás de DeepSeek (completa o acortada)')
 
 // Tramo de DeepSeek: punta L–V 01–04 y 06–10 UTC; el resto, valle.
 const { tramoDeepseek } = await import(pathToFileURL(path.join(raiz, 'config/hub/lib/tarifa-deepseek.mjs')).href)
