@@ -26,16 +26,24 @@ const hook = (sesion) => spawnSync(process.execPath, [path.join(raiz, 'config/ho
   env: { ...process.env, HUB_DATA_DIR: tmp, CONTEXTO_AVISO: '100000', CONTEXTO_PASO: '50000' },
 }).stdout.trim()
 
-fs.writeFileSync(transcript, `${respuesta(90000)}\n`)
-assert.equal(hook('s1'), '', 'por debajo del umbral no avisa')
-fs.writeFileSync(transcript, `${respuesta(120000)}\n{"type":"user"}\n`)
+// The threshold counts growth over the session's first answer (fixed load: CLAUDE.md, tools, skills…).
+const subagente = JSON.stringify({ type: 'assistant', isSidechain: true, message: { usage: { input_tokens: 500000 } } })
+const sesion = (...tokens) => `${subagente}\n${tokens.map(respuesta).join('\n')}\n{"type":"user"}\n`
+fs.writeFileSync(transcript, sesion(85000))
+assert.equal(hook('s1'), '', 'una sola respuesta: sin crecimiento, no avisa')
+fs.writeFileSync(transcript, sesion(85000, 120000))
+assert.equal(hook('s1'), '', 'base 85k + 35k de trabajo: no avisa aunque pase de 100k')
+fs.writeFileSync(transcript, sesion(85000, 120000, 190000))
 const aviso = JSON.parse(hook('s1'))
-assert.match(aviso.systemMessage, /~120k tokens/)
+assert.match(aviso.systemMessage, /~190k tokens/)
+assert.match(aviso.systemMessage, /~105k de trabajo/)
 assert.match(aviso.hookSpecificOutput.additionalContext, /ESTADO\.md/)
 assert.equal(hook('s1'), '', 'mismo nivel: no repite')
-fs.writeFileSync(transcript, `${respuesta(160000)}\n`)
-assert.match(JSON.parse(hook('s1')).systemMessage, /~160k/, 'nivel nuevo: avisa otra vez')
-assert.match(JSON.parse(hook('s2')).systemMessage, /~160k/, 'otra sesión: avisa')
+fs.writeFileSync(transcript, sesion(85000, 240000))
+assert.match(JSON.parse(hook('s1')).systemMessage, /~240k/, 'nivel nuevo: avisa otra vez')
+assert.match(JSON.parse(hook('s2')).systemMessage, /~240k/, 'otra sesión: avisa')
+fs.writeFileSync(transcript, sesion(85000, 240000, 60000))
+assert.equal(hook('s3'), '', 'tras compactar por debajo de la base: no avisa')
 
 // 2 · Nota de última sesión
 const { slugProyecto, leerNota, dirUltimaSesion } = await import(new URL('../config/hooks/ultima-sesion.mjs', import.meta.url).href)

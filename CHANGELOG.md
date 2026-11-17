@@ -5,6 +5,10 @@ Versionado semántico (MAJOR.MINOR.PATCH).
 
 ## [Sin publicar]
 
+### Cambiado
+
+- **Aviso de contexto relativo** (`aviso-contexto.mjs`): el umbral cuenta lo que ha crecido la sesión sobre su primera respuesta, no el total. Una sesión vacía ya arranca en ~85k tokens (CLAUDE.md, herramientas, skills), así que con 100k fijos el aviso saltaba tras 1–2 mensajes. Ahora `CONTEXTO_AVISO` (100000) son tokens de trabajo y el mensaje muestra los dos datos: «~190k tokens (~105k de trabajo)».
+
 ### Añadido (spec 26 · consola de arranque y parada)
 
 - **Consola del Cerebro**: un doble clic en `Cerebro.cmd` (Windows) o `scripts/consola.sh` (macOS/Linux) abre una consola que levanta el hub (Docker o nativo) y el panel web, abre el navegador y se queda en primer plano. **Al cerrarla se apaga todo** lo que encendió esa consola.
